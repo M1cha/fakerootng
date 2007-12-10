@@ -10,19 +10,9 @@
 
 int process_children(pid_t first_child)
 {
-    int status;
-    
-    // Initialize the new trace
-    //ptrace(PTRACE_SETOPTIONS, first_child, NULL,
-    //    PTRACE_O_TRACESYSGOOD|PTRACE_O_TRACEFORK|PTRACE_O_TRACEVFORK|PTRACE_O_TRACECLONE );
-
-    printf("About to wait\n");
-    pid_t ret=waitpid(first_child, &status, 0);
-
-    ptrace( PTRACE_SYSCALL, ret, 0, 0 );
-
-
     while(1) {
+        int status;
+        pid_t ret=wait(&status);
         printf("Wait returned with pid %d, status: 0x%08x\n", ret, status);
 
         if( WIFEXITED(status) ) {
@@ -34,15 +24,18 @@ int process_children(pid_t first_child)
 
             return -1;
         } else if( WIFSTOPPED(status) ) {
-            printf("Process %d halted due to signal %d\n", ret, WSTOPSIG(status) );
-            ptrace( PTRACE_SYSCALL, ret, 0, 0 );
+            int sig = WSTOPSIG(status);
+            printf("Process %d halted due to signal %d\n", ret, sig );
+            if( sig==SIGTRAP ) {
+                printf("SYSCALL captured\n");
+                sig=0;
+            } else {
+                printf("Process received signal %d\n", sig);
+            }
+            ptrace( PTRACE_SYSCALL, ret, 0, sig );
         } else {
             printf("Unknown meaning of status\n");
         }
-
-        printf("About to wait again\n");
-        ret=waitpid(first_child, &status, 0);
-        printf("Wait done\n");
     }
 
     return 0;

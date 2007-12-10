@@ -3,8 +3,9 @@
 
 AC_PREREQ(2.61)
 AC_INIT([fakeroot-ng], [0.00], [shachar@debian.org])
+AC_CANONICAL_TARGET()
 AM_INIT_AUTOMAKE
-AC_CONFIG_SRCDIR([platform.h.in])
+AC_CONFIG_SRCDIR([platform.h])
 AC_CONFIG_HEADER([config.h])
 
 # Checks for programs.
@@ -26,5 +27,37 @@ AC_TYPE_PID_T
 # Checks for library functions.
 AC_FUNC_FORK
 
-AC_CONFIG_FILES([Makefile platform.h])
+# Custom steps
+
+dnl Canoninize the canonical system names
+[
+if [ "$target_os" = "linux-gnu" ]
+then
+    target_os=linux
+fi
+
+case "$target_cpu" in
+i686|i586|i486)
+    target_cpu=i386
+    ;;
+esac
+]
+
+# Check whether we are ported to this platform
+AC_MSG_CHECKING([whether platform $target_os/$target_cpu is supported])
+
+[
+if [ ! -f "$srcdir/arch/$target_os/$target_cpu/platform.c" ]
+then
+]
+    AC_MSG_RESULT(no)
+    echo "$srcdir"
+    AC_MSG_ERROR(Platform detected is yet supported.)
+[
+else
+]    AC_MSG_RESULT([yes]) [
+fi
+]
+
+AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

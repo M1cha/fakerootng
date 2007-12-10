@@ -29,7 +29,7 @@ int parse_options( int argc, char *argv[] )
     return optind;
 }
 
-int main(int argc, char *argv[], char *env[])
+int main(int argc, char *argv[])
 {
     int opt_offset=parse_options( argc, argv );
     if( opt_offset==-1 )
@@ -46,12 +46,14 @@ int main(int argc, char *argv[], char *env[])
 
     if( child==0 ) {
         /* We are the child */
-        printf("Child started\n");
-        ptrace(PTRACE_TRACEME);
-        printf("Being traced\n");
+        if( ptrace(PTRACE_TRACEME)!=0 ) {
+            perror("Could not start trace");
 
-        execve(argv[opt_offset], argv+opt_offset, env);
-        exit(1);
+            exit(2);
+        }
+
+        execvp(argv[opt_offset], argv+opt_offset);
+        exit(2);
     }
 
     return process_children(child);
