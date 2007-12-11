@@ -35,8 +35,6 @@ int main(int argc, char *argv[])
     if( opt_offset==-1 )
         return 1;
 
-    printf("Optind=%d\n", opt_offset);
-
     pid_t child=fork();
     if( child<0 ) {
         perror("Failed to create child process");

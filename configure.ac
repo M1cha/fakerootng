@@ -5,7 +5,7 @@ AC_PREREQ(2.61)
 AC_INIT([fakeroot-ng], [0.00], [shachar@debian.org])
 AC_CANONICAL_TARGET()
 AM_INIT_AUTOMAKE
-AC_CONFIG_SRCDIR([platform.h])
+AC_CONFIG_SRCDIR([parent.h])
 AC_CONFIG_HEADER([config.h])
 
 # Checks for programs.

@@ -10,9 +10,9 @@
 
 #include "../../platform.h"
 
-void *ptlib_get_syscall( pid_t pid )
+int ptlib_get_syscall( pid_t pid )
 {
-    return (void *)ptrace( PTRACE_PEEKUSER, pid, 4*ORIG_EAX, 0 );
+    return ptrace( PTRACE_PEEKUSER, pid, 4*ORIG_EAX, 0 );
 }
 
 void *ptlib_get_argument( pid_t pid, int argnum )
@@ -24,4 +24,14 @@ void *ptlib_get_argument( pid_t pid, int argnum )
     fprintf(stderr, "Illegal argnum %d was asked for\n", argnum );
 
     return NULL;
+}
+
+void *ptlib_get_retval( pid_t pid )
+{
+    return (void *)ptrace( PTRACE_PEEKUSER, pid, 4*EAX );
+}
+
+void ptlib_set_retval( pid_t pid, void *val )
+{
+    ptrace( PTRACE_POKEUSER, pid, 4*EAX, val );
 }
