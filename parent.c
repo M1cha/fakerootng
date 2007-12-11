@@ -27,7 +27,7 @@ int process_children(pid_t first_child)
             int sig = WSTOPSIG(status);
             printf("Process %d halted due to signal %d\n", ret, sig );
             if( sig==SIGTRAP ) {
-                printf("SYSCALL captured\n");
+                printf("SYSCALL %d captured\n", ptlib_get_syscall(ret));
                 sig=0;
             } else {
                 printf("Process received signal %d\n", sig);
