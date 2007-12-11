@@ -13,6 +13,7 @@ AC_PROG_CC
 AC_PROG_AWK
 AC_PROG_INSTALL
 AC_PROG_MKDIR_P
+AC_PROG_LIBTOOL
 
 # Checks for libraries.
 
@@ -59,5 +60,5 @@ else
 fi
 ]
 
-AC_CONFIG_FILES([Makefile])
+AC_CONFIG_FILES([Makefile arch/linux/i386/Makefile])
 AC_OUTPUT
