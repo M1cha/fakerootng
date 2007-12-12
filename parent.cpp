@@ -28,9 +28,17 @@ void sys_geteuid( pid_t pid, pid_state *state )
     }
 }
 
+void sys_getuid( pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::RETURN ) {
+        ptlib_set_retval( pid, 0 );
+    }
+}
+
 static void init_handlers()
 {
     syscalls[__NR_geteuid32]=sys_geteuid;
+    syscalls[__NR_getuid32]=sys_getuid;
 }
 
 int process_children(pid_t first_child)
