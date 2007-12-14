@@ -60,5 +60,6 @@ else
 fi
 ]
 
+dnl We generate all Makefiles for all platforms, and then only invoke those for the platforms we need
 AC_CONFIG_FILES([Makefile arch/linux/i386/Makefile])
 AC_OUTPUT

@@ -11,6 +11,7 @@
 
 #include "arch/platform.h"
 
+#include "syscalls.h"
 #include "parent.h"
 
 // Keep track of handled syscalls
@@ -39,6 +40,7 @@ static void init_handlers()
 {
     syscalls[__NR_geteuid32]=sys_geteuid;
     syscalls[__NR_getuid32]=sys_getuid;
+    syscalls[__NR_fork]=sys_fork;
 }
 
 int process_children(pid_t first_child)
@@ -47,6 +49,11 @@ int process_children(pid_t first_child)
 
     state[first_child]=pid_state();
     init_handlers();
+
+    int statd;
+    wait(&statd);
+    ptlib_prepare(first_child);
+    ptrace(PTRACE_SYSCALL, first_child, 0, 0 );
 
     while(1) {
         int status;
