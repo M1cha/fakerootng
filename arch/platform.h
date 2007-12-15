@@ -15,11 +15,16 @@ void ptlib_prepare( pid_t pid );
 
 /* Wait for next event.
  * Reports whether it was a signal delivered at the process (ret gets the signal number)
+ * "status" is the status returned by "wait"
+ * A process stopped due to signal (ret is the signal number)
  * A process terminated (ret is the return code)
+ * A process terminated (ret is the signal that killed it)
  * A SYSCALL took place (ret is the syscall number)
  * A new process being created (only if PTLIB_SUPPORTS_{FORK,VFORK,CLONE} is defined for the platform) - ret is the new PID */
-enum PTLIB_WAIT_RET { SIGNAL, EXIT, SYSCALL, NEWPROCESS };
-int ptlib_wait( pid_t *pid, long *ret );
+enum PTLIB_WAIT_RET { SIGNAL, EXIT, SIGEXIT, SYSCALL, NEWPROCESS };
+int ptlib_wait( pid_t *pid, int *status, long *ret );
+/* If we get a trace before we run ptlib_prepare, we might mis-interpret the signals */
+int ptlib_reinterpret( enum PTLIB_WAIT_RET prestate, pid_t pid, int status, long *ret );
 
 /* Returns/sets the Program Counter (EIP on Intel) for the traced program */
 void *ptlib_get_pc( pid_t pid );

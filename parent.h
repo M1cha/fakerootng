@@ -1,14 +1,36 @@
 #ifndef PARENT_H
 #define PARENT_H
 
+#include <sys/time.h>
+#include <sys/resource.h>
+
+#include <list>
+
 int process_children(pid_t first_child);
 
 struct pid_state {
-    enum { NONE, RETURN } state;
+    enum { INIT, NONE, RETURN, WAIT_HALTED, WAIT4_HALTED, WAITPID_HALTED } state;
+    void *memory; // Where and how much mem do we have inside the process's address space
+    size_t mem_size;
 
-    pid_state() : state(NONE) {}
+    struct waiting_signal {
+        pid_t pid;
+        int status;
+        struct rusage usage;
+        
+        waiting_signal( pid_t _pid, int _status, const struct rusage &_usage ) : pid(_pid), status(_status), usage(_usage)
+        {
+        }
+    };
+    std::list<waiting_signal> waiting_signals;
+
+    pid_t parent;
+
+    pid_state() : state(INIT), memory(NULL), mem_size(0), parent(1)
+    {
+    }
 };
 
-typedef void (*sys_callback)( pid_t pid, pid_state *state );
+typedef bool (*sys_callback)( pid_t pid, pid_state *state );
 
 #endif /* PARENT_H */

@@ -4,7 +4,3 @@
 
 #include "syscalls.h"
 
-void sys_fork( pid_t pid, pid_state *state )
-{
-
-}

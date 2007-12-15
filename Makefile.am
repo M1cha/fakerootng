@@ -1,4 +1,4 @@
-SUBDIRS=arch/linux/i386
+SUBDIRS=tests arch/linux/i386
 
 bin_PROGRAMS=fakeroot-ng
 
