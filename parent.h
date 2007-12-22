@@ -6,6 +6,10 @@
 
 #include <list>
 
+#include <stdio.h>
+
+void dlog( const char *format, ... );
+
 int process_children(pid_t first_child);
 
 struct pid_state {
@@ -32,5 +36,16 @@ struct pid_state {
 };
 
 typedef bool (*sys_callback)( pid_t pid, pid_state *state );
+struct syscall_hook {
+    sys_callback func;
+    const char *name;
+
+    syscall_hook() : func(NULL), name(NULL)
+    {
+    }
+    syscall_hook( sys_callback _func, const char *_name ) : func(_func), name(_name)
+    {
+    }
+};
 
 #endif /* PARENT_H */

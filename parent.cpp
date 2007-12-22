@@ -26,7 +26,7 @@
 // Keep track of the states for the various processes
 static __gnu_cxx::hash_map<pid_t, pid_state> state;
 
-static __gnu_cxx::hash_map<int, sys_callback> syscalls;
+static __gnu_cxx::hash_map<int, syscall_hook> syscalls;
 
 bool sys_geteuid( pid_t pid, pid_state *state )
 {
@@ -62,10 +62,10 @@ bool sys_getuid( pid_t pid, pid_state *state )
 
 static void init_handlers()
 {
-    syscalls[__NR_geteuid32]=sys_geteuid;
-    syscalls[__NR_getuid32]=sys_getuid;
+    syscalls[__NR_geteuid32]=syscall_hook(sys_geteuid, "geteuid");
+    syscalls[__NR_getuid32]=syscall_hook(sys_getuid, "getuid");
 #if ! PTLIB_SUPPORTS_FORK
-    syscalls[__NR_fork]=sys_fork;
+    syscalls[__NR_fork]=syscall_hook(sys_fork, "fork");
 #endif
 #if ! PTLIB_SUPPORTS_VFORK
     syscalls[__NR_vfork]=sys_vfork;
@@ -131,7 +131,9 @@ int process_children(pid_t first_child)
 
         // If this is the first time we see this process, we need to init the ptrace options for it
         if( state[pid].state==pid_state::INIT ) {
-            ptlib_prepare(first_child);
+            dlog( "%d: Init new process\n", pid);
+
+            ptlib_prepare(pid);
             state[pid].state=pid_state::NONE;
 
             wait_state=static_cast<enum PTLIB_WAIT_RET>(ptlib_reinterpret( wait_state, pid, status, &ret ));
@@ -140,16 +142,26 @@ int process_children(pid_t first_child)
         switch(wait_state) {
         case SYSCALL:
             if( syscalls.find(ret)!=syscalls.end() ) {
-                if( !syscalls[ret]( pid, &state[pid] ) )
+                dlog("%d: Called %s\n", pid, syscalls[ret].name);
+
+                if( !syscalls[ret].func( pid, &state[pid] ) )
                     sig=-1; // Mark for ptrace not to continue the process
+            } else {
+                dlog("%d: Unknown syscall %ld\n", pid, ret);
             }
             break;
         case SIGNAL:
+            dlog("%d: Signal %ld\n", pid, ret);
             sig=ret;
             break;
         case EXIT:
         case SIGEXIT:
             {
+                if( wait_state==EXIT )
+                    dlog("%d: Exit with return code %ld\n", pid, ret);
+                else
+                    dlog("%d: Exit with signal %ld\n", pid, ret);
+
                 struct rusage rusage;
                 getrusage( RUSAGE_CHILDREN, &rusage );
                 handle_exit(pid, status, rusage );
@@ -159,6 +171,7 @@ int process_children(pid_t first_child)
             break;
         case NEWPROCESS:
             {
+                dlog("%d: Created new child process %ld\n", pid, ret);
                 handle_new_process( pid, ret );
             }
         }

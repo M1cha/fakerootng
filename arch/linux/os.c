@@ -13,7 +13,8 @@
 
 void ptlib_prepare( pid_t pid )
 {
-    ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_TRACEFORK|PTRACE_O_TRACEVFORK|PTRACE_O_TRACECLONE);
+    if( ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_TRACEFORK|PTRACE_O_TRACEVFORK|PTRACE_O_TRACECLONE)!=0 )
+        perror("PTRACE_SETOPTIONS failed");
 }
 
 int ptlib_wait( pid_t *pid, int *status, long *ret )
@@ -29,13 +30,18 @@ int ptlib_wait( pid_t *pid, int *status, long *ret )
     } else if( WIFSTOPPED(*status) ) {
         *ret=WSTOPSIG(*status);
 
-        if( *ret==(SIGTRAP | PTRACE_EVENT_FORK << 8) || *ret==(SIGTRAP | PTRACE_EVENT_VFORK << 8) ||
-            *ret==(SIGTRAP | PTRACE_EVENT_CLONE << 8) ) {
-
-            ptrace(PTRACE_GETEVENTMSG, *pid, NULL, ret);
-            return NEWPROCESS;
-        }
         if( *ret==SIGTRAP ) {
+            siginfo_t siginfo;
+
+            if( ptrace(PTRACE_GETSIGINFO, *pid, NULL, &siginfo)==0 &&
+                (siginfo.si_code>>8==PTRACE_EVENT_FORK || siginfo.si_code>>8==PTRACE_EVENT_VFORK ||
+                 siginfo.si_code>>8==PTRACE_EVENT_CLONE ) )
+            {
+                ptrace( PTRACE_GETEVENTMSG, *pid, NULL, ret );
+
+                return NEWPROCESS;
+            }
+
             /* Since we cannot reliably know when PTRACE_O_TRACESYSGOOD is supported, we always assume that's the reason for a
              * SIGTRACE */
             *ret=ptlib_get_syscall(*pid);
