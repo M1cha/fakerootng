@@ -10,7 +10,7 @@
 
 void dlog( const char *format, ... );
 
-int process_children(pid_t first_child);
+int process_children(pid_t first_child, int comm_fd);
 
 struct pid_state {
     enum { INIT, NONE, RETURN, WAIT_HALTED, WAIT4_HALTED, WAITPID_HALTED } state;

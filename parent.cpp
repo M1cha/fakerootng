@@ -114,14 +114,18 @@ static void handle_new_process( pid_t parent, pid_t child )
     state[child].parent=parent;
 }
 
-int process_children(pid_t first_child)
+int process_children(pid_t first_child, int comm_fd )
 {
     // Create a state for the first child
 
     state[first_child]=pid_state();
     init_handlers();
 
-    while(1) {
+    dlog( "Begin the process loop\n" );
+
+    int num_processes=1;
+
+    while(num_processes>0) {
         int status;
         pid_t pid;
         long ret;
@@ -165,14 +169,20 @@ int process_children(pid_t first_child)
                 struct rusage rusage;
                 getrusage( RUSAGE_CHILDREN, &rusage );
                 handle_exit(pid, status, rusage );
-                if( pid==first_child )
-                    return 0;
+                if( pid==first_child && comm_fd!=-1 ) {
+                    write( comm_fd, &status, sizeof(status) );
+                    close( comm_fd );
+                    comm_fd=-1;
+                }
+
+                num_processes--;
             }
             break;
         case NEWPROCESS:
             {
                 dlog("%d: Created new child process %ld\n", pid, ret);
                 handle_new_process( pid, ret );
+                num_processes++;
             }
         }
 

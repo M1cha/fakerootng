@@ -1,0 +1,4 @@
+Limitations:
+- When in a chroot environment, we do not behave like the real thing if the
+  interpreter used to run the program (/bin/sh, ld-linux.so etc) does not exist
+  inside the chroot. We succeed where a real chroot would have failed
