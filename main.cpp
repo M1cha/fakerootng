@@ -144,8 +144,10 @@ int main(int argc, char *argv[])
 
     close( child2parent[1] );
     close( child2child[1] );
-    fclose( debug_log );
-    debug_log=NULL;
+    if( debug_log!=NULL ) {
+        fclose( debug_log );
+        debug_log=NULL;
+    }
 
     int buffer;
 
