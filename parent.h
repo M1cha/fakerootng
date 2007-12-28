@@ -19,6 +19,7 @@ struct pid_state {
     void *memory; // Where and how much mem do we have inside the process's address space
     size_t mem_size;
 
+#if !PTLIB_PARENT_CAN_WAIT
     struct waiting_signal {
         pid_t pid;
         int status;
@@ -31,8 +32,12 @@ struct pid_state {
     std::list<waiting_signal> waiting_signals;
 
     pid_t parent;
+#endif // PTLIB_PARENT_CAN_WAIT
 
-    pid_state() : state(INIT), memory(NULL), mem_size(0), parent(1)
+    pid_state() : state(INIT), memory(NULL), mem_size(0)
+#if !PTLIB_PARENT_CAN_WAIT
+        , parent(1)
+#endif // PTLIB_PARENT_CAN_WAIT
     {
     }
 };

@@ -81,6 +81,8 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
      __gnu_cxx::hash_map<pid_t, pid_state>::iterator process=state.find(pid);
      assert(process!=state.end());
 
+    // This function is fairly empty if the platform does not require "wait" emulation
+#if !PTLIB_PARENT_CAN_WAIT
     // Does it have a parent at all?
     if( process->second.parent==1 )
         return;
@@ -107,11 +109,16 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
         state[process->second.parent].waiting_signals.push_back(pid_state::waiting_signal(pid, status, usage));
         break;
     }
+#endif // PTLIB_PARENT_CAN_WAIT
+
+    state.erase(process);
 }
 
 static void handle_new_process( pid_t parent, pid_t child )
 {
+#if !PTLIB_PARENT_CAN_WAIT
     state[child].parent=parent;
+#endif // PTLIB_PARENT_CAN_WAIT
 }
 
 int process_children(pid_t first_child, int comm_fd )
