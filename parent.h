@@ -8,6 +8,8 @@
 
 #include <stdio.h>
 
+#include "platform_specific.h"
+
 void dlog( const char *format, ... );
 
 int process_children(pid_t first_child, int comm_fd);
