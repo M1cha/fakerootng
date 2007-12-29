@@ -73,7 +73,9 @@ static void init_handlers()
 #if ! PTLIB_SUPPORTS_CLONE
     syscalls[__NR_clone]=sys_clone;
 #endif
-    syscalls[__NR_stat64]=syscall_hook(sys_stat64, "stat");
+    syscalls[__NR_stat64]=syscall_hook(sys_stat64, "stat64");
+    syscalls[__NR_fstat64]=syscall_hook(sys_stat64, "fstat64");
+    syscalls[__NR_lstat64]=syscall_hook(sys_stat64, "lstat64");
 }
 
 static void handle_exit( pid_t pid, int status, const struct rusage &usage )
