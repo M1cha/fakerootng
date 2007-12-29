@@ -5,8 +5,11 @@
 //#include <sys/user.h>
 #include <linux/user.h>
 #include <asm-i486/ptrace.h>
+#include <sys/syscall.h>
+#include <errno.h>
 
 #include <stdio.h>
+#include <assert.h>
 
 #include "../../platform.h"
 
@@ -35,3 +38,25 @@ void ptlib_set_retval( pid_t pid, void *val )
 {
     ptrace( PTRACE_POKEUSER, pid, 4*EAX, val );
 }
+
+int ptlib_success( pid_t pid, int sc_num )
+{
+    void *ret=ptlib_get_retval( pid );
+
+    switch( sc_num ) {
+    case __NR_stat:
+    case __NR_stat64:
+    case __NR_fstat:
+    case __NR_fstat64:
+    case __NR_lstat:
+    case __NR_lstat64:
+        return ((int)ret)>=0;
+    case __NR_mmap:
+        /* -errno on error */
+        return ((unsigned int)ret)<0xfffff000u;
+    default:
+        assert(0); /* We tried to assume about an unknown syscall */
+        return 0;
+    }
+}
+

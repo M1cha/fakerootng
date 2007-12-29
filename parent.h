@@ -18,6 +18,7 @@ struct pid_state {
     enum { INIT, NONE, RETURN, WAIT_HALTED, WAIT4_HALTED, WAITPID_HALTED } state;
     void *memory; // Where and how much mem do we have inside the process's address space
     size_t mem_size;
+    void *saved_state[PTLIB_STATE_SIZE];
 
 #if !PTLIB_PARENT_CAN_WAIT
     struct waiting_signal {
@@ -42,7 +43,7 @@ struct pid_state {
     }
 };
 
-typedef bool (*sys_callback)( pid_t pid, pid_state *state );
+typedef bool (*sys_callback)( int sc_num, pid_t pid, pid_state *state );
 struct syscall_hook {
     sys_callback func;
     const char *name;
@@ -54,5 +55,7 @@ struct syscall_hook {
     {
     }
 };
+
+bool allocate_process_mem( pid_t pid, pid_state *state );
 
 #endif /* PARENT_H */

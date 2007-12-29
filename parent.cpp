@@ -28,7 +28,7 @@ static __gnu_cxx::hash_map<pid_t, pid_state> state;
 
 static __gnu_cxx::hash_map<int, syscall_hook> syscalls;
 
-bool sys_geteuid( pid_t pid, pid_state *state )
+bool sys_geteuid( int sc_num, pid_t pid, pid_state *state )
 {
     switch( state->state ) {
     default:
@@ -44,7 +44,7 @@ bool sys_geteuid( pid_t pid, pid_state *state )
     return true;
 }
 
-bool sys_getuid( pid_t pid, pid_state *state )
+bool sys_getuid( int sc_num, pid_t pid, pid_state *state )
 {
     switch( state->state ) {
     default:
@@ -73,6 +73,7 @@ static void init_handlers()
 #if ! PTLIB_SUPPORTS_CLONE
     syscalls[__NR_clone]=sys_clone;
 #endif
+    syscalls[__NR_stat64]=syscall_hook(sys_stat64, "stat");
 }
 
 static void handle_exit( pid_t pid, int status, const struct rusage &usage )
@@ -155,7 +156,7 @@ int process_children(pid_t first_child, int comm_fd )
             if( syscalls.find(ret)!=syscalls.end() ) {
                 dlog("%d: Called %s\n", pid, syscalls[ret].name);
 
-                if( !syscalls[ret].func( pid, &state[pid] ) )
+                if( !syscalls[ret].func( ret, pid, &state[pid] ) )
                     sig=-1; // Mark for ptrace not to continue the process
             } else {
                 dlog("%d: Unknown syscall %ld\n", pid, ret);

@@ -39,7 +39,13 @@ int ptlib_get_syscall( pid_t pid );
 void *ptlib_get_argument( pid_t pid, int argnum );
 
 void *ptlib_get_retval( pid_t pid );
+int ptlib_success( pid_t pid, int sc_num ); /* Report whether the syscall succeeded */
 void ptlib_set_retval( pid_t pid, void *val );
+
+/* Copy memory in and out of the process
+ * Return TRUE on success */
+int ptlib_get_mem( pid_t pid, void *process_ptr, void *local_ptr, size_t len );
+int ptlib_set_mem( pid_t pid, void *local_ptr, void *process_ptr, size_t len );
 
 #ifdef __cplusplus
 };

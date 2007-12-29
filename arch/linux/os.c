@@ -8,6 +8,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <assert.h>
 
 #include "../platform.h"
 
@@ -60,4 +62,34 @@ int ptlib_reinterpret( enum PTLIB_WAIT_RET prevstate, pid_t pid, int status, lon
     // Previous state does not affect us
     // XXX if the first thing the child does is a "fork", is this statement still true?
     return prevstate;
+}
+
+int ptlib_get_mem( pid_t pid, void *process_ptr, void *local_ptr, size_t len )
+{
+    int i;
+    errno=0;
+
+    for( i=0; i<len/sizeof(long) && errno==0; ++i ) {
+        ((long *)local_ptr)[i]=ptrace(PTRACE_PEEKDATA, pid, process_ptr+i*sizeof(long));
+    }
+
+    /* Unaligned data lengths not yet supported */
+    assert(len%sizeof(long)==0);
+
+    return errno==0;
+}
+
+int ptlib_set_mem( pid_t pid, void *local_ptr, void *process_ptr, size_t len )
+{
+    int i;
+    errno=0;
+
+    for( i=0; i<len/sizeof(long) && errno==0; ++i ) {
+        ptrace(PTRACE_POKEDATA, pid, process_ptr+i*sizeof(long), ((long *)local_ptr)[i]);
+    }
+
+    /* Unaligned data lengths not yet supported */
+    assert(len%sizeof(long)==0);
+
+    return errno==0;
 }

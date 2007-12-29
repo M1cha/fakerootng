@@ -2,7 +2,7 @@ SUBDIRS=tests arch/linux/i386
 
 bin_PROGRAMS=fakeroot-ng
 
-fakeroot_ng_SOURCES=main.cpp parent.h parent.cpp syscalls.h process.cpp
+fakeroot_ng_SOURCES=main.cpp parent.h parent.cpp syscalls.h process.cpp file.cpp file_lie.cpp
 #fakeroot_ng_LDFLAGS=-Larch/$(target_os)/$(target_cpu)
 fakeroot_ng_LDADD=arch/$(target_os)/$(target_cpu)/libarch.la
 fakeroot_ng_CPPFLAGS=-I$(top_srcdir)/arch/$(target_os)/$(target_cpu)
