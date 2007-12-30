@@ -1,0 +1,18 @@
+.TH FAKEROOT\-NG 1 "December 12, 2007" "Shachar Shemesh" "Fakeroot Next Gen User Manual"
+.\" Please adjust this date whenever revising the manpage.
+.SH NAME
+fakeroot\-ng \- run a command while making it believe it is running as root
+.SH SYNOPSIS
+\fBfakeroot\-ng\fP [ \fB-d\fIlogfile\fP ] [ \fB-p\fIpersist_file\fP ] \fIcommand line\fP
+.SH DESCRIPTION
+This manual page documents the \fBfakeroot-ng\fP command.
+.PP
+.SH SEE ALSO
+.BR fakeroot "(1), " fakechroot (1)
+.SH AUTHOR
+Fakeroot-ng was written by Shachar Shemesh. Commercial support is available from his company,
+Lingnu Open Source Consulting Ltd., at http://www.lingnu.com
+.PP
+This manual page was written by Shachar Shemesh <shachar@debian.org>
+.SH PROJECT HOMEPAGE
+http://sourceforge.net/projects/fakerootng
