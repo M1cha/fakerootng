@@ -1,0 +1,3 @@
+Version 0.01
+    * Initial release. Supports Linux/i386 only. Only supports {,f,l}stat64,
+      (f)chmod and get(e)uid.
