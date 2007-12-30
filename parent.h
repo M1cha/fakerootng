@@ -14,11 +14,14 @@ void dlog( const char *format, ... );
 
 int process_children(pid_t first_child, int comm_fd);
 
+#define NUM_SAVED_STATES 3
+
 struct pid_state {
-    enum { INIT, NONE, RETURN, WAIT_HALTED, WAIT4_HALTED, WAITPID_HALTED } state;
+    enum { INIT, NONE, RETURN, REDIRECT, ALLOCATE } state;
+    int orig_sc; // Original system call
     void *memory; // Where and how much mem do we have inside the process's address space
     size_t mem_size;
-    void *saved_state[PTLIB_STATE_SIZE];
+    void *saved_state[PTLIB_STATE_SIZE+NUM_SAVED_STATES];
 
 #if !PTLIB_PARENT_CAN_WAIT
     struct waiting_signal {
@@ -56,6 +59,6 @@ struct syscall_hook {
     }
 };
 
-bool allocate_process_mem( pid_t pid, pid_state *state );
+bool allocate_process_mem( pid_t pid, pid_state *state, int sc_num );
 
 #endif /* PARENT_H */

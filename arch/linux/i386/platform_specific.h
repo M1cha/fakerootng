@@ -10,7 +10,7 @@
 
 #define PTLIB_PARENT_CAN_WAIT 1
 
-#define PTLIB_STATE_SIZE (sizeof(struct pt_regs)/sizeof(void *))
+#define PTLIB_STATE_SIZE (FRAME_SIZE/sizeof(void *))
 
 typedef unsigned long long ptlib_inode_t;
 

@@ -15,5 +15,9 @@ DECLARE_SYSFUNC(wait4)
 
 // File handling
 DECLARE_SYSFUNC(stat64)
+DECLARE_SYSFUNC(chmod)
+
+// Meta required functions
+DECLARE_SYSFUNC(mmap)
 
 #endif // SYSCALLS_H

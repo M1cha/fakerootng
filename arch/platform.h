@@ -34,18 +34,34 @@ void *ptlib_set_pc( pid_t pid );
 
 /* Report the syscall number being invoked */
 int ptlib_get_syscall( pid_t pid );
+int ptlib_set_syscall( pid_t pid, int sc_num ); /* Change the meaning of a just started system call */
+int ptlib_generate_syscall( pid_t pid, int sc_num, void *base_memory ); /* Generate a new system call */
 
 /* Return the nth argument passed */
 void *ptlib_get_argument( pid_t pid, int argnum );
+int ptlib_set_argument( pid_t pid, int argnum, void *value );
 
 void *ptlib_get_retval( pid_t pid );
 int ptlib_success( pid_t pid, int sc_num ); /* Report whether the syscall succeeded */
 void ptlib_set_retval( pid_t pid, void *val );
+void ptlib_set_error( pid_t pid, int sc_num, int error );
+int ptlib_get_error( pid_t pid, int sc_num );
 
 /* Copy memory in and out of the process
  * Return TRUE on success */
 int ptlib_get_mem( pid_t pid, void *process_ptr, void *local_ptr, size_t len );
-int ptlib_set_mem( pid_t pid, void *local_ptr, void *process_ptr, size_t len );
+int ptlib_set_mem( pid_t pid, const void *local_ptr, void *process_ptr, size_t len );
+
+/* Copy a NULL terminated string. "get" returns the number of bytes copied, including the NULL */
+int ptlib_get_string( pid_t pid, void *process_ptr, char *local_ptr, size_t maxlen );
+int ptlib_set_string( pid_t pid, const char *local_ptr, void *process_ptr );
+
+/* Save/restore the process state */
+void ptlib_save_state( pid_t pid, void *buffer );
+void ptlib_restore_state( pid_t pid, const void *buffer );
+
+/* Initialize debugger controled memory inside debuggee address space */
+void ptlib_prepare_memory( pid_t pid, void **memory, size_t *size );
 
 #ifdef __cplusplus
 };

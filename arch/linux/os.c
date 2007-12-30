@@ -79,7 +79,7 @@ int ptlib_get_mem( pid_t pid, void *process_ptr, void *local_ptr, size_t len )
     return errno==0;
 }
 
-int ptlib_set_mem( pid_t pid, void *local_ptr, void *process_ptr, size_t len )
+int ptlib_set_mem( pid_t pid, const void *local_ptr, void *process_ptr, size_t len )
 {
     int i;
     errno=0;

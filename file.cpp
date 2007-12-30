@@ -1,6 +1,10 @@
 #include "config.h"
 
 #include <sys/stat.h>
+#include <sys/syscall.h>
+#include <errno.h>
+
+#include <assert.h>
 
 #include "syscalls.h"
 #include "file_lie.h"
@@ -26,6 +30,9 @@ bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
 
             ptlib_get_mem( pid, state->saved_state[0], &ret, sizeof(ret) );
 
+            // Copy the current mode into the override struct
+            override.mode=ret.mode;
+
             if( get_map( ret.dev, ret.ino, &override ) ) {
                 ret.mode=override.mode;
                 ret.uid=override.uid;
@@ -45,3 +52,63 @@ bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
     return true;
 }
 
+bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        if( state->memory==NULL ) {
+            return allocate_process_mem( pid, state, sc_num );
+        }
+
+        state->saved_state[0]=ptlib_get_argument( pid, 1 ); // Store the filename/filedes
+        state->saved_state[1]=ptlib_get_argument( pid, 2 ); // Store the requested mode
+        ptlib_set_argument( pid, 2,
+            reinterpret_cast<void *>(reinterpret_cast<unsigned long>(state->saved_state[0])&0777) ); // Zero out the S* field
+        state->state=pid_state::RETURN;
+    } else if( state->state==pid_state::RETURN ) {
+        if( ptlib_success( pid, sc_num ) ) {
+            // We need to call "stat/fstat" so we can know the dev/inode
+            state->state=pid_state::REDIRECT;
+            ptlib_save_state( pid, state->saved_state+2 );
+            state->orig_sc=sc_num;
+
+            ptlib_set_argument( pid, 1, state->saved_state[0] );
+            ptlib_set_argument( pid, 2, state->memory );
+            switch( sc_num ) {
+            case SYS_fchmod:
+                ptlib_generate_syscall( pid, SYS_fstat64, state->memory );
+                break;
+            case SYS_chmod:
+                ptlib_generate_syscall( pid, SYS_lstat64, state->memory );
+                break;
+            default:
+                dlog("chmod: %d Oops! Unhandled syscall %d\n", pid, sc_num );
+                assert(0);
+                ptlib_restore_state( pid, state->saved_state+2 );
+                ptlib_set_error( pid, sc_num, EFAULT );
+                state->state=pid_state::NONE;
+                break;
+            }
+        } else {
+            state->state=pid_state::NONE;
+        }
+    } else if( state->state==pid_state::REDIRECT ) {
+        // Update our lies database
+        struct stat_override override;
+        struct ptlib_stat64 stat;
+
+        ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
+
+        if( !get_map( stat.dev, stat.ino, &override ) ) {
+            override.dev=stat.dev;
+            override.inode=stat.ino;
+            override.uid=stat.uid;
+            override.gid=stat.uid;
+            override.dev_id=stat.rdev;
+        }
+        override.mode=(stat.mode&~07777)|(((mode_t)state->saved_state[1])&07777);
+
+        set_map( &override );
+
+        state->state=pid_state::NONE;
+    }
+}

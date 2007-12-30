@@ -7,6 +7,29 @@ fakeroot\-ng \- run a command while making it believe it is running as root
 .SH DESCRIPTION
 This manual page documents the \fBfakeroot-ng\fP command.
 .PP
+.SH SECURITY CONSIDERATIONS
+Fakeroot-ng is a non-SUID executable, and does not modify any sensitive data. It, therefor,
+does not affect the overall security of the system. One may be tempted, however, to use
+fakeroot-ng as a security tool, for running processes with reduced privileges or inside
+a chroot jail. In addition to all the warnings that usually apply to using chroot jails as a security
+tool (in a nutshell - don't), the following should be understood.
+.PP
+Unlike previous implementations, fakeroot-ng uses a technology that leaves the traced process
+no choice regarding whether it will use fakeroot-ng's "services" or not. Compiling a program
+statically, directly calling the kernel and manipulating ones own address space are all techniques
+that can be trivially used to bypass LD_PRELOAD based control over a process, and do not apply
+to fakeroot-ng. It is, theoretically, possible to mold fakeroot-ng in such a way as to have total
+control over the traced process.
+.PP
+While it is theoretically possible, it has not been done. Fakeroot-ng does assume certain "nicely
+behaved" assumptions about the process being traced, and a process that break those assumptions
+may be able to, if not totally escape then at least circumvent some of the "fake" environment
+imposed on it by fakeroot-ng. As such, you are strongly warned against using fakeroot-ng as
+a security tool. Bug reports that claim that a process can deliberatly (as opposed to inadvertly) 
+escape fakeroot-ng's control will either be closed as "not a bug" or marked as low priority.
+.PP
+It is possible that this policy be rethought in the future. For the time being, however, you have
+been warned.
 .SH SEE ALSO
 .BR fakeroot "(1), " fakechroot (1)
 .SH AUTHOR

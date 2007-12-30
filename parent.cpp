@@ -1,7 +1,7 @@
 #include "config.h"
 
 // XXX Should move the generation of _BSD_SOURCE into autoconf
-#define _BSD_SOURCE
+#define _GNU_SOURCE 1
 
 #include <sys/types.h>
 #include <sys/time.h>
@@ -9,6 +9,7 @@
 #include <sys/wait.h>
 #include <sys/ptrace.h>
 #include <sys/syscall.h>
+#include <sys/mman.h>
 
 #include <ext/hash_map>
 
@@ -62,20 +63,26 @@ bool sys_getuid( int sc_num, pid_t pid, pid_state *state )
 
 static void init_handlers()
 {
-    syscalls[__NR_geteuid32]=syscall_hook(sys_geteuid, "geteuid");
-    syscalls[__NR_getuid32]=syscall_hook(sys_getuid, "getuid");
+    syscalls[SYS_geteuid32]=syscall_hook(sys_geteuid, "geteuid");
+    syscalls[SYS_getuid32]=syscall_hook(sys_getuid, "getuid");
 #if ! PTLIB_SUPPORTS_FORK
-    syscalls[__NR_fork]=syscall_hook(sys_fork, "fork");
+    syscalls[SYS_fork]=syscall_hook(sys_fork, "fork");
 #endif
 #if ! PTLIB_SUPPORTS_VFORK
-    syscalls[__NR_vfork]=sys_vfork;
+    syscalls[SYS_vfork]=sys_vfork;
 #endif
 #if ! PTLIB_SUPPORTS_CLONE
-    syscalls[__NR_clone]=sys_clone;
+    syscalls[SYS_clone]=sys_clone;
 #endif
-    syscalls[__NR_stat64]=syscall_hook(sys_stat64, "stat64");
-    syscalls[__NR_fstat64]=syscall_hook(sys_stat64, "fstat64");
-    syscalls[__NR_lstat64]=syscall_hook(sys_stat64, "lstat64");
+
+    syscalls[SYS_stat64]=syscall_hook(sys_stat64, "stat64");
+    syscalls[SYS_fstat64]=syscall_hook(sys_stat64, "fstat64");
+    syscalls[SYS_lstat64]=syscall_hook(sys_stat64, "lstat64");
+
+    syscalls[SYS_chmod]=syscall_hook(sys_chmod, "chmod");
+    syscalls[SYS_fchmod]=syscall_hook(sys_chmod, "fchmod");
+
+    syscalls[SYS_mmap]=syscall_hook(sys_mmap, "mmap");
 }
 
 static void handle_exit( pid_t pid, int status, const struct rusage &usage )
@@ -86,32 +93,7 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
 
     // This function is fairly empty if the platform does not require "wait" emulation
 #if !PTLIB_PARENT_CAN_WAIT
-    // Does it have a parent at all?
-    if( process->second.parent==1 )
-        return;
-
-    switch( state[process->second.parent].state ) {
-        // XXX This is a very simplistic approach. No support for waiting for specific groups/pid, and no handling of waitid
-    case pid_state::WAIT_HALTED:
-        {
-            void *process_status=ptlib_get_argument(process->second.parent, 1);
-            ptrace(PTRACE_POKEDATA, process->second.parent, process_status, status); // Write the status as we got it
-            ptrace(PTRACE_SYSCALL, process->second.parent, 0, 0); // Continue the halted process
-        }
-        break;
-    case pid_state::WAIT4_HALTED:
-    case pid_state::WAITPID_HALTED:
-        {
-            void *process_status=ptlib_get_argument(process->second.parent, 2);
-            ptrace(PTRACE_POKEDATA, process->second.parent, process_status, status); // Write the status as we got it
-            ptrace(PTRACE_SYSCALL, process->second.parent, 0, 0); // Continue the halted process
-        }
-        break;
-    default:
-        // Parent was not waiting for us. Add this event to the end of the "waiting" list
-        state[process->second.parent].waiting_signals.push_back(pid_state::waiting_signal(pid, status, usage));
-        break;
-    }
+#error emulating parent wait not yet implemented
 #endif // PTLIB_PARENT_CAN_WAIT
 
     state.erase(process);
@@ -121,6 +103,7 @@ static void handle_new_process( pid_t parent, pid_t child )
 {
 #if !PTLIB_PARENT_CAN_WAIT
     state[child].parent=parent;
+#error emulating parent wait not yet implemented
 #endif // PTLIB_PARENT_CAN_WAIT
 }
 
@@ -155,13 +138,21 @@ int process_children(pid_t first_child, int comm_fd )
 
         switch(wait_state) {
         case SYSCALL:
-            if( syscalls.find(ret)!=syscalls.end() ) {
-                dlog("%d: Called %s\n", pid, syscalls[ret].name);
+            {
+                pid_state *proc_state=&state[pid];
+                if( proc_state->state==pid_state::REDIRECT ) {
+                    dlog("%d: Called syscall %d, redirected from %s\n", pid, ret, syscalls[proc_state->orig_sc].name );
 
-                if( !syscalls[ret].func( ret, pid, &state[pid] ) )
-                    sig=-1; // Mark for ptrace not to continue the process
-            } else {
-                dlog("%d: Unknown syscall %ld\n", pid, ret);
+                    if( !syscalls[ret].func( ret, pid, proc_state ) )
+                        sig=-1; // Mark for ptrace not to continue the process
+                } else if( syscalls.find(ret)!=syscalls.end() ) {
+                    dlog("%d: Called %s\n", pid, syscalls[ret].name);
+
+                    if( !syscalls[ret].func( ret, pid, proc_state ) )
+                        sig=-1; // Mark for ptrace not to continue the process
+                } else {
+                    dlog("%d: Unknown syscall %ld\n", pid, ret);
+                }
             }
             break;
         case SIGNAL:
@@ -202,4 +193,65 @@ int process_children(pid_t first_child, int comm_fd )
     }
 
     return 0;
+}
+
+bool allocate_process_mem( pid_t pid, pid_state *state, int sc_num )
+{
+    dlog("allocate_process_mem: %d running syscall %d needs process memory\n", pid, sc_num );
+
+    // Save the old state
+    ptlib_save_state( pid, state->saved_state );
+    state->orig_sc=sc_num;
+    state->state=pid_state::ALLOCATE;
+
+    // Translate the whatever call into an mmap
+    ptlib_set_syscall( pid, SYS_mmap );
+
+    if( ptlib_set_argument( pid, 1, 0 ) ) // start pointer
+        dlog("allocate_process_mem: %d set mmap arg 1\n", pid );
+    if( ptlib_set_argument( pid, 2, (void *)sysconf(_SC_PAGESIZE) ) ) // Length of page - we allocate exactly one page
+        dlog("allocate_process_mem: %d set mmap arg 2\n", pid );
+    if( ptlib_set_argument( pid, 3, (void *)(PROT_EXEC|PROT_READ|PROT_WRITE) ) ) // Protection - allow execute
+        dlog("allocate_process_mem: %d set mmap arg 3\n", pid );
+    if( ptlib_set_argument( pid, 4, (void *)(MAP_PRIVATE|MAP_ANONYMOUS) ) ) // Flags - anonymous memory allocation
+        dlog("allocate_process_mem: %d set mmap arg 4\n", pid );
+    if( ptlib_set_argument( pid, 5, (void *)-1 ) ) // File descriptor
+        dlog("allocate_process_mem: %d set mmap arg 5\n", pid );
+    if( ptlib_set_argument( pid, 6, 0 ) ) // Offset
+        dlog("allocate_process_mem: %d set mmap arg 6\n", pid );
+
+    dlog("Calling mmap(%p, %p, %p, %p, %p, %p)\n", ptlib_get_argument( pid, 1 ), ptlib_get_argument( pid, 2 ), ptlib_get_argument( pid, 3 ), ptlib_get_argument( pid, 4 ), ptlib_get_argument( pid, 5 ), ptlib_get_argument( pid, 6 ) );
+    return true;
+}
+
+bool sys_mmap( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        dlog("mmap: %d direct call\n", pid);
+        state->state=pid_state::RETURN;
+    } else if( state->state==pid_state::RETURN ) {
+        dlog("mmap: %d direct return\n", pid);
+        state->state=pid_state::NONE;
+    } else if( state->state==pid_state::ALLOCATE ) {
+        state->state=pid_state::NONE;
+
+        if( ptlib_success( pid, sc_num ) ) {
+            state->memory=ptlib_get_retval( pid );
+            state->mem_size=sysconf( _SC_PAGESIZE );
+            dlog("mmap: %d allocated for our use %d bytes at %p\n", state->mem_size, state->memory);
+            
+            ptlib_prepare_memory( pid, &state->memory, &state->mem_size );
+
+            // Memory is prepared, we can now use it to restart the original system call
+            ptlib_restore_state( pid, state->saved_state );
+            return ptlib_generate_syscall( pid, state->orig_sc , state->memory );
+        } else {
+            // The allocation failed. What can you do except kill the process?
+            dlog("mmap: %d our memory allocation failed with error. Kill process. %d\n", pid, ptlib_get_error(pid, sc_num) );
+            ptrace( PTRACE_KILL, pid, 0, 0 );
+            return false;
+        }
+    }
+
+    return true;
 }
