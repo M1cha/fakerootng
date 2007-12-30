@@ -9,7 +9,7 @@
 #include <errno.h>
 
 #include <stdio.h>
-#include <assert.h>
+#include <stdlib.h>
 
 #include "../../platform.h"
 
@@ -49,7 +49,7 @@ int ptlib_generate_syscall( pid_t pid, int sc_num, void *base_memory )
     ptrace( PTRACE_POKEUSER, pid, 4*EAX, sc_num );
     ptrace( PTRACE_POKEUSER, pid, 4*EIP, base_memory-mem_offset );
 
-    return 0;
+    return 1;
 }
 
 void *ptlib_get_argument( pid_t pid, int argnum )
@@ -87,10 +87,12 @@ void ptlib_set_retval( pid_t pid, void *val )
 int ptlib_get_error( pid_t pid, int sc_num )
 {
     switch( sc_num ) {
+    case SYS_chmod:
+    case SYS_fchmod:
     case SYS_mmap:
         return -(int)ptlib_get_retval( pid );
     default:
-        assert(0);
+        abort();
         return -(int)ptlib_get_retval( pid );
     }
 }
@@ -106,12 +108,15 @@ int ptlib_success( pid_t pid, int sc_num )
     case SYS_fstat64:
     case SYS_lstat:
     case SYS_lstat64:
+    case SYS_chmod:
+    case SYS_fchmod:
         return ((int)ret)>=0;
     case SYS_mmap:
+    case SYS_mmap2:
         /* -errno on error */
         return ((unsigned int)ret)<0xfffff000u;
     default:
-        assert(0); /* We tried to assume about an unknown syscall */
+        abort(); /* We tried to assume about an unknown syscall */
         return 0;
     }
 }

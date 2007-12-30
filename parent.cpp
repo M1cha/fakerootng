@@ -21,6 +21,10 @@
 #include "syscalls.h"
 #include "parent.h"
 
+// forward declaration of function
+static bool finish_allocation( int sc_num, pid_t pid, pid_state *state );
+
+
 // Keep track of handled syscalls
 
 
@@ -43,6 +47,57 @@ bool sys_geteuid( int sc_num, pid_t pid, pid_state *state )
     }
 
     return true;
+}
+
+static const char *sig2str( int signum )
+{
+    static char buffer[64];
+
+    switch(signum) {
+#define SIGNAME(a) case a: return #a;
+        SIGNAME(SIGHUP);
+        SIGNAME(SIGINT);
+        SIGNAME(SIGQUIT);
+        SIGNAME(SIGILL);
+        SIGNAME(SIGTRAP);
+        SIGNAME(SIGABRT);
+        SIGNAME(SIGBUS);
+        SIGNAME(SIGFPE);
+        SIGNAME(SIGKILL);
+        SIGNAME(SIGSEGV);
+        SIGNAME(SIGPIPE);
+        SIGNAME(SIGALRM);
+        SIGNAME(SIGTERM);
+        SIGNAME(SIGCHLD);
+        SIGNAME(SIGCONT);
+        SIGNAME(SIGSTOP);
+#undef SIGNAME
+    default:
+        sprintf(buffer, "signal %d", signum);
+    }
+
+    return buffer;
+}
+
+static const char *state2str( pid_state::states state )
+{
+    static char buffer[64];
+
+    switch(state) {
+#define STATENAME(a) case pid_state::a: return #a;
+        STATENAME(INIT)
+        STATENAME(NONE)
+        STATENAME(RETURN)
+        STATENAME(REDIRECT1)
+        STATENAME(REDIRECT2)
+        STATENAME(ALLOCATE)
+        STATENAME(ALLOC_RETURN)
+#undef STATENAME
+    }
+
+    sprintf(buffer, "Unknown state %d", state);
+
+    return buffer;
 }
 
 bool sys_getuid( int sc_num, pid_t pid, pid_state *state )
@@ -82,7 +137,7 @@ static void init_handlers()
     syscalls[SYS_chmod]=syscall_hook(sys_chmod, "chmod");
     syscalls[SYS_fchmod]=syscall_hook(sys_chmod, "fchmod");
 
-    syscalls[SYS_mmap]=syscall_hook(sys_mmap, "mmap");
+    syscalls[SYS_mmap2]=syscall_hook(sys_mmap, "mmap2");
 }
 
 static void handle_exit( pid_t pid, int status, const struct rusage &usage )
@@ -140,23 +195,26 @@ int process_children(pid_t first_child, int comm_fd )
         case SYSCALL:
             {
                 pid_state *proc_state=&state[pid];
-                if( proc_state->state==pid_state::REDIRECT ) {
+                if( proc_state->state==pid_state::REDIRECT1 || proc_state->state==pid_state::REDIRECT2 ) {
                     dlog("%d: Called syscall %d, redirected from %s\n", pid, ret, syscalls[proc_state->orig_sc].name );
 
-                    if( !syscalls[ret].func( ret, pid, proc_state ) )
+                    if( !syscalls[proc_state->orig_sc].func( ret, pid, proc_state ) )
                         sig=-1; // Mark for ptrace not to continue the process
+                } else if( proc_state->state==pid_state::ALLOC_RETURN ) {
+                    if( !finish_allocation( ret, pid, proc_state ) )
+                        sig=-1;
                 } else if( syscalls.find(ret)!=syscalls.end() ) {
-                    dlog("%d: Called %s\n", pid, syscalls[ret].name);
+                    dlog("%d: Called %s(%s)\n", pid, syscalls[ret].name, state2str(proc_state->state));
 
                     if( !syscalls[ret].func( ret, pid, proc_state ) )
                         sig=-1; // Mark for ptrace not to continue the process
                 } else {
-                    dlog("%d: Unknown syscall %ld\n", pid, ret);
+                    dlog("%d: Unknown syscall %ld(%s)\n", pid, ret, state2str(proc_state->state));
                 }
             }
             break;
         case SIGNAL:
-            dlog("%d: Signal %ld\n", pid, ret);
+            dlog("%d: Signal %s\n", pid, sig2str(ret));
             sig=ret;
             break;
         case EXIT:
@@ -164,8 +222,9 @@ int process_children(pid_t first_child, int comm_fd )
             {
                 if( wait_state==EXIT )
                     dlog("%d: Exit with return code %ld\n", pid, ret);
-                else
-                    dlog("%d: Exit with signal %ld\n", pid, ret);
+                else {
+                    dlog("%d: Exit with %s\n", pid, sig2str(ret));
+                }
 
                 struct rusage rusage;
                 getrusage( RUSAGE_CHILDREN, &rusage );
@@ -205,22 +264,15 @@ bool allocate_process_mem( pid_t pid, pid_state *state, int sc_num )
     state->state=pid_state::ALLOCATE;
 
     // Translate the whatever call into an mmap
-    ptlib_set_syscall( pid, SYS_mmap );
+    ptlib_set_syscall( pid, SYS_mmap2 );
 
-    if( ptlib_set_argument( pid, 1, 0 ) ) // start pointer
-        dlog("allocate_process_mem: %d set mmap arg 1\n", pid );
-    if( ptlib_set_argument( pid, 2, (void *)sysconf(_SC_PAGESIZE) ) ) // Length of page - we allocate exactly one page
-        dlog("allocate_process_mem: %d set mmap arg 2\n", pid );
-    if( ptlib_set_argument( pid, 3, (void *)(PROT_EXEC|PROT_READ|PROT_WRITE) ) ) // Protection - allow execute
-        dlog("allocate_process_mem: %d set mmap arg 3\n", pid );
-    if( ptlib_set_argument( pid, 4, (void *)(MAP_PRIVATE|MAP_ANONYMOUS) ) ) // Flags - anonymous memory allocation
-        dlog("allocate_process_mem: %d set mmap arg 4\n", pid );
-    if( ptlib_set_argument( pid, 5, (void *)-1 ) ) // File descriptor
-        dlog("allocate_process_mem: %d set mmap arg 5\n", pid );
-    if( ptlib_set_argument( pid, 6, 0 ) ) // Offset
-        dlog("allocate_process_mem: %d set mmap arg 6\n", pid );
+    ptlib_set_argument( pid, 1, 0 ); // start pointer
+    ptlib_set_argument( pid, 2, (void *)sysconf(_SC_PAGESIZE) ); // Length of page - we allocate exactly one page
+    ptlib_set_argument( pid, 3, (void *)(PROT_EXEC|PROT_READ|PROT_WRITE) ); // Protection - allow execute
+    ptlib_set_argument( pid, 4, (void *)(MAP_PRIVATE|MAP_ANONYMOUS) ); // Flags - anonymous memory allocation
+    ptlib_set_argument( pid, 5, (void *)-1 ); // File descriptor
+    ptlib_set_argument( pid, 6, 0 ); // Offset
 
-    dlog("Calling mmap(%p, %p, %p, %p, %p, %p)\n", ptlib_get_argument( pid, 1 ), ptlib_get_argument( pid, 2 ), ptlib_get_argument( pid, 3 ), ptlib_get_argument( pid, 4 ), ptlib_get_argument( pid, 5 ), ptlib_get_argument( pid, 6 ) );
     return true;
 }
 
@@ -233,17 +285,16 @@ bool sys_mmap( int sc_num, pid_t pid, pid_state *state )
         dlog("mmap: %d direct return\n", pid);
         state->state=pid_state::NONE;
     } else if( state->state==pid_state::ALLOCATE ) {
-        state->state=pid_state::NONE;
 
         if( ptlib_success( pid, sc_num ) ) {
             state->memory=ptlib_get_retval( pid );
             state->mem_size=sysconf( _SC_PAGESIZE );
-            dlog("mmap: %d allocated for our use %d bytes at %p\n", state->mem_size, state->memory);
+            dlog("mmap: %d allocated for our use %d bytes at %p\n", pid, state->mem_size, state->memory);
             
             ptlib_prepare_memory( pid, &state->memory, &state->mem_size );
 
             // Memory is prepared, we can now use it to restart the original system call
-            ptlib_restore_state( pid, state->saved_state );
+            state->state=pid_state::ALLOC_RETURN;
             return ptlib_generate_syscall( pid, state->orig_sc , state->memory );
         } else {
             // The allocation failed. What can you do except kill the process?
@@ -251,7 +302,19 @@ bool sys_mmap( int sc_num, pid_t pid, pid_state *state )
             ptrace( PTRACE_KILL, pid, 0, 0 );
             return false;
         }
+        state->state=pid_state::NONE;
     }
 
     return true;
+}
+
+static bool finish_allocation( int sc_num, pid_t pid, pid_state *state )
+{
+    ptlib_restore_state( pid, state->saved_state );
+    state->state=pid_state::NONE;
+
+    syscall_hook *sys=&syscalls[sc_num];
+    dlog("finish_allocation: %d restore state and call %s handler\n", pid, sys->name );
+
+    return sys->func( sc_num, pid, state );
 }

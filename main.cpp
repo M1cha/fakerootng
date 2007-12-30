@@ -21,6 +21,8 @@ void dlog( const char *format, ... )
         va_start(params, format);
         vfprintf(debug_log, format, params);
         va_end(params);
+
+        fflush( debug_log );
     }
 }
 

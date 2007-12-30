@@ -54,20 +54,27 @@ bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
 
 bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
 {
+    dlog("chmod: %d started\n", pid);
     if( state->state==pid_state::NONE ) {
         if( state->memory==NULL ) {
             return allocate_process_mem( pid, state, sc_num );
         }
 
         state->saved_state[0]=ptlib_get_argument( pid, 1 ); // Store the filename/filedes
-        state->saved_state[1]=ptlib_get_argument( pid, 2 ); // Store the requested mode
-        ptlib_set_argument( pid, 2,
-            reinterpret_cast<void *>(reinterpret_cast<unsigned long>(state->saved_state[0])&0777) ); // Zero out the S* field
+        mode_t mode=(mode_t)ptlib_get_argument( pid, 2 ); // Store the requested mode
+        state->saved_state[1]=(void *)mode;
+
+        mode=mode&0777;
+        ptlib_set_argument( pid, 2, (void *) mode ); // Zero out the S* field
+
+        dlog("chmod: %d mode %o changed to %o\n", pid, state->saved_state[1], mode );
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
         if( ptlib_success( pid, sc_num ) ) {
+            dlog("chmod: %d chmod successful, performing stat so we can update the map\n", pid);
+
             // We need to call "stat/fstat" so we can know the dev/inode
-            state->state=pid_state::REDIRECT;
+            state->state=pid_state::REDIRECT1;
             ptlib_save_state( pid, state->saved_state+2 );
             state->orig_sc=sc_num;
 
@@ -75,14 +82,14 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
             ptlib_set_argument( pid, 2, state->memory );
             switch( sc_num ) {
             case SYS_fchmod:
-                ptlib_generate_syscall( pid, SYS_fstat64, state->memory );
+                return ptlib_generate_syscall( pid, SYS_fstat64, state->memory );
                 break;
             case SYS_chmod:
-                ptlib_generate_syscall( pid, SYS_lstat64, state->memory );
+                return ptlib_generate_syscall( pid, SYS_lstat64, state->memory );
                 break;
             default:
                 dlog("chmod: %d Oops! Unhandled syscall %d\n", pid, sc_num );
-                assert(0);
+                abort();
                 ptlib_restore_state( pid, state->saved_state+2 );
                 ptlib_set_error( pid, sc_num, EFAULT );
                 state->state=pid_state::NONE;
@@ -90,8 +97,12 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
             }
         } else {
             state->state=pid_state::NONE;
+            dlog("chmod: %d chmod failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)));
         }
-    } else if( state->state==pid_state::REDIRECT ) {
+    } else if( state->state==pid_state::REDIRECT1 ) {
+        state->state=pid_state::REDIRECT2;
+        dlog("chmod: %d REDIRECT1\n", pid );
+    } else if( state->state==pid_state::REDIRECT2 ) {
         // Update our lies database
         struct stat_override override;
         struct ptlib_stat64 stat;
@@ -105,10 +116,16 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
             override.gid=stat.uid;
             override.dev_id=stat.rdev;
         }
-        override.mode=(stat.mode&~07777)|(((mode_t)state->saved_state[1])&07777);
+        override.mode=(stat.mode&~07000)|(((mode_t)state->saved_state[1])&07000);
 
+        dlog("chmod: %d Setting override mode %o\n", pid, override.mode );
         set_map( &override );
 
         state->state=pid_state::NONE;
+        ptlib_restore_state( pid, state->saved_state+2 );
+    } else {
+        dlog("chmod: %d unknown state %d\n", pid, state->state );
     }
+
+    return true;
 }
