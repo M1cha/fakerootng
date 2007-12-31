@@ -22,6 +22,7 @@
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #include <assert.h>
 
@@ -46,8 +47,8 @@ bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
     if( state->state==pid_state::NONE ) {
         // Entering the syscall
         state->state=pid_state::RETURN;
-        state->saved_state[0]=ptlib_get_argument( pid, 2 ); // Store the pointer to the stat struct
-        dlog("stat64: %d stored pointer at %p\n", pid, state->saved_state[0] );
+        state->context_state[0]=ptlib_get_argument( pid, 2 ); // Store the pointer to the stat struct
+        dlog("stat64: %d stored pointer at %p\n", pid, state->context_state[0] );
     } else if( state->state==pid_state::RETURN ) {
         // Returning from the syscall
         void *returncode=ptlib_get_retval( pid );
@@ -56,7 +57,7 @@ bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
             struct ptlib_stat64 ret;
             struct stat_override override;
 
-            ptlib_get_mem( pid, state->saved_state[0], &ret, sizeof(ret) );
+            ptlib_get_mem( pid, state->context_state[0], &ret, sizeof(ret) );
 
             if( get_map( ret.dev, ret.ino, &override ) ) {
                 bool ok=true;
@@ -77,7 +78,7 @@ bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
                 // XXX the dlog may actually be platform dependent, based on the size of dev and inode
                 if( ok ) {
                     dlog("stat64: %d dev=%llx inode=%lld mode=%o uid=%d gid=%d\n", pid, ret.dev, ret.ino, ret.mode, ret.uid, ret.gid );
-                    ptlib_set_mem( pid, &ret, state->saved_state[0], sizeof(struct stat) );
+                    ptlib_set_mem( pid, &ret, state->context_state[0], sizeof(struct stat) );
                 } else {
                     dlog("stat64: %d dev=%llx inode=%lld entry corrupt - removed\n", pid, ret.dev, ret.ino );
                     remove_map( ret.dev, ret.ino );
@@ -99,14 +100,14 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
             return allocate_process_mem( pid, state, sc_num );
         }
 
-        state->saved_state[0]=ptlib_get_argument( pid, 1 ); // Store the filename/filedes
+        state->context_state[0]=ptlib_get_argument( pid, 1 ); // Store the filename/filedes
         mode_t mode=(mode_t)ptlib_get_argument( pid, 2 ); // Store the requested mode
-        state->saved_state[1]=(void *)mode;
+        state->context_state[1]=(void *)mode;
 
         mode=mode&~07000;
         ptlib_set_argument( pid, 2, (void *) mode ); // Zero out the S* field
 
-        dlog("chmod: %d mode %o changed to %o\n", pid, state->saved_state[1], mode );
+        dlog("chmod: %d mode %o changed to %o\n", pid, state->context_state[1], mode );
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
         if( ptlib_success( pid, sc_num ) ) {
@@ -114,10 +115,10 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
 
             // We need to call "stat/fstat" so we can know the dev/inode
             state->state=pid_state::REDIRECT1;
-            ptlib_save_state( pid, state->saved_state+2 );
+            ptlib_save_state( pid, state->saved_state );
             state->orig_sc=sc_num;
 
-            ptlib_set_argument( pid, 1, state->saved_state[0] );
+            ptlib_set_argument( pid, 1, state->context_state[0] );
             ptlib_set_argument( pid, 2, state->memory );
             switch( sc_num ) {
             case SYS_fchmod:
@@ -129,7 +130,7 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
             default:
                 dlog("chmod: %d Oops! Unhandled syscall %d\n", pid, sc_num );
                 abort();
-                ptlib_restore_state( pid, state->saved_state+2 );
+                ptlib_restore_state( pid, state->saved_state );
                 ptlib_set_error( pid, sc_num, EFAULT );
                 state->state=pid_state::NONE;
                 break;
@@ -151,13 +152,13 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
         if( !get_map( stat.dev, stat.ino, &override ) ) {
             stat_override_copy( &stat, &override );
         }
-        override.mode=(stat.mode&~07000)|(((mode_t)state->saved_state[1])&07000);
+        override.mode=(stat.mode&~07000)|(((mode_t)state->context_state[1])&07000);
 
         dlog("chmod: %d Setting override mode %o\n", pid, override.mode );
         set_map( &override );
 
         state->state=pid_state::NONE;
-        ptlib_restore_state( pid, state->saved_state+2 );
+        ptlib_restore_state( pid, state->saved_state );
     } else {
         dlog("chmod: %d unknown state %d\n", pid, state->state );
     }
@@ -174,8 +175,8 @@ bool sys_chown( int sc_num, pid_t pid, pid_state *state )
         }
 
         // Map this to a stat operation
-        state->saved_state[0]=ptlib_get_argument(pid, 2);
-        state->saved_state[1]=ptlib_get_argument(pid, 3);
+        state->context_state[0]=ptlib_get_argument(pid, 2);
+        state->context_state[1]=ptlib_get_argument(pid, 3);
 
         ptlib_set_argument( pid, 2, state->memory );
 
@@ -212,10 +213,10 @@ bool sys_chown( int sc_num, pid_t pid, pid_state *state )
             if( !get_map( stat.dev, stat.ino, &override ) )
                 stat_override_copy( &stat, &override );
 
-            if( ((int)state->saved_state[0])!=-1 )
-                override.uid=(int)state->saved_state[0];
-            if( ((int)state->saved_state[1])!=-1 )
-                override.gid=(int)state->saved_state[1];
+            if( ((int)state->context_state[0])!=-1 )
+                override.uid=(int)state->context_state[0];
+            if( ((int)state->context_state[1])!=-1 )
+                override.gid=(int)state->context_state[1];
 
             set_map( &override );
         } else {
@@ -236,10 +237,10 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
             return allocate_process_mem(pid, state, sc_num);
         }
 
-        state->saved_state[0]=ptlib_get_argument( pid, 1 ); // File name
-        state->saved_state[1]=ptlib_get_argument( pid, 2 ); // Mode
-        state->saved_state[2]=ptlib_get_argument( pid, 3 ); // Device ID
-        mode_t mode=(mode_t)state->saved_state[1];
+        state->context_state[0]=ptlib_get_argument( pid, 1 ); // File name
+        state->context_state[1]=ptlib_get_argument( pid, 2 ); // Mode
+        state->context_state[2]=ptlib_get_argument( pid, 3 ); // Device ID
+        mode_t mode=(mode_t)state->context_state[1];
 
         if( S_ISCHR(mode) || S_ISBLK(mode) ) {
             dlog("mknod: %d tried to create %s device, turn to regular file\n", pid, S_ISCHR(mode) ? "character" : "block" );
@@ -250,16 +251,16 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
 
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
-        mode_t mode=(mode_t)state->saved_state[1];
+        mode_t mode=(mode_t)state->context_state[1];
 
         if( ptlib_success( pid, sc_num ) && (S_ISCHR(mode) || S_ISBLK(mode) ) ) {
             // Need to call "stat" on the file to see what inode number it got
-            ptlib_set_argument( pid, 1, state->saved_state[0] ); // File name
+            ptlib_set_argument( pid, 1, state->context_state[0] ); // File name
             ptlib_set_argument( pid, 2, state->memory ); // Struct stat
 
             state->orig_sc=sc_num;
             state->state=pid_state::REDIRECT1;
-            ptlib_save_state( pid, state->saved_state+3 );
+            ptlib_save_state( pid, state->saved_state );
 
             dlog("mknod: %d Actual node creation successful. Calling stat\n", pid );
             return ptlib_generate_syscall( pid, SYS_stat64, state->memory );
@@ -286,11 +287,11 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
             override.uid=0;
             override.gid=0;
 
-            mode_t mode=(mode_t)state->saved_state[1];
+            mode_t mode=(mode_t)state->context_state[1];
             if( S_ISCHR(mode) || S_ISBLK(mode) ) {
                 dlog("mknod: %d overriding the file type\n", pid );
                 override.mode=override.mode&~S_IFMT | mode&S_IFMT;
-                override.dev_id=(dev_t)state->saved_state[2];
+                override.dev_id=(dev_t)state->context_state[2];
             }
 
             set_map( &override );
@@ -299,9 +300,70 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
             dlog("mknod: %d stat failed. Leave override DB non-updated\n", pid );
         }
 
-        ptlib_restore_state( pid, state->saved_state+3 );
+        ptlib_restore_state( pid, state->saved_state );
         state->state=pid_state::NONE;
     }
 
     return true;
 }
+
+bool sys_open( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        // Will need memory
+        if( state->memory==NULL )
+            return allocate_process_mem( pid, state, sc_num );
+
+        state->context_state[0]=ptlib_get_argument( pid, 2 );
+        state->state=pid_state::RETURN;
+    } else if( state->state==pid_state::RETURN ) {
+        // Did we request to create a new file?
+        if( (((int)state->context_state[0])&O_CREAT)!=0 && ptlib_success(pid, sc_num) ) {
+            int fd=(int)ptlib_get_retval(pid);
+            dlog("open: %d opened fd %d, assume we actually created it\n", pid, fd );
+
+            ptlib_save_state( pid, state->saved_state );
+            state->state=pid_state::REDIRECT1;
+            state->orig_sc=sc_num;
+
+            // Call fstat to find out what we have
+            ptlib_set_argument( pid, 1, (void *)fd );
+            ptlib_set_argument( pid, 2, state->memory );
+            return ptlib_generate_syscall( pid, SYS_fstat64, state->memory );
+        } else
+            state->state=pid_state::NONE;
+    } else if( state->state==pid_state::REDIRECT1 ) {
+        dlog("open: %d REDIRECT1\n");
+        state->state=pid_state::REDIRECT2;
+    } else if( state->state==pid_state::REDIRECT2 ) {
+        if( ptlib_success( pid, sc_num ) ) {
+            ptlib_stat64 stat;
+            stat_override override;
+
+            ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
+
+            // XXX The test whether we just created a new file is not the most accurate in the world
+            // In particular, if the previous instance was deleted, this will misbehave
+            if( !get_map( stat.dev, stat.ino, &override ) ) {
+                // If the map already exists, assume we did not create a new file and don't touch the owners
+                stat_override_copy( &stat, &override );
+
+                override.uid=0;
+                override.gid=0;
+
+                set_map( &override );
+                dlog("open: %d creating override for dev %llx inode %lld\n", pid, override.dev, override.inode);
+            } else {
+                dlog("open: %d map for dev %llx inode %lld already exists - doing nothing\n", pid, stat.dev, stat.ino );
+            }
+        } else {
+            dlog("open: %d fstat failed %s\n", pid, strerror( ptlib_get_error( pid, sc_num ) ) );
+        }
+
+        state->state=pid_state::NONE;
+        ptlib_restore_state( pid, state->saved_state );
+    }
+
+    return true;
+}
+
