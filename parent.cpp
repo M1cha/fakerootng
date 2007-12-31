@@ -52,20 +52,28 @@ static __gnu_cxx::hash_map<pid_t, pid_state> state;
 
 static __gnu_cxx::hash_map<int, syscall_hook> syscalls;
 
-bool sys_geteuid( int sc_num, pid_t pid, pid_state *state )
+static void init_handlers()
 {
-    switch( state->state ) {
-    default:
-    case pid_state::NONE:
-        state->state=pid_state::RETURN;
-        break;
-    case pid_state::RETURN:
-        ptlib_set_retval( pid, 0 );
-        state->state=pid_state::NONE;
-        break;
-    }
+    syscalls[SYS_geteuid32]=syscall_hook(sys_geteuid, "geteuid");
+    syscalls[SYS_getuid32]=syscall_hook(sys_getuid, "getuid");
+#if ! PTLIB_SUPPORTS_FORK
+    syscalls[SYS_fork]=syscall_hook(sys_fork, "fork");
+#endif
+#if ! PTLIB_SUPPORTS_VFORK
+    syscalls[SYS_vfork]=sys_vfork;
+#endif
+#if ! PTLIB_SUPPORTS_CLONE
+    syscalls[SYS_clone]=sys_clone;
+#endif
 
-    return true;
+    syscalls[SYS_stat64]=syscall_hook(sys_stat64, "stat64");
+    syscalls[SYS_fstat64]=syscall_hook(sys_stat64, "fstat64");
+    syscalls[SYS_lstat64]=syscall_hook(sys_stat64, "lstat64");
+
+    syscalls[SYS_chmod]=syscall_hook(sys_chmod, "chmod");
+    syscalls[SYS_fchmod]=syscall_hook(sys_chmod, "fchmod");
+
+    syscalls[SYS_mmap2]=syscall_hook(sys_mmap, "mmap2");
 }
 
 static const char *sig2str( int signum )
@@ -117,46 +125,6 @@ static const char *state2str( pid_state::states state )
     sprintf(buffer, "Unknown state %d", state);
 
     return buffer;
-}
-
-bool sys_getuid( int sc_num, pid_t pid, pid_state *state )
-{
-    switch( state->state ) {
-    default:
-    case pid_state::NONE:
-        state->state=pid_state::RETURN;
-        break;
-    case pid_state::RETURN:
-        ptlib_set_retval( pid, 0 );
-        state->state=pid_state::NONE;
-        break;
-    }
-
-    return true;
-}
-
-static void init_handlers()
-{
-    syscalls[SYS_geteuid32]=syscall_hook(sys_geteuid, "geteuid");
-    syscalls[SYS_getuid32]=syscall_hook(sys_getuid, "getuid");
-#if ! PTLIB_SUPPORTS_FORK
-    syscalls[SYS_fork]=syscall_hook(sys_fork, "fork");
-#endif
-#if ! PTLIB_SUPPORTS_VFORK
-    syscalls[SYS_vfork]=sys_vfork;
-#endif
-#if ! PTLIB_SUPPORTS_CLONE
-    syscalls[SYS_clone]=sys_clone;
-#endif
-
-    syscalls[SYS_stat64]=syscall_hook(sys_stat64, "stat64");
-    syscalls[SYS_fstat64]=syscall_hook(sys_stat64, "fstat64");
-    syscalls[SYS_lstat64]=syscall_hook(sys_stat64, "lstat64");
-
-    syscalls[SYS_chmod]=syscall_hook(sys_chmod, "chmod");
-    syscalls[SYS_fchmod]=syscall_hook(sys_chmod, "fchmod");
-
-    syscalls[SYS_mmap2]=syscall_hook(sys_mmap, "mmap2");
 }
 
 static void handle_exit( pid_t pid, int status, const struct rusage &usage )
