@@ -24,22 +24,6 @@
 #include "syscalls.h"
 #include "arch/platform.h"
 
-bool sys_geteuid( int sc_num, pid_t pid, pid_state *state )
-{
-    switch( state->state ) {
-    default:
-    case pid_state::NONE:
-        state->state=pid_state::RETURN;
-        break;
-    case pid_state::RETURN:
-        ptlib_set_retval( pid, 0 );
-        state->state=pid_state::NONE;
-        break;
-    }
-
-    return true;
-}
-
 bool sys_getuid( int sc_num, pid_t pid, pid_state *state )
 {
     switch( state->state ) {

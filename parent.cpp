@@ -54,8 +54,11 @@ static __gnu_cxx::hash_map<int, syscall_hook> syscalls;
 
 static void init_handlers()
 {
-    syscalls[SYS_geteuid32]=syscall_hook(sys_geteuid, "geteuid");
+    syscalls[SYS_geteuid32]=syscall_hook(sys_getuid, "geteuid");
     syscalls[SYS_getuid32]=syscall_hook(sys_getuid, "getuid");
+    syscalls[SYS_getegid32]=syscall_hook(sys_getuid, "getegid");
+    syscalls[SYS_getgid32]=syscall_hook(sys_getuid, "getgid");
+
 #if ! PTLIB_SUPPORTS_FORK
     syscalls[SYS_fork]=syscall_hook(sys_fork, "fork");
 #endif
