@@ -17,6 +17,7 @@ DECLARE_SYSFUNC(wait4)
 DECLARE_SYSFUNC(stat64)
 DECLARE_SYSFUNC(chmod)
 DECLARE_SYSFUNC(chown)
+DECLARE_SYSFUNC(mknod)
 
 // Meta required functions
 DECLARE_SYSFUNC(mmap)

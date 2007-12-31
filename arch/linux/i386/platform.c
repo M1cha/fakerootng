@@ -109,6 +109,7 @@ int ptlib_get_error( pid_t pid, int sc_num )
     case SYS_chmod:
     case SYS_fchmod:
     case SYS_mmap:
+    case SYS_mknod:
         return -(int)ptlib_get_retval( pid );
     default:
         abort();
@@ -129,6 +130,7 @@ int ptlib_success( pid_t pid, int sc_num )
     case SYS_lstat64:
     case SYS_chmod:
     case SYS_fchmod:
+    case SYS_mknod:
         return ((int)ret)>=0;
     case SYS_mmap:
     case SYS_mmap2:

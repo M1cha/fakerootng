@@ -72,7 +72,7 @@ bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
                     // If the override is not a device, and the types do not match, this is not a valid entry
                     ok=(S_IFMT&ret.mode)==(S_IFMT&override.mode);
                 }
-                ret.mode=ret.mode&(~07000) | override.mode&07000;
+                ret.mode=ret.mode&(~(07000|S_IFMT)) | override.mode&(07000|S_IFMT);
 
                 // XXX the dlog may actually be platform dependent, based on the size of dev and inode
                 if( ok ) {
@@ -103,7 +103,7 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
         mode_t mode=(mode_t)ptlib_get_argument( pid, 2 ); // Store the requested mode
         state->saved_state[1]=(void *)mode;
 
-        mode=mode&0777;
+        mode=mode&~07000;
         ptlib_set_argument( pid, 2, (void *) mode ); // Zero out the S* field
 
         dlog("chmod: %d mode %o changed to %o\n", pid, state->saved_state[1], mode );
@@ -222,6 +222,84 @@ bool sys_chown( int sc_num, pid_t pid, pid_state *state )
             dlog("chown: %d stat call failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)) );
         }
 
+        state->state=pid_state::NONE;
+    }
+
+    return true;
+}
+
+bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        // Will need memory
+        if( state->memory==NULL ) {
+            return allocate_process_mem(pid, state, sc_num);
+        }
+
+        state->saved_state[0]=ptlib_get_argument( pid, 1 ); // File name
+        state->saved_state[1]=ptlib_get_argument( pid, 2 ); // Mode
+        state->saved_state[2]=ptlib_get_argument( pid, 3 ); // Device ID
+        mode_t mode=(mode_t)state->saved_state[1];
+
+        if( S_ISCHR(mode) || S_ISBLK(mode) ) {
+            dlog("mknod: %d tried to create %s device, turn to regular file\n", pid, S_ISCHR(mode) ? "character" : "block" );
+            mode=mode&~S_IFMT | S_IFREG;
+
+            ptlib_set_argument( pid, 2, (void *)mode );
+        }
+
+        state->state=pid_state::RETURN;
+    } else if( state->state==pid_state::RETURN ) {
+        mode_t mode=(mode_t)state->saved_state[1];
+
+        if( ptlib_success( pid, sc_num ) && (S_ISCHR(mode) || S_ISBLK(mode) ) ) {
+            // Need to call "stat" on the file to see what inode number it got
+            ptlib_set_argument( pid, 1, state->saved_state[0] ); // File name
+            ptlib_set_argument( pid, 2, state->memory ); // Struct stat
+
+            state->orig_sc=sc_num;
+            state->state=pid_state::REDIRECT1;
+            ptlib_save_state( pid, state->saved_state+3 );
+
+            dlog("mknod: %d Actual node creation successful. Calling stat\n", pid );
+            return ptlib_generate_syscall( pid, SYS_stat64, state->memory );
+        } else {
+            // Nothing to do if the call failed
+            dlog("mknod: %d call failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num) ) );
+        }
+    } else if( state->state==pid_state::REDIRECT1 ) {
+        dlog("mknod: %d REDIRECT1\n", pid );
+        state->state=pid_state::REDIRECT2;
+    } else if( state->state==pid_state::REDIRECT2 ) {
+        if( ptlib_success( pid, sc_num ) ) {
+            dlog("mknod: %d registering the new device in the override DB\n", pid);
+
+            ptlib_stat64 stat;
+            stat_override override;
+
+            ptlib_get_mem( pid, state->memory, &stat, sizeof(stat) );
+
+            // This file was, supposedly, just created. Even if it has an entry in the override DB, that entry is obsolete
+            stat_override_copy( &stat, &override );
+
+            // We created the file, it should have our uid/gid
+            override.uid=0;
+            override.gid=0;
+
+            mode_t mode=(mode_t)state->saved_state[1];
+            if( S_ISCHR(mode) || S_ISBLK(mode) ) {
+                dlog("mknod: %d overriding the file type\n", pid );
+                override.mode=override.mode&~S_IFMT | mode&S_IFMT;
+                override.dev_id=(dev_t)state->saved_state[2];
+            }
+
+            set_map( &override );
+        } else {
+            // mknod succeeded, but stat failed?
+            dlog("mknod: %d stat failed. Leave override DB non-updated\n", pid );
+        }
+
+        ptlib_restore_state( pid, state->saved_state+3 );
         state->state=pid_state::NONE;
     }
 
