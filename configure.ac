@@ -53,7 +53,7 @@ then
 ]
     AC_MSG_RESULT(no)
     echo "$srcdir"
-    AC_MSG_ERROR(Platform detected is yet supported.)
+    AC_MSG_ERROR(Platform detected is not yet supported.)
 [
 else
 ]    AC_MSG_RESULT([yes]) [
