@@ -64,3 +64,11 @@ void set_map( const stat_override *stat )
 {
     map_hash[db_key(stat->dev, stat->inode)]=*stat;
 }
+
+void remove_map( dev_t dev, ptlib_inode_t inode )
+{
+    file_hash::iterator i(map_hash.find( db_key( dev, inode) ));
+
+    if( i!=map_hash.end() )
+        map_hash.erase(i);
+}

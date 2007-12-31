@@ -58,19 +58,30 @@ bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
 
             ptlib_get_mem( pid, state->saved_state[0], &ret, sizeof(ret) );
 
-            // Copy the current mode into the override struct
-            override.mode=ret.mode;
-
             if( get_map( ret.dev, ret.ino, &override ) ) {
-                ret.mode=override.mode;
+                bool ok=true;
+
                 ret.uid=override.uid;
                 ret.gid=override.gid;
-                if( S_ISBLK(ret.mode) || S_ISCHR(ret.mode) )
+                if( S_ISBLK(override.mode) || S_ISCHR(override.mode) ) {
+                    // Only turn regular files into devices
+                    if( !S_ISREG( ret.mode ) )
+                        ok=false;
                     ret.rdev=override.dev_id;
+                } else {
+                    // If the override is not a device, and the types do not match, this is not a valid entry
+                    ok=(S_IFMT&ret.mode)==(S_IFMT&override.mode);
+                }
+                ret.mode=ret.mode&(~07000) | override.mode&07000;
 
                 // XXX the dlog may actually be platform dependent, based on the size of dev and inode
-                dlog("stat64: %d dev=%llx inode=%lld mode=%o uid=%d gid=%d\n", pid, ret.dev, ret.ino, ret.mode, ret.uid, ret.gid );
-                ptlib_set_mem( pid, &ret, state->saved_state[0], sizeof(struct stat) );
+                if( ok ) {
+                    dlog("stat64: %d dev=%llx inode=%lld mode=%o uid=%d gid=%d\n", pid, ret.dev, ret.ino, ret.mode, ret.uid, ret.gid );
+                    ptlib_set_mem( pid, &ret, state->saved_state[0], sizeof(struct stat) );
+                } else {
+                    dlog("stat64: %d dev=%llx inode=%lld entry corrupt - removed\n", pid, ret.dev, ret.ino );
+                    remove_map( ret.dev, ret.ino );
+                }
             }
         }
 

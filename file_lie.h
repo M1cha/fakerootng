@@ -20,4 +20,6 @@ bool get_map( dev_t dev, ptlib_inode_t inode, struct stat_override *stat );
 
 void set_map( const struct stat_override *stat );
 
+void remove_map( dev_t dev, ptlib_inode_t inode );
+
 #endif // FILE_LIE_H
