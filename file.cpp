@@ -29,7 +29,16 @@
 #include "file_lie.h"
 #include "arch/platform.h"
 
-// "stat" structure size and layout too greatly depends on the precise syscall used. We define it here, just in case
+// Helper function - fill in an override structure from a stat structure
+static void stat_override_copy( const ptlib_stat64 *stat, stat_override *override )
+{
+    override->dev=stat->dev;
+    override->inode=stat->ino;
+    override->uid=stat->uid;
+    override->gid=stat->uid;
+    override->dev_id=stat->rdev;
+    override->mode=stat->mode;
+}
 
 // Same function for stat64, lstat64 and fstat64
 bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
@@ -129,11 +138,7 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
         ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
 
         if( !get_map( stat.dev, stat.ino, &override ) ) {
-            override.dev=stat.dev;
-            override.inode=stat.ino;
-            override.uid=stat.uid;
-            override.gid=stat.uid;
-            override.dev_id=stat.rdev;
+            stat_override_copy( &stat, &override );
         }
         override.mode=(stat.mode&~07000)|(((mode_t)state->saved_state[1])&07000);
 
@@ -144,6 +149,69 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
         ptlib_restore_state( pid, state->saved_state+2 );
     } else {
         dlog("chmod: %d unknown state %d\n", pid, state->state );
+    }
+
+    return true;
+}
+
+bool sys_chown( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        // We're going to need memory
+        if( state->memory==NULL ) {
+            return allocate_process_mem( pid, state, sc_num );
+        }
+
+        // Map this to a stat operation
+        state->saved_state[0]=ptlib_get_argument(pid, 2);
+        state->saved_state[1]=ptlib_get_argument(pid, 3);
+
+        ptlib_set_argument( pid, 2, state->memory );
+
+        switch( sc_num ) {
+        case SYS_chown32:
+            ptlib_set_syscall( pid, SYS_stat64 );
+            dlog("chown: %d redirected chown call to stat\n", pid );
+            break;
+        case SYS_fchown32:
+            ptlib_set_syscall( pid, SYS_fstat64 );
+            dlog("chown: %d redirected fchown call to fstat\n", pid );
+            break;
+        case SYS_lchown32:
+            ptlib_set_syscall( pid, SYS_lstat64 );
+            dlog("chown: %d redirected lchown call to lstat\n", pid );
+            break;
+        default:
+            dlog("chown: %d called unsupported syscall %d\n", pid, sc_num );
+            abort();
+            break;
+        }
+
+        state->state=pid_state::REDIRECT2;
+        state->orig_sc=sc_num;
+    } else if( state->state==pid_state::REDIRECT2 ) {
+        dlog("point %d\n", sc_num );
+        if( ptlib_success( pid, sc_num ) ) {
+            dlog("point2\n");
+            struct ptlib_stat64 stat;
+            struct stat_override override;
+
+            ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
+
+            if( !get_map( stat.dev, stat.ino, &override ) )
+                stat_override_copy( &stat, &override );
+
+            if( ((int)state->saved_state[0])!=-1 )
+                override.uid=(int)state->saved_state[0];
+            if( ((int)state->saved_state[1])!=-1 )
+                override.gid=(int)state->saved_state[1];
+
+            set_map( &override );
+        } else {
+            dlog("chown: %d stat call failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)) );
+        }
+
+        state->state=pid_state::NONE;
     }
 
     return true;

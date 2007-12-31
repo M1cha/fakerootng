@@ -73,6 +73,10 @@ static void init_handlers()
     syscalls[SYS_fstat64]=syscall_hook(sys_stat64, "fstat64");
     syscalls[SYS_lstat64]=syscall_hook(sys_stat64, "lstat64");
 
+    syscalls[SYS_chown32]=syscall_hook(sys_chown, "chown32");
+    syscalls[SYS_fchown32]=syscall_hook(sys_chown, "fchown32");
+    syscalls[SYS_lchown32]=syscall_hook(sys_chown, "lchown32");
+
     syscalls[SYS_chmod]=syscall_hook(sys_chmod, "chmod");
     syscalls[SYS_fchmod]=syscall_hook(sys_chmod, "fchmod");
 

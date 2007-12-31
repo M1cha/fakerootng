@@ -87,7 +87,10 @@ static void perform_debugger( int child_socket, int parent_socket, pid_t child )
     setsid();
     dlog("Debugger started\n");
 
+#ifndef DEBUG
     // Close all open file descriptors except child_socket, parent_socket and the debug_log (if it exists)
+    // Do not close the file handles, nor chdir to root, if in debug mode. This is so that more debug info
+    // come out and that core can be dumped
     int fd=-1;
     if( debug_log!=NULL )
         fd=fileno(debug_log);
@@ -106,6 +109,7 @@ static void perform_debugger( int child_socket, int parent_socket, pid_t child )
 
     // Chdir out of the way of everyone
     chdir("/");
+#endif // DEBUG
 
     // Attach a debugger to the child
     if( ptrace(PTRACE_ATTACH, child, 0, 0)!=0 ) {
