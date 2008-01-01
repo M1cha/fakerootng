@@ -139,9 +139,6 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
             state->state=pid_state::NONE;
             dlog("chmod: %d chmod failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)));
         }
-    } else if( state->state==pid_state::REDIRECT1 ) {
-        state->state=pid_state::REDIRECT2;
-        dlog("chmod: %d REDIRECT1\n", pid );
     } else if( state->state==pid_state::REDIRECT2 ) {
         // Update our lies database
         struct stat_override override;
@@ -242,18 +239,21 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
         state->context_state[2]=ptlib_get_argument( pid, 3 ); // Device ID
         mode_t mode=(mode_t)state->context_state[1];
 
+        if( (mode&07000)!=0 ) {
+            // Mode has a SUID set
+            mode&=~(07000);
+        }
         if( S_ISCHR(mode) || S_ISBLK(mode) ) {
             dlog("mknod: %d tried to create %s device, turn to regular file\n", pid, S_ISCHR(mode) ? "character" : "block" );
             mode=mode&~S_IFMT | S_IFREG;
-
-            ptlib_set_argument( pid, 2, (void *)mode );
         }
+        ptlib_set_argument( pid, 2, (void *)mode );
 
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
         mode_t mode=(mode_t)state->context_state[1];
 
-        if( ptlib_success( pid, sc_num ) && (S_ISCHR(mode) || S_ISBLK(mode) ) ) {
+        if( ptlib_success( pid, sc_num ) ) {
             // Need to call "stat" on the file to see what inode number it got
             ptlib_set_argument( pid, 1, state->context_state[0] ); // File name
             ptlib_set_argument( pid, 2, state->memory ); // Struct stat
@@ -268,9 +268,6 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
             // Nothing to do if the call failed
             dlog("mknod: %d call failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num) ) );
         }
-    } else if( state->state==pid_state::REDIRECT1 ) {
-        dlog("mknod: %d REDIRECT1\n", pid );
-        state->state=pid_state::REDIRECT2;
     } else if( state->state==pid_state::REDIRECT2 ) {
         if( ptlib_success( pid, sc_num ) ) {
             dlog("mknod: %d registering the new device in the override DB\n", pid);
@@ -288,9 +285,9 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
             override.gid=0;
 
             mode_t mode=(mode_t)state->context_state[1];
-            if( S_ISCHR(mode) || S_ISBLK(mode) ) {
-                dlog("mknod: %d overriding the file type\n", pid );
-                override.mode=override.mode&~S_IFMT | mode&S_IFMT;
+            if( S_ISCHR(mode) || S_ISBLK(mode) || (mode&07000)!=0) {
+                dlog("mknod: %d overriding the file type and/or mode\n", pid );
+                override.mode=override.mode&~(S_IFMT|07000) | mode&(S_IFMT|07000);
                 override.dev_id=(dev_t)state->context_state[2];
             }
 
@@ -332,9 +329,6 @@ bool sys_open( int sc_num, pid_t pid, pid_state *state )
             return ptlib_generate_syscall( pid, SYS_fstat64, state->memory );
         } else
             state->state=pid_state::NONE;
-    } else if( state->state==pid_state::REDIRECT1 ) {
-        dlog("open: %d REDIRECT1\n");
-        state->state=pid_state::REDIRECT2;
     } else if( state->state==pid_state::REDIRECT2 ) {
         if( ptlib_success( pid, sc_num ) ) {
             ptlib_stat64 stat;

@@ -192,7 +192,12 @@ int process_children(pid_t first_child, int comm_fd )
         case SYSCALL:
             {
                 pid_state *proc_state=&state[pid];
-                if( proc_state->state==pid_state::REDIRECT1 || proc_state->state==pid_state::REDIRECT2 ) {
+                if( proc_state->state==pid_state::REDIRECT1 ) {
+                    // REDIRECT1 is just a filler state between the previous call, where the arguments were set up and
+                    // the call initiated, and the call's return (REDIRECT2). No need to actually call the handler
+                    dlog("%d: Calling syscall %d redirected from %s\n", pid, ret, syscalls[proc_state->orig_sc].name );
+                    proc_state->state=pid_state::REDIRECT2;
+                } else if( proc_state->state==pid_state::REDIRECT2 ) {
                     dlog("%d: Called syscall %d, redirected from %s\n", pid, ret, syscalls[proc_state->orig_sc].name );
 
                     if( !syscalls[proc_state->orig_sc].func( ret, pid, proc_state ) )
