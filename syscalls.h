@@ -20,6 +20,7 @@ DECLARE_SYSFUNC(chown)
 DECLARE_SYSFUNC(mknod)
 DECLARE_SYSFUNC(open)
 DECLARE_SYSFUNC(mkdir)
+DECLARE_SYSFUNC(symlink)
 
 // Meta required functions
 DECLARE_SYSFUNC(mmap)

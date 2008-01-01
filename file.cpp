@@ -415,3 +415,62 @@ bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
 
     return true;
 }
+
+bool sys_symlink( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        // Will need memory
+        if( state->memory==NULL )
+            return allocate_process_mem( pid, state, sc_num );
+
+        state->context_state[0]=ptlib_get_argument( pid, 2 ); // new path
+
+        state->state=pid_state::RETURN;
+    } else if( state->state==pid_state::RETURN ) {
+        if( ptlib_success( pid, sc_num ) ) {
+            dlog("symlink: %d success. Call stat to mark uid/gid override\n", pid );
+
+            state->orig_sc=sc_num;
+            state->state=pid_state::REDIRECT1;
+            ptlib_save_state( pid, state->saved_state );
+
+            ptlib_set_argument( pid, 1, state->context_state[0] ); // File name
+            ptlib_set_argument( pid, 2, state->memory ); // stat structure
+
+            return ptlib_generate_syscall( pid, SYS_lstat64, state->memory );
+        } else {
+            dlog("symlink: %d failed with error %s\n", strerror( ptlib_get_error(pid, sc_num) ) );
+            state->state=pid_state::NONE;
+        }
+    } else if( state->state==pid_state::REDIRECT2 ) {
+        if( ptlib_success( pid, sc_num ) ) {
+            ptlib_stat64 stat;
+            stat_override override;
+
+            ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
+
+            // Make sure we got the right file
+            if( S_ISLNK(stat.mode) ) {
+                // No need to check the DB as we just created the file
+                stat_override_copy( &stat, &override );
+
+                override.uid=0;
+                override.gid=0;
+
+                dlog("symlink: %d set uid/gid override for dev %llx inode %lld\n", pid, override.dev, override.inode );
+                set_map( &override );
+            } else {
+                dlog("symlink: %d acutal file on disk is not a symlink. Type %o dev %llx inode %lld\n", pid, stat.mode, stat.dev,
+                    stat.ino );
+            }
+        } else {
+            dlog("symlink: %d symlink succeeded, but stat failed with %s\n", pid, strerror(ptlib_get_error(pid, sc_num)));
+        }
+
+        ptlib_restore_state( pid, state->saved_state );
+        state->state=pid_state::NONE;
+    }
+
+    return true;
+}
+
