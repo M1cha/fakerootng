@@ -3,7 +3,7 @@
 .SH NAME
 fakeroot\-ng \- run a command while making it believe it is running as root
 .SH SYNOPSIS
-\fBfakeroot\-ng\fP [ \fB-d\fIlogfile\fP ] [ \fB-p\fIpersist_file\fP ] \fIcommand line\fP
+\fBfakeroot\-ng\fP [ \fB-l\fIlogfile\fP ] [ \fB-p\fIpersist_file\fP ] [-d] \fIcommand line\fP
 .SH DESCRIPTION
 This manual page documents the \fBfakeroot\-ng\fP command.
 .PP
@@ -23,16 +23,21 @@ Fakeroot-ng strives to fill those gaps by using a totally different technology f
 interception. Instead of using LD_PRELOAD, ptrace(2) is being used.
 .SH PARAMETERS
 .TP
-\fB\-d\fIlog_file\fP
-Causes fakeroot\-ng to dump to \fIlog_file\fP internal state and processing information. This is
-mostly useful for cases where fakeroot\-ng fails to act as expected.
-.TP
 \fB-p\fIstate_file\fP
 \fINot yet implemented\fP. Before the first process is being run, loads from \fIstate_file\fP the
 information needed in order to maintain a consistent view of file permissions and owners across
 fakeroot\-ng runs. This image is also automatically saved when the last process exists. If more then
 one instance of fakeroot\-ng is loaded simultaneously, both with the same \fIstate_file\fP, then
 the two instances will share state and their processes will see the same picture.
+.TP
+\fB\-l\fIlog_file\fP
+Causes fakeroot\-ng to dump to \fIlog_file\fP internal state and processing information. This is
+mostly useful for cases where fakeroot\-ng fails to act as expected.
+.TP
+\fB\-d\fP
+Tells fakeroot\-ng not to completely daemonize itself. This is mostly useful in case of crashes that
+cause a core dump, as the debugger would normally change directory to root, which would prevent a
+core file from being created.
 .SH SECURITY CONSIDERATIONS
 Fakeroot-ng is a non-SUID executable, and does not modify any sensitive data. It, therefor,
 does not affect the overall security of the system. One may be tempted, however, to use

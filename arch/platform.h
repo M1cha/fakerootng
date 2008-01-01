@@ -63,6 +63,9 @@ void ptlib_restore_state( pid_t pid, const void *buffer );
 /* Initialize debugger controled memory inside debuggee address space */
 void ptlib_prepare_memory( pid_t pid, void **memory, size_t *size );
 
+/* This is a function that must be provided by the user of the library */
+void dlog( const char *format, ... );
+
 #ifdef __cplusplus
 };
 #endif

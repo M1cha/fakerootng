@@ -120,6 +120,8 @@ int ptlib_get_error( pid_t pid, int sc_num )
     case SYS_fstat64:
         return -(int)ptlib_get_retval( pid );
     default:
+        dlog("ptlib_get_error: %d syscall %d not supported\n", pid, sc_num );
+        dlog(NULL); /* Flush the log before we crash */
         abort();
         return -(int)ptlib_get_retval( pid );
     }
@@ -150,6 +152,8 @@ int ptlib_success( pid_t pid, int sc_num )
         /* -errno on error */
         return ((unsigned int)ret)<0xfffff000u;
     default:
+        dlog("ptlib_success: %d unknown syscall %d\n", pid, sc_num );
+        dlog(NULL); /* Flush the log before we crash */
         abort(); /* We tried to assume about an unknown syscall */
         return 0;
     }

@@ -129,6 +129,7 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
                 break;
             default:
                 dlog("chmod: %d Oops! Unhandled syscall %d\n", pid, sc_num );
+                dlog(NULL); // Flush the file before we crash
                 abort();
                 ptlib_restore_state( pid, state->saved_state );
                 ptlib_set_error( pid, sc_num, EFAULT );
@@ -192,6 +193,7 @@ bool sys_chown( int sc_num, pid_t pid, pid_state *state )
             break;
         default:
             dlog("chown: %d called unsupported syscall %d\n", pid, sc_num );
+            dlog(NULL); // Flush the log before we crash
             abort();
             break;
         }
@@ -214,6 +216,7 @@ bool sys_chown( int sc_num, pid_t pid, pid_state *state )
                 override.gid=(int)state->context_state[1];
 
             dlog("chown: %d changing owner of dev %llx inode %lld\n", pid, override.dev, override.inode );
+            dlog(NULL); // Flush the log before we crash
             abort();
             set_map( &override );
         } else {

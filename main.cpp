@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 
+#include "arch/platform.h"
 #include "parent.h"
 
 static FILE *debug_log;
@@ -35,25 +36,36 @@ static FILE *debug_log;
 void dlog( const char *format, ... )
 {
     if( debug_log!=NULL ) {
-        va_list params;
+        if( format!=NULL ) {
+            va_list params;
 
-        va_start(params, format);
-        vfprintf(debug_log, format, params);
-        va_end(params);
-
-        fflush( debug_log );
+            va_start(params, format);
+            vfprintf(debug_log, format, params);
+            va_end(params);
+        } else {
+            fflush( debug_log );
+        }
     }
 }
+
+void print_version(void)
+{
+    printf(PACKAGE_NAME " version " PACKAGE_VERSION "\n");
+    printf("This is free software. Please read the AUTHORS file for details on copyright\n"
+        "and redistribution rights.\n");
+}
+
+static bool nodetach=false;
 
 int parse_options( int argc, char *argv[] )
 {
     int opt;
 
-    while( (opt=getopt(argc, argv, "+p:d:" ))!=-1 ) {
+    while( (opt=getopt(argc, argv, "+p:l:d" ))!=-1 ) {
         switch( opt ) {
         case 'p': // Persist file
             break;
-        case 'd':
+        case 'l':
             if( debug_log==NULL ) {
                 debug_log=fopen(optarg, "wt");
 
@@ -63,10 +75,13 @@ int parse_options( int argc, char *argv[] )
                     return -1;
                 }
             } else {
-                fprintf(stderr, "-d option given twice\n");
+                fprintf(stderr, "-l option given twice\n");
 
                 return -1;
             }
+            break;
+        case 'd':
+            nodetach=true;
             break;
         case '?':
             /* Error in parsing */
@@ -87,29 +102,29 @@ static void perform_debugger( int child_socket, int parent_socket, pid_t child )
     setsid();
     dlog("Debugger started\n");
 
-#ifndef DEBUG
-    // Close all open file descriptors except child_socket, parent_socket and the debug_log (if it exists)
-    // Do not close the file handles, nor chdir to root, if in debug mode. This is so that more debug info
-    // come out and that core can be dumped
-    int fd=-1;
-    if( debug_log!=NULL )
-        fd=fileno(debug_log);
+    if( !nodetach ) {
+        // Close all open file descriptors except child_socket, parent_socket and the debug_log (if it exists)
+        // Do not close the file handles, nor chdir to root, if in debug mode. This is so that more debug info
+        // come out and that core can be dumped
+        int fd=-1;
+        if( debug_log!=NULL )
+            fd=fileno(debug_log);
 
-    for( int i=0; i<getdtablesize(); ++i ) {
-        if( i!=child_socket && i!=parent_socket && i!=fd )
-            close(i);
+        for( int i=0; i<getdtablesize(); ++i ) {
+            if( i!=child_socket && i!=parent_socket && i!=fd )
+                close(i);
+        }
+
+        // Re-open the std{in,out,err}
+        fd=open("/dev/null", O_RDWR);
+        if( fd==0 ) { // Otherwise we somehow failed to close everything
+            dup(fd);
+            dup(fd);
+        }
+
+        // Chdir out of the way of everyone
+        chdir("/");
     }
-
-    // Re-open the std{in,out,err}
-    fd=open("/dev/null", O_RDWR);
-    if( fd==0 ) { // Otherwise we somehow failed to close everything
-        dup(fd);
-        dup(fd);
-    }
-
-    // Chdir out of the way of everyone
-    chdir("/");
-#endif // DEBUG
 
     // Attach a debugger to the child
     if( ptrace(PTRACE_ATTACH, child, 0, 0)!=0 ) {
@@ -157,6 +172,11 @@ int main(int argc, char *argv[])
         perror("child pipe failed");
 
         return 2;
+    }
+
+    if( opt_offset==argc ) {
+        print_version();
+        exit(0);
     }
 
 #if PTLIB_PARENT_CAN_WAIT
