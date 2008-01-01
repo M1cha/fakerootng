@@ -199,9 +199,7 @@ bool sys_chown( int sc_num, pid_t pid, pid_state *state )
         state->state=pid_state::REDIRECT2;
         state->orig_sc=sc_num;
     } else if( state->state==pid_state::REDIRECT2 ) {
-        dlog("point %d\n", sc_num );
         if( ptlib_success( pid, sc_num ) ) {
-            dlog("point2\n");
             struct ptlib_stat64 stat;
             struct stat_override override;
 
@@ -215,6 +213,8 @@ bool sys_chown( int sc_num, pid_t pid, pid_state *state )
             if( ((int)state->context_state[1])!=-1 )
                 override.gid=(int)state->context_state[1];
 
+            dlog("chown: %d changing owner of dev %llx inode %lld\n", pid, override.dev, override.inode );
+            abort();
             set_map( &override );
         } else {
             dlog("chown: %d stat call failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)) );
@@ -251,8 +251,6 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
 
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
-        mode_t mode=(mode_t)state->context_state[1];
-
         if( ptlib_success( pid, sc_num ) ) {
             // Need to call "stat" on the file to see what inode number it got
             ptlib_set_argument( pid, 1, state->context_state[0] ); // File name
@@ -361,3 +359,56 @@ bool sys_open( int sc_num, pid_t pid, pid_state *state )
     return true;
 }
 
+bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        // Will need memory
+        if( state->memory==NULL )
+            return allocate_process_mem( pid, state, sc_num );
+
+        state->context_state[0]=ptlib_get_argument( pid, 1 ); // Directory name
+
+        state->state=pid_state::RETURN;
+    } else if( state->state==pid_state::RETURN ) {
+        state->state=pid_state::NONE;
+
+        if( ptlib_success( pid, sc_num ) ) {
+            dlog("mkdir: %d succeeded. Call stat\n", pid );
+            ptlib_save_state( pid, state->saved_state );
+
+            // Perform a stat operation so we can know the directory's dev and inode
+            ptlib_set_argument( pid, 1, state->context_state[0] ); // Dir name
+            ptlib_set_argument( pid, 2, state->memory ); // stat structure
+
+            state->orig_sc=sc_num;
+            state->state=pid_state::REDIRECT1;
+
+            return ptlib_generate_syscall( pid, SYS_stat64, state->memory );
+        } else {
+            // If mkdir failed, we don't have anything else to do.
+            dlog("mkdir: %d failed with error %s\n", pid, strerror(ptlib_get_error( pid, sc_num ) ) );
+        }
+    } else if( state->state==pid_state::REDIRECT2 ) {
+        if( ptlib_success( pid, sc_num ) ) {
+            ptlib_stat64 stat;
+            stat_override override;
+
+            ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
+
+            // Since mkdir fails if the directory already exists, there is no point to check whether the override already exists
+            stat_override_copy( &stat, &override );
+            override.uid=0;
+            override.gid=0;
+
+            dlog("mkdir: %d storing override for dev %llx inode %lld\n", pid, override.dev, override.inode);
+            set_map( &override );
+        } else {
+            dlog("mkdir: %d stat failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)));
+        }
+
+        ptlib_restore_state( pid, state->saved_state );
+        state->state=pid_state::NONE;
+    }
+
+    return true;
+}

@@ -19,6 +19,7 @@ DECLARE_SYSFUNC(chmod)
 DECLARE_SYSFUNC(chown)
 DECLARE_SYSFUNC(mknod)
 DECLARE_SYSFUNC(open)
+DECLARE_SYSFUNC(mkdir)
 
 // Meta required functions
 DECLARE_SYSFUNC(mmap)
