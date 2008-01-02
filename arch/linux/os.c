@@ -72,6 +72,8 @@ int ptlib_wait( pid_t *pid, int *status, long *ret )
         return SIGNAL;
     } else {
         /* What is going on here? We should never get here. */
+        dlog("Process %d received unknown status %x - aborting\n", pid, *status);
+        dlog(NULL); /* Flush the log before we abort */
         abort();
     }
 }
