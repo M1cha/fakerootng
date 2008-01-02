@@ -1,4 +1,18 @@
-Limitations:
+Fakeroot-ng allows running a program while lieing to it that it is running with
+root privileges. Check out the man page for more details.
+
+Fakeroot-ng basic idea is taken from "fakeroot" (check the AUTHORS file), but
+it uses a different technology that will, hopefully, allow it to go where the
+original fakeroot has been unable to go. At the moment, however, fakeroot-ng
+merely aims to catch up to the functionality fakeroot already provides.
+
+These limitations are limitations inherent to the technology. Work arounds to
+some of them is planned, but they are documented here for completness' sake.
+
+Technology Limitations:
 - When in a chroot environment, we do not behave like the real thing if the
   interpreter used to run the program (/bin/sh, ld-linux.so etc) does not exist
-  inside the chroot. We succeed where a real chroot would have failed
+  inside the chroot. We succeed where a real chroot would have failed.
+- It is not possible to run a debugger on a fakerooted process. In particular,
+  this means that it is not currently possible to run "strace" inside a
+  fakeroot environment.

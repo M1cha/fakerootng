@@ -1,3 +1,14 @@
+Version 0.02
+    * New functions supported: chown, getgid/getegid, mknod (creating device
+      files)
+    * Assume ownership to root when creating files, directories and symbolic
+      links
+    * Improve some "stat" handling semantics
+    * Slight change to the command line parameters
+    * Internal restructuring and code cleanup
+    * Entire emulation of all basic operations (a few know bugs for fringe
+      cases).
+
 Version 0.01
     * Initial release. Supports Linux/i386 only. Only supports {,f,l}stat64,
       (f)chmod and get(e)uid.
