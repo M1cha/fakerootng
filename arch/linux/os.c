@@ -114,3 +114,29 @@ int ptlib_set_mem( pid_t pid, const void *local_ptr, void *process_ptr, size_t l
 
     return errno==0;
 }
+
+int ptlib_get_string( pid_t pid, void *process_ptr, char *local_ptr, size_t maxlen )
+{
+    /* Are we aligned on the "start" front? */
+    int offset=((unsigned long)process_ptr)%sizeof(long);
+    int i=0;
+    int done=0;
+    int word_offset=0;
+
+    while( !done ) {
+        unsigned long word=ptrace( PTRACE_PEEKDATA, pid, process_ptr+(word_offset++)*sizeof(long), 0 );
+
+        while( !done && offset<sizeof(long) && i<maxlen ) {
+            local_ptr[i]=((char *)&word)[offset]; /* Endianity neutral copy */
+
+            done=local_ptr[i]=='\0';
+            ++i;
+            ++offset;
+        }
+
+        offset=0;
+        done=done || i>=maxlen;
+    }
+
+    return i;
+} 

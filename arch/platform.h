@@ -64,7 +64,9 @@ void ptlib_restore_state( pid_t pid, const void *buffer );
 void ptlib_prepare_memory( pid_t pid, void **memory, size_t *size );
 
 /* This is a function that must be provided by the user of the library */
-void dlog( const char *format, ... );
+void __dlog_( const char *format, ... );
+extern int log_level;
+#define dlog if( log_level>0 ) __dlog_
 
 #ifdef __cplusplus
 };

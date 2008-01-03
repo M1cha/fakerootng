@@ -59,15 +59,11 @@ static void init_handlers()
     syscalls[SYS_getegid32]=syscall_hook(sys_getuid, "getegid");
     syscalls[SYS_getgid32]=syscall_hook(sys_getuid, "getgid");
 
-#if ! PTLIB_SUPPORTS_FORK
-    syscalls[SYS_fork]=syscall_hook(sys_fork, "fork");
-#endif
-#if ! PTLIB_SUPPORTS_VFORK
-    syscalls[SYS_vfork]=sys_vfork;
-#endif
-#if ! PTLIB_SUPPORTS_CLONE
-    syscalls[SYS_clone]=sys_clone;
-#endif
+//    syscalls[SYS_fork]=syscall_hook(sys_fork, "fork");
+//    syscalls[SYS_vfork]=syscall_hook(sys_fork, "vfork");
+//    syscalls[SYS_clone]=syscall_hook(sys_fork, "clone");
+    syscalls[SYS_execve]=syscall_hook(sys_execve, "execve");
+    syscalls[SYS_sigreturn]=syscall_hook(sys_sigreturn, "sigreturn");
 
     syscalls[SYS_stat64]=syscall_hook(sys_stat64, "stat64");
     syscalls[SYS_fstat64]=syscall_hook(sys_stat64, "fstat64");
@@ -143,6 +139,7 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
 {
     // Let's see if the process doing the exiting is even registered
      __gnu_cxx::hash_map<pid_t, pid_state>::iterator process=state.find(pid);
+     dlog(NULL);
      assert(process!=state.end());
 
     // This function is fairly empty if the platform does not require "wait" emulation
@@ -155,6 +152,10 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
 
 static void handle_new_process( pid_t parent, pid_t child )
 {
+    // The new process has the same memory allocated as the parent
+    state[child].memory=state[parent].memory;
+    state[child].mem_size=state[parent].mem_size;
+
 #if !PTLIB_PARENT_CAN_WAIT
     state[child].parent=parent;
 #error emulating parent wait not yet implemented
@@ -207,13 +208,30 @@ int process_children(pid_t first_child, int comm_fd )
                 } else if( proc_state->state==pid_state::ALLOC_RETURN ) {
                     if( !finish_allocation( ret, pid, proc_state ) )
                         sig=-1;
-                } else if( syscalls.find(ret)!=syscalls.end() ) {
-                    dlog("%d: Called %s(%s)\n", pid, syscalls[ret].name, state2str(proc_state->state));
-
-                    if( !syscalls[ret].func( ret, pid, proc_state ) )
-                        sig=-1; // Mark for ptrace not to continue the process
                 } else {
-                    dlog("%d: Unknown syscall %ld(%s)\n", pid, ret, state2str(proc_state->state));
+                    // Sanity check - returning from same syscall that got us in
+                    if( proc_state->state==pid_state::RETURN && ret!=proc_state->orig_sc ) {
+                        dlog("process %d orig_sc=%d actual sc=%d state=%d\n", pid, proc_state->orig_sc, ret, state2str(proc_state->state));
+                        dlog(NULL);
+                        assert( proc_state->state!=pid_state::RETURN || ret==proc_state->orig_sc );
+                    }
+                    
+                    if( proc_state->state==pid_state::NONE )
+                        // Store the syscall type here (we are not in override)
+                        proc_state->orig_sc=ret;
+
+                    if( syscalls.find(ret)!=syscalls.end() ) {
+                        dlog("%d: Called %s(%s)\n", pid, syscalls[ret].name, state2str(proc_state->state));
+
+                        if( !syscalls[ret].func( ret, pid, proc_state ) )
+                            sig=-1; // Mark for ptrace not to continue the process
+                    } else {
+                        dlog("%d: Unknown syscall %ld(%s)\n", pid, ret, state2str(proc_state->state));
+                        if( proc_state->state==pid_state::NONE )
+                            proc_state->state=pid_state::RETURN;
+                        else if( proc_state->state==pid_state::RETURN )
+                            proc_state->state=pid_state::NONE;
+                    }
                 }
             }
             break;

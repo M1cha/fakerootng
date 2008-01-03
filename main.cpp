@@ -32,8 +32,9 @@
 #include "parent.h"
 
 static FILE *debug_log;
+int log_level;
 
-void dlog( const char *format, ... )
+void __dlog_( const char *format, ... )
 {
     if( debug_log!=NULL ) {
         if( format!=NULL ) {
@@ -73,6 +74,8 @@ int parse_options( int argc, char *argv[] )
                     perror("fakeroot-ng: Could not open debug log");
 
                     return -1;
+                } else {
+                    log_level=1;
                 }
             } else {
                 fprintf(stderr, "-l option given twice\n");

@@ -12,6 +12,9 @@
 
 #define PTLIB_STATE_SIZE (FRAME_SIZE)
 
+/* This is defined to 1 if the platform sends a SIGTRAP to the process after a successful execve if it's being traced */
+#define PTLIB_TRAP_AFTER_EXEC 1
+
 typedef unsigned long long ptlib_inode_t;
 
 struct ptlib_stat64 {
