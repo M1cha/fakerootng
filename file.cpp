@@ -48,11 +48,11 @@ bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
         // Entering the syscall
         state->state=pid_state::RETURN;
         state->context_state[0]=ptlib_get_argument( pid, 2 ); // Store the pointer to the stat struct
-        dlog("stat64: %d stored pointer at %p\n", pid, state->context_state[0] );
+        dlog("stat64: "PID_F" stored pointer at %p\n", pid, state->context_state[0] );
     } else if( state->state==pid_state::RETURN ) {
         // Returning from the syscall
         void *returncode=ptlib_get_retval( pid );
-        dlog("stat64: %d returned %x\n", pid, returncode);
+        dlog("stat64: "PID_F" returned %x\n", pid, returncode);
         if( ptlib_success( pid, sc_num ) ) {
             struct ptlib_stat64 ret;
             struct stat_override override;
@@ -75,12 +75,11 @@ bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
                 }
                 ret.mode=ret.mode&(~(07000|S_IFMT)) | override.mode&(07000|S_IFMT);
 
-                // XXX the dlog may actually be platform dependent, based on the size of dev and inode
                 if( ok ) {
-                    dlog("stat64: %d dev=%llx inode=%lld mode=%o uid=%d gid=%d\n", pid, ret.dev, ret.ino, ret.mode, ret.uid, ret.gid );
+                    dlog("stat64: "PID_F" dev="DEV_F" inode="INODE_F" mode=%o uid=%d gid=%d\n", pid, ret.dev, ret.ino, ret.mode, ret.uid, ret.gid );
                     ptlib_set_mem( pid, &ret, state->context_state[0], sizeof(struct stat) );
                 } else {
-                    dlog("stat64: %d dev=%llx inode=%lld entry corrupt - removed\n", pid, ret.dev, ret.ino );
+                    dlog("stat64: "PID_F" dev="DEV_F" inode="INODE_F" entry corrupt - removed\n", pid, ret.dev, ret.ino );
                     remove_map( ret.dev, ret.ino );
                 }
             }
@@ -94,7 +93,7 @@ bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
 
 bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
 {
-    dlog("chmod: %d started\n", pid);
+    dlog("chmod: "PID_F" started\n", pid);
     if( state->state==pid_state::NONE ) {
         if( state->memory==NULL ) {
             return allocate_process_mem( pid, state, sc_num );
@@ -107,11 +106,11 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
         mode=mode&~07000;
         ptlib_set_argument( pid, 2, (void *) mode ); // Zero out the S* field
 
-        dlog("chmod: %d mode %o changed to %o\n", pid, state->context_state[1], mode );
+        dlog("chmod: "PID_F" mode %o changed to %o\n", pid, state->context_state[1], mode );
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
         if( ptlib_success( pid, sc_num ) ) {
-            dlog("chmod: %d chmod successful, performing stat so we can update the map\n", pid);
+            dlog("chmod: "PID_F" chmod successful, performing stat so we can update the map\n", pid);
 
             // We need to call "stat/fstat" so we can know the dev/inode
             state->state=pid_state::REDIRECT1;
@@ -128,7 +127,7 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
                 return ptlib_generate_syscall( pid, SYS_lstat64, state->memory );
                 break;
             default:
-                dlog("chmod: %d Oops! Unhandled syscall %d - abort\n", pid, sc_num );
+                dlog("chmod: "PID_F" Oops! Unhandled syscall %d - abort\n", pid, sc_num );
                 dlog(NULL); // Flush the file before we crash
                 abort();
                 ptlib_restore_state( pid, state->saved_state );
@@ -138,7 +137,7 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
             }
         } else {
             state->state=pid_state::NONE;
-            dlog("chmod: %d chmod failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)));
+            dlog("chmod: "PID_F" chmod failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)));
         }
     } else if( state->state==pid_state::REDIRECT2 ) {
         // Update our lies database
@@ -152,13 +151,13 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
         }
         override.mode=(stat.mode&~07000)|(((mode_t)state->context_state[1])&07000);
 
-        dlog("chmod: %d Setting override mode %o\n", pid, override.mode );
+        dlog("chmod: "PID_F" Setting override mode %o\n", pid, override.mode );
         set_map( &override );
 
         state->state=pid_state::NONE;
         ptlib_restore_state( pid, state->saved_state );
     } else {
-        dlog("chmod: %d unknown state %d\n", pid, state->state );
+        dlog("chmod: "PID_F" unknown state %d\n", pid, state->state );
     }
 
     return true;
@@ -181,18 +180,18 @@ bool sys_chown( int sc_num, pid_t pid, pid_state *state )
         switch( sc_num ) {
         case SYS_chown32:
             ptlib_set_syscall( pid, SYS_stat64 );
-            dlog("chown: %d redirected chown call to stat\n", pid );
+            dlog("chown: "PID_F" redirected chown call to stat\n", pid );
             break;
         case SYS_fchown32:
             ptlib_set_syscall( pid, SYS_fstat64 );
-            dlog("chown: %d redirected fchown call to fstat\n", pid );
+            dlog("chown: "PID_F" redirected fchown call to fstat\n", pid );
             break;
         case SYS_lchown32:
             ptlib_set_syscall( pid, SYS_lstat64 );
-            dlog("chown: %d redirected lchown call to lstat\n", pid );
+            dlog("chown: "PID_F" redirected lchown call to lstat\n", pid );
             break;
         default:
-            dlog("chown: %d called unsupported syscall %d - abort\n", pid, sc_num );
+            dlog("chown: "PID_F" called unsupported syscall %d - abort\n", pid, sc_num );
             dlog(NULL); // Flush the log before we crash
             abort();
             break;
@@ -215,10 +214,10 @@ bool sys_chown( int sc_num, pid_t pid, pid_state *state )
             if( ((int)state->context_state[1])!=-1 )
                 override.gid=(int)state->context_state[1];
 
-            dlog("chown: %d changing owner of dev %llx inode %lld\n", pid, override.dev, override.inode );
+            dlog("chown: "PID_F" changing owner of dev "DEV_F" inode "INODE_F"\n", pid, override.dev, override.inode );
             set_map( &override );
         } else {
-            dlog("chown: %d stat call failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)) );
+            dlog("chown: "PID_F" stat call failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)) );
         }
 
         state->state=pid_state::NONE;
@@ -245,7 +244,7 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
             mode&=~(07000);
         }
         if( S_ISCHR(mode) || S_ISBLK(mode) ) {
-            dlog("mknod: %d tried to create %s device, turn to regular file\n", pid, S_ISCHR(mode) ? "character" : "block" );
+            dlog("mknod: "PID_F" tried to create %s device, turn to regular file\n", pid, S_ISCHR(mode) ? "character" : "block" );
             mode=mode&~S_IFMT | S_IFREG;
         }
         ptlib_set_argument( pid, 2, (void *)mode );
@@ -261,15 +260,15 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
             state->state=pid_state::REDIRECT1;
             ptlib_save_state( pid, state->saved_state );
 
-            dlog("mknod: %d Actual node creation successful. Calling stat\n", pid );
+            dlog("mknod: "PID_F" Actual node creation successful. Calling stat\n", pid );
             return ptlib_generate_syscall( pid, SYS_stat64, state->memory );
         } else {
             // Nothing to do if the call failed
-            dlog("mknod: %d call failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num) ) );
+            dlog("mknod: "PID_F" call failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num) ) );
         }
     } else if( state->state==pid_state::REDIRECT2 ) {
         if( ptlib_success( pid, sc_num ) ) {
-            dlog("mknod: %d registering the new device in the override DB\n", pid);
+            dlog("mknod: "PID_F" registering the new device in the override DB\n", pid);
 
             ptlib_stat64 stat;
             stat_override override;
@@ -285,7 +284,7 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
 
             mode_t mode=(mode_t)state->context_state[1];
             if( S_ISCHR(mode) || S_ISBLK(mode) || (mode&07000)!=0) {
-                dlog("mknod: %d overriding the file type and/or mode\n", pid );
+                dlog("mknod: "PID_F" overriding the file type and/or mode\n", pid );
                 override.mode=override.mode&~(S_IFMT|07000) | mode&(S_IFMT|07000);
                 override.dev_id=(dev_t)state->context_state[2];
             }
@@ -293,7 +292,7 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
             set_map( &override );
         } else {
             // mknod succeeded, but stat failed?
-            dlog("mknod: %d stat failed. Leave override DB non-updated\n", pid );
+            dlog("mknod: "PID_F" stat failed. Leave override DB non-updated\n", pid );
         }
 
         ptlib_restore_state( pid, state->saved_state );
@@ -316,7 +315,7 @@ bool sys_open( int sc_num, pid_t pid, pid_state *state )
         // Did we request to create a new file?
         if( (((int)state->context_state[0])&O_CREAT)!=0 && ptlib_success(pid, sc_num) ) {
             int fd=(int)ptlib_get_retval(pid);
-            dlog("open: %d opened fd %d, assume we actually created it\n", pid, fd );
+            dlog("open: "PID_F" opened fd %d, assume we actually created it\n", pid, fd );
 
             ptlib_save_state( pid, state->saved_state );
             state->state=pid_state::REDIRECT1;
@@ -345,12 +344,12 @@ bool sys_open( int sc_num, pid_t pid, pid_state *state )
                 override.gid=0;
 
                 set_map( &override );
-                dlog("open: %d creating override for dev %llx inode %lld\n", pid, override.dev, override.inode);
+                dlog("open: "PID_F" creating override for dev "DEV_F" inode "INODE_F"\n", pid, override.dev, override.inode);
             } else {
-                dlog("open: %d map for dev %llx inode %lld already exists - doing nothing\n", pid, stat.dev, stat.ino );
+                dlog("open: "PID_F" map for dev "DEV_F" inode "INODE_F" already exists - doing nothing\n", pid, stat.dev, stat.ino );
             }
         } else {
-            dlog("open: %d fstat failed %s\n", pid, strerror( ptlib_get_error( pid, sc_num ) ) );
+            dlog("open: "PID_F" fstat failed %s\n", pid, strerror( ptlib_get_error( pid, sc_num ) ) );
         }
 
         state->state=pid_state::NONE;
@@ -374,7 +373,7 @@ bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
         state->state=pid_state::NONE;
 
         if( ptlib_success( pid, sc_num ) ) {
-            dlog("mkdir: %d succeeded. Call stat\n", pid );
+            dlog("mkdir: "PID_F" succeeded. Call stat\n", pid );
             ptlib_save_state( pid, state->saved_state );
 
             // Perform a stat operation so we can know the directory's dev and inode
@@ -387,7 +386,7 @@ bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
             return ptlib_generate_syscall( pid, SYS_stat64, state->memory );
         } else {
             // If mkdir failed, we don't have anything else to do.
-            dlog("mkdir: %d failed with error %s\n", pid, strerror(ptlib_get_error( pid, sc_num ) ) );
+            dlog("mkdir: "PID_F" failed with error %s\n", pid, strerror(ptlib_get_error( pid, sc_num ) ) );
         }
     } else if( state->state==pid_state::REDIRECT2 ) {
         if( ptlib_success( pid, sc_num ) ) {
@@ -401,10 +400,10 @@ bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
             override.uid=0;
             override.gid=0;
 
-            dlog("mkdir: %d storing override for dev %llx inode %lld\n", pid, override.dev, override.inode);
+            dlog("mkdir: "PID_F" storing override for dev "DEV_F" inode "INODE_F"\n", pid, override.dev, override.inode);
             set_map( &override );
         } else {
-            dlog("mkdir: %d stat failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)));
+            dlog("mkdir: "PID_F" stat failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)));
         }
 
         ptlib_restore_state( pid, state->saved_state );
@@ -426,7 +425,7 @@ bool sys_symlink( int sc_num, pid_t pid, pid_state *state )
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
         if( ptlib_success( pid, sc_num ) ) {
-            dlog("symlink: %d success. Call stat to mark uid/gid override\n", pid );
+            dlog("symlink: "PID_F" success. Call stat to mark uid/gid override\n", pid );
 
             state->orig_sc=sc_num;
             state->state=pid_state::REDIRECT1;
@@ -437,7 +436,7 @@ bool sys_symlink( int sc_num, pid_t pid, pid_state *state )
 
             return ptlib_generate_syscall( pid, SYS_lstat64, state->memory );
         } else {
-            dlog("symlink: %d failed with error %s\n", strerror( ptlib_get_error(pid, sc_num) ) );
+            dlog("symlink: "PID_F" failed with error %s\n", pid, strerror( ptlib_get_error(pid, sc_num) ) );
             state->state=pid_state::NONE;
         }
     } else if( state->state==pid_state::REDIRECT2 ) {
@@ -455,14 +454,14 @@ bool sys_symlink( int sc_num, pid_t pid, pid_state *state )
                 override.uid=0;
                 override.gid=0;
 
-                dlog("symlink: %d set uid/gid override for dev %llx inode %lld\n", pid, override.dev, override.inode );
+                dlog("symlink: "PID_F" set uid/gid override for dev "DEV_F" inode "INODE_F"\n", pid, override.dev, override.inode );
                 set_map( &override );
             } else {
-                dlog("symlink: %d acutal file on disk is not a symlink. Type %o dev %llx inode %lld\n", pid, stat.mode, stat.dev,
+                dlog("symlink: "PID_F" acutal file on disk is not a symlink. Type %o dev "DEV_F" inode "INODE_F"\n", pid, stat.mode, stat.dev,
                     stat.ino );
             }
         } else {
-            dlog("symlink: %d symlink succeeded, but stat failed with %s\n", pid, strerror(ptlib_get_error(pid, sc_num)));
+            dlog("symlink: "PID_F" symlink succeeded, but stat failed with %s\n", pid, strerror(ptlib_get_error(pid, sc_num)));
         }
 
         ptlib_restore_state( pid, state->saved_state );

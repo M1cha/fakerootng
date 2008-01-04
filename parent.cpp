@@ -183,7 +183,7 @@ int process_children(pid_t first_child, int comm_fd )
 
         // If this is the first time we see this process, we need to init the ptrace options for it
         if( state[pid].state==pid_state::INIT ) {
-            dlog( "%d: Init new process\n", pid);
+            dlog( PID_F": Init new process\n", pid);
 
             ptlib_prepare(pid);
             state[pid].state=pid_state::NONE;
@@ -198,10 +198,10 @@ int process_children(pid_t first_child, int comm_fd )
                 if( proc_state->state==pid_state::REDIRECT1 ) {
                     // REDIRECT1 is just a filler state between the previous call, where the arguments were set up and
                     // the call initiated, and the call's return (REDIRECT2). No need to actually call the handler
-                    dlog("%d: Calling syscall %d redirected from %s\n", pid, ret, syscalls[proc_state->orig_sc].name );
+                    dlog(PID_F": Calling syscall %d redirected from %s\n", pid, ret, syscalls[proc_state->orig_sc].name );
                     proc_state->state=pid_state::REDIRECT2;
                 } else if( proc_state->state==pid_state::REDIRECT2 ) {
-                    dlog("%d: Called syscall %d, redirected from %s\n", pid, ret, syscalls[proc_state->orig_sc].name );
+                    dlog(PID_F": Called syscall %d, redirected from %s\n", pid, ret, syscalls[proc_state->orig_sc].name );
 
                     if( !syscalls[proc_state->orig_sc].func( ret, pid, proc_state ) )
                         sig=-1; // Mark for ptrace not to continue the process
@@ -211,7 +211,7 @@ int process_children(pid_t first_child, int comm_fd )
                 } else {
                     // Sanity check - returning from same syscall that got us in
                     if( proc_state->state==pid_state::RETURN && ret!=proc_state->orig_sc ) {
-                        dlog("process %d orig_sc=%d actual sc=%d state=%d\n", pid, proc_state->orig_sc, ret, state2str(proc_state->state));
+                        dlog("process "PID_F" orig_sc=%d actual sc=%d state=%d\n", pid, proc_state->orig_sc, ret, state2str(proc_state->state));
                         dlog(NULL);
                         assert( proc_state->state!=pid_state::RETURN || ret==proc_state->orig_sc );
                     }
@@ -221,12 +221,12 @@ int process_children(pid_t first_child, int comm_fd )
                         proc_state->orig_sc=ret;
 
                     if( syscalls.find(ret)!=syscalls.end() ) {
-                        dlog("%d: Called %s(%s)\n", pid, syscalls[ret].name, state2str(proc_state->state));
+                        dlog(PID_F": Called %s(%s)\n", pid, syscalls[ret].name, state2str(proc_state->state));
 
                         if( !syscalls[ret].func( ret, pid, proc_state ) )
                             sig=-1; // Mark for ptrace not to continue the process
                     } else {
-                        dlog("%d: Unknown syscall %ld(%s)\n", pid, ret, state2str(proc_state->state));
+                        dlog(PID_F": Unknown syscall %ld(%s)\n", pid, ret, state2str(proc_state->state));
                         if( proc_state->state==pid_state::NONE )
                             proc_state->state=pid_state::RETURN;
                         else if( proc_state->state==pid_state::RETURN )
@@ -236,16 +236,16 @@ int process_children(pid_t first_child, int comm_fd )
             }
             break;
         case SIGNAL:
-            dlog("%d: Signal %s\n", pid, sig2str(ret));
+            dlog(PID_F": Signal %s\n", pid, sig2str(ret));
             sig=ret;
             break;
         case EXIT:
         case SIGEXIT:
             {
                 if( wait_state==EXIT )
-                    dlog("%d: Exit with return code %ld\n", pid, ret);
+                    dlog(PID_F": Exit with return code %ld\n", pid, ret);
                 else {
-                    dlog("%d: Exit with %s\n", pid, sig2str(ret));
+                    dlog(PID_F": Exit with %s\n", pid, sig2str(ret));
                 }
 
                 struct rusage rusage;
@@ -262,7 +262,7 @@ int process_children(pid_t first_child, int comm_fd )
             break;
         case NEWPROCESS:
             {
-                dlog("%d: Created new child process %ld\n", pid, ret);
+                dlog(PID_F": Created new child process %ld\n", pid, ret);
                 handle_new_process( pid, ret );
                 num_processes++;
             }
@@ -278,7 +278,7 @@ int process_children(pid_t first_child, int comm_fd )
 
 bool allocate_process_mem( pid_t pid, pid_state *state, int sc_num )
 {
-    dlog("allocate_process_mem: %d running syscall %d needs process memory\n", pid, sc_num );
+    dlog("allocate_process_mem: "PID_F" running syscall %d needs process memory\n", pid, sc_num );
 
     // Save the old state
     ptlib_save_state( pid, state->saved_state );
@@ -301,17 +301,17 @@ bool allocate_process_mem( pid_t pid, pid_state *state, int sc_num )
 bool sys_mmap( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        dlog("mmap: %d direct call\n", pid);
+        dlog("mmap: "PID_F" direct call\n", pid);
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
-        dlog("mmap: %d direct return\n", pid);
+        dlog("mmap: "PID_F" direct return\n", pid);
         state->state=pid_state::NONE;
     } else if( state->state==pid_state::ALLOCATE ) {
 
         if( ptlib_success( pid, sc_num ) ) {
             state->memory=ptlib_get_retval( pid );
             state->mem_size=sysconf( _SC_PAGESIZE );
-            dlog("mmap: %d allocated for our use %d bytes at %p\n", pid, state->mem_size, state->memory);
+            dlog("mmap: "PID_F" allocated for our use %d bytes at %p\n", pid, state->mem_size, state->memory);
             
             ptlib_prepare_memory( pid, &state->memory, &state->mem_size );
 
@@ -320,7 +320,8 @@ bool sys_mmap( int sc_num, pid_t pid, pid_state *state )
             return ptlib_generate_syscall( pid, state->orig_sc , state->memory );
         } else {
             // The allocation failed. What can you do except kill the process?
-            dlog("mmap: %d our memory allocation failed with error. Kill process. %d\n", pid, ptlib_get_error(pid, sc_num) );
+            dlog("mmap: "PID_F" our memory allocation failed with error. Kill process. %s\n", pid,
+                strerror(ptlib_get_error(pid, sc_num)) );
             ptrace( PTRACE_KILL, pid, 0, 0 );
             return false;
         }
@@ -336,7 +337,7 @@ static bool finish_allocation( int sc_num, pid_t pid, pid_state *state )
     state->state=pid_state::NONE;
 
     syscall_hook *sys=&syscalls[sc_num];
-    dlog("finish_allocation: %d restore state and call %s handler\n", pid, sys->name );
+    dlog("finish_allocation: "PID_F" restore state and call %s handler\n", pid, sys->name );
 
     return sys->func( sc_num, pid, state );
 }

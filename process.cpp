@@ -58,7 +58,7 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state )
         if( log_level>0 ) {
             char cmd[PATH_MAX];
             ptlib_get_string( pid, ptlib_get_argument( pid, 1 ), cmd, sizeof(cmd) );
-            dlog("execve: %d calling execve for executing %s\n", pid, cmd );
+            dlog("execve: "PID_F" calling execve for executing %s\n", pid, cmd );
             dlog(NULL);
         }
         state->state=pid_state::RETURN;
@@ -66,7 +66,7 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state )
         state->state=pid_state::NONE;
 
         if( ptlib_success( pid, sc_num ) ) {
-            dlog("execve: %d successfully execed a new command\n", pid );
+            dlog("execve: "PID_F" successfully execed a new command\n", pid );
 
             // All memory allocations performed before the exec are now null and void
             state->memory=NULL;
@@ -78,7 +78,7 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state )
             state->state=pid_state::REDIRECT2;
 #endif
         } else {
-            dlog("execve: %d failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)) );
+            dlog("execve: "PID_F" failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)) );
         }
     } else if( state->state==pid_state::REDIRECT2 ) {
         // Nothing to do here

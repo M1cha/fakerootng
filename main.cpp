@@ -135,7 +135,7 @@ static void perform_debugger( int child_socket, int parent_socket, pid_t child )
 
         exit(2);
     }
-    dlog("Debugger successfully attached to process %d\n", child );
+    dlog("Debugger successfully attached to process "PID_F"\n", child );
 
     // Let's free the process to do the exec
     if( write( child_socket, "a", 1 )==1 ) {
@@ -300,7 +300,7 @@ int main(int argc, char *argv[])
         return WTERMSIG(buffer);
     }
 
-    fprintf(stderr, "Child %d terminated with unknown termination status %x\n", child, buffer );
+    fprintf(stderr, "Child "PID_F" terminated with unknown termination status %x\n", child, buffer );
 
     return 3;
 #endif // PTLIB_PARENT_CAN_WAIT

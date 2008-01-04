@@ -50,4 +50,9 @@ struct ptlib_stat64 {
         unsigned long long      ino;
 };
 
-#endif // PLATFORM_SPECIFIC_H
+/* Platform specific format specifiers for printing pid, dev and inode */
+#define PID_F "%d"
+#define DEV_F "%llx"
+#define INODE_F "%lld"
+
+#endif /* PLATFORM_SPECIFIC_H */
