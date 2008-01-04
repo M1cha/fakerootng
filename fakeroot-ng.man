@@ -24,11 +24,12 @@ interception. Instead of using LD_PRELOAD, ptrace(2) is being used.
 .SH PARAMETERS
 .TP
 \fB-p\fIstate_file\fP
-\fINot yet implemented\fP. Before the first process is being run, loads from \fIstate_file\fP the
+Before the first process is being run, loads from \fIstate_file\fP the
 information needed in order to maintain a consistent view of file permissions and owners across
 fakeroot\-ng runs. This image is also automatically saved when the last process exists. If more then
 one instance of fakeroot\-ng is loaded simultaneously, both with the same \fIstate_file\fP, then
-the two instances will share state and their processes will see the same picture.
+the two instances will share state and their processes will see the same picture. \fBThe second part
+of this functionality is not yet implemented\fP.
 .TP
 \fB\-l\fIlog_file\fP
 Causes fakeroot\-ng to dump to \fIlog_file\fP internal state and processing information. This is

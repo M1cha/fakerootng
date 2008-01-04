@@ -27,9 +27,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <errno.h>
 
 #include "arch/platform.h"
 #include "parent.h"
+#include "file_lie.h"
 
 static FILE *debug_log;
 int log_level;
@@ -57,6 +59,7 @@ void print_version(void)
 }
 
 static bool nodetach=false;
+static const char *persistent_file;
 
 int parse_options( int argc, char *argv[] )
 {
@@ -65,6 +68,7 @@ int parse_options( int argc, char *argv[] )
     while( (opt=getopt(argc, argv, "+p:l:d" ))!=-1 ) {
         switch( opt ) {
         case 'p': // Persist file
+            persistent_file=optarg;
             break;
         case 'l':
             if( debug_log==NULL ) {
@@ -105,6 +109,21 @@ static void perform_debugger( int child_socket, int parent_socket, pid_t child )
     setsid();
     dlog("Debugger started\n");
 
+    // Fill in the file_lie database from persistent file (if relevant)
+    if( persistent_file ) {
+        FILE *file=fopen(persistent_file, "rt");
+
+        if( file!=NULL ) {
+            dlog("Opened persistent file %s\n", persistent_file );
+
+            load_map( file );
+
+            fclose(file);
+        } else {
+            dlog("Couldn't open persistent file %s - %s\n", persistent_file, strerror(errno) );
+        }
+    }
+
     if( !nodetach ) {
         // Close all open file descriptors except child_socket, parent_socket and the debug_log (if it exists)
         // Do not close the file handles, nor chdir to root, if in debug mode. This is so that more debug info
@@ -142,6 +161,19 @@ static void perform_debugger( int child_socket, int parent_socket, pid_t child )
         close( child_socket );
 
         process_children(child, parent_socket );
+    }
+
+    if( persistent_file ) {
+        FILE *file=fopen(persistent_file, "w");
+
+        if( file!=NULL ) {
+            dlog("Saving persitent state to %s\n", persistent_file );
+            save_map( file );
+
+            fclose(file);
+        } else {
+            dlog("Failed to open persistent file %s for saving - %s\n", persistent_file, strerror(errno) );
+        }
     }
 
     exit(0);

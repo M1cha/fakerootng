@@ -72,3 +72,26 @@ void remove_map( dev_t dev, ptlib_inode_t inode )
     if( i!=map_hash.end() )
         map_hash.erase(i);
 }
+
+void load_map( FILE *file )
+{
+    stat_override override;
+    int params;
+
+    while( (params=fscanf(file, "dev="DEV_F", ino="INODE_F", mode=%o, uid=%d, gid=%d, rdev="DEV_F" \n", &override.dev, &override.inode,
+            &override.mode, &override.uid, &override.gid, &override.dev_id ))==6 )
+    {
+        set_map( &override );
+    }
+}
+
+void save_map( FILE *file )
+{
+    for( file_hash::const_iterator i=map_hash.begin(); i!=map_hash.end() ; ++i ) {
+        const struct stat_override *override;
+
+        override=&(i->second);
+        fprintf( file, "dev="DEV_F",ino="INODE_F",mode=%o,uid=%d,gid=%d,rdev="DEV_F"\n", override->dev, override->inode,
+            override->mode, override->uid, override->gid, override->dev_id );
+    }
+}

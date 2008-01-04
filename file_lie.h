@@ -1,6 +1,8 @@
 #ifndef FILE_LIE_H
 #define FILE_LIE_H
 
+#include <stdio.h>
+
 // Define functions for mapping the real files on disk to what they should be as far as the fake environment is concerned
 
 #include "arch/platform.h"
@@ -21,5 +23,8 @@ bool get_map( dev_t dev, ptlib_inode_t inode, struct stat_override *stat );
 void set_map( const struct stat_override *stat );
 
 void remove_map( dev_t dev, ptlib_inode_t inode );
+
+void load_map( FILE *file );
+void save_map( FILE *file );
 
 #endif // FILE_LIE_H
