@@ -76,10 +76,10 @@ bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
                 ret.mode=ret.mode&(~(07000|S_IFMT)) | override.mode&(07000|S_IFMT);
 
                 if( ok ) {
-                    dlog("stat64: "PID_F" dev="DEV_F" inode="INODE_F" mode=%o uid=%d gid=%d\n", pid, ret.dev, ret.ino, ret.mode, ret.uid, ret.gid );
+                    dlog("stat64: "PID_F" override dev="DEV_F" inode="INODE_F" mode=%o uid=%d gid=%d\n", pid, ret.dev, ret.ino, ret.mode, ret.uid, ret.gid );
                     ptlib_set_mem( pid, &ret, state->context_state[0], sizeof(struct stat) );
                 } else {
-                    dlog("stat64: "PID_F" dev="DEV_F" inode="INODE_F" entry corrupt - removed\n", pid, ret.dev, ret.ino );
+                    dlog("stat64: "PID_F" dev="DEV_F" inode="INODE_F" override entry corrupt - removed\n", pid, ret.dev, ret.ino );
                     remove_map( ret.dev, ret.ino );
                 }
             }
@@ -93,7 +93,6 @@ bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
 
 bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
 {
-    dlog("chmod: "PID_F" started\n", pid);
     if( state->state==pid_state::NONE ) {
         if( state->memory==NULL ) {
             return allocate_process_mem( pid, state, sc_num );
@@ -149,9 +148,10 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
         if( !get_map( stat.dev, stat.ino, &override ) ) {
             stat_override_copy( &stat, &override );
         }
-        override.mode=(stat.mode&~07000)|(((mode_t)state->context_state[1])&07000);
+        override.mode=(override.mode&~07777)|(((mode_t)state->context_state[1])&07777);
 
-        dlog("chmod: "PID_F" Setting override mode %o\n", pid, override.mode );
+        dlog("chmod: "PID_F" Setting override mode %o dev "DEV_F" inode "INODE_F"\n", pid, override.mode, override.dev,
+            override.inode );
         set_map( &override );
 
         state->state=pid_state::NONE;
@@ -206,8 +206,10 @@ bool sys_chown( int sc_num, pid_t pid, pid_state *state )
 
             ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
 
-            if( !get_map( stat.dev, stat.ino, &override ) )
+            if( !get_map( stat.dev, stat.ino, &override ) ) {
+                dlog("chown: "PID_F" no override for file - create a new one\n", pid );
                 stat_override_copy( &stat, &override );
+            }
 
             if( ((int)state->context_state[0])!=-1 )
                 override.uid=(int)state->context_state[0];
@@ -268,8 +270,6 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
         }
     } else if( state->state==pid_state::REDIRECT2 ) {
         if( ptlib_success( pid, sc_num ) ) {
-            dlog("mknod: "PID_F" registering the new device in the override DB\n", pid);
-
             ptlib_stat64 stat;
             stat_override override;
 
@@ -281,6 +281,9 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
             // We created the file, it should have our uid/gid
             override.uid=0;
             override.gid=0;
+
+            dlog("mknod: "PID_F" registering the new device in the override DB dev "DEV_F" inode "INODE_F"\n", pid,
+                stat.dev, stat.ino );
 
             mode_t mode=(mode_t)state->context_state[1];
             if( S_ISCHR(mode) || S_ISBLK(mode) || (mode&07000)!=0) {
