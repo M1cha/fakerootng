@@ -59,7 +59,7 @@ void print_version(void)
 }
 
 static bool nodetach=false;
-static const char *persistent_file;
+static char persistent_file[PATH_MAX];
 
 int parse_options( int argc, char *argv[] )
 {
@@ -68,7 +68,20 @@ int parse_options( int argc, char *argv[] )
     while( (opt=getopt(argc, argv, "+p:l:d" ))!=-1 ) {
         switch( opt ) {
         case 'p': // Persist file
-            persistent_file=optarg;
+            if( optarg[0]!='/' ) {
+                if( getcwd( persistent_file, sizeof(persistent_file) )!=NULL ) {
+                    size_t len=strlen(persistent_file);
+                    if( persistent_file[len-1]!='/' )
+                        persistent_file[len++]='/';
+
+                    strncpy( persistent_file+len, optarg, sizeof(persistent_file)-len-1 );
+                }
+            } else {
+                strncpy( persistent_file, optarg, sizeof(persistent_file)-1 );
+            }
+            
+            // strncpy has been known to leave strings unterminated
+            persistent_file[sizeof(persistent_file)-1]='\0';
             break;
         case 'l':
             if( debug_log==NULL ) {
