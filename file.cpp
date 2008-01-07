@@ -178,16 +178,25 @@ bool sys_chown( int sc_num, pid_t pid, pid_state *state )
         ptlib_set_argument( pid, 2, state->memory );
 
         switch( sc_num ) {
+        case SYS_chown:
+#ifdef SYS_chown32
         case SYS_chown32:
-            ptlib_set_syscall( pid, SYS_stat64 );
+#endif
+            ptlib_set_syscall( pid, PREF_STAT );
             dlog("chown: "PID_F" redirected chown call to stat\n", pid );
             break;
+        case SYS_fchown:
+#ifdef SYS_fchown32
         case SYS_fchown32:
-            ptlib_set_syscall( pid, SYS_fstat64 );
+#endif
+            ptlib_set_syscall( pid, PREF_FSTAT );
             dlog("chown: "PID_F" redirected fchown call to fstat\n", pid );
             break;
+        case SYS_lchown:
+#ifdef SYS_lchown32
         case SYS_lchown32:
-            ptlib_set_syscall( pid, SYS_lstat64 );
+#endif
+            ptlib_set_syscall( pid, PREF_LSTAT );
             dlog("chown: "PID_F" redirected lchown call to lstat\n", pid );
             break;
         default:
@@ -251,6 +260,13 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
         }
         ptlib_set_argument( pid, 2, (void *)mode );
 
+        if( log_level>0 ) {
+            char name[PATH_MAX];
+
+            ptlib_get_string( pid, state->context_state[0], name, sizeof(name) );
+
+            dlog("mknod: %d mode %o name %s\n", pid, state->context_state[1], name );
+        }
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
         if( ptlib_success( pid, sc_num ) ) {
@@ -370,6 +386,13 @@ bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
             return allocate_process_mem( pid, state, sc_num );
 
         state->context_state[0]=ptlib_get_argument( pid, 1 ); // Directory name
+        if( log_level>0  ) {
+            char name[PATH_MAX];
+
+            ptlib_get_string( pid, state->context_state[0], name, sizeof(name) );
+
+            dlog("mkdir: %d creates %s\n", pid, name );
+        }
 
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
@@ -386,7 +409,7 @@ bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
             state->orig_sc=sc_num;
             state->state=pid_state::REDIRECT1;
 
-            return ptlib_generate_syscall( pid, SYS_stat64, state->memory );
+            return ptlib_generate_syscall( pid, PREF_STAT, state->memory );
         } else {
             // If mkdir failed, we don't have anything else to do.
             dlog("mkdir: "PID_F" failed with error %s\n", pid, strerror(ptlib_get_error( pid, sc_num ) ) );

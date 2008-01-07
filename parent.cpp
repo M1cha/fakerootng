@@ -45,19 +45,29 @@ static bool finish_allocation( int sc_num, pid_t pid, pid_state *state );
 
 
 // Keep track of handled syscalls
-
+static __gnu_cxx::hash_map<int, syscall_hook> syscalls;
 
 // Keep track of the states for the various processes
 static __gnu_cxx::hash_map<pid_t, pid_state> state;
 
-static __gnu_cxx::hash_map<int, syscall_hook> syscalls;
-
 static void init_handlers()
 {
+    syscalls[SYS_geteuid]=syscall_hook(sys_getuid, "geteuid");
+#ifdef SYS_geteuid32
     syscalls[SYS_geteuid32]=syscall_hook(sys_getuid, "geteuid");
+#endif
+    syscalls[SYS_getuid]=syscall_hook(sys_getuid, "getuid");
+#ifdef SYS_getuid32
     syscalls[SYS_getuid32]=syscall_hook(sys_getuid, "getuid");
+#endif
+    syscalls[SYS_getegid]=syscall_hook(sys_getuid, "getegid");
+#ifdef SYS_getegid32
     syscalls[SYS_getegid32]=syscall_hook(sys_getuid, "getegid");
+#endif
+    syscalls[SYS_getgid]=syscall_hook(sys_getuid, "getgid");
+#ifdef SYS_getgid32
     syscalls[SYS_getgid32]=syscall_hook(sys_getuid, "getgid");
+#endif
 
 //    syscalls[SYS_fork]=syscall_hook(sys_fork, "fork");
 //    syscalls[SYS_vfork]=syscall_hook(sys_fork, "vfork");
@@ -69,9 +79,18 @@ static void init_handlers()
     syscalls[SYS_fstat64]=syscall_hook(sys_stat64, "fstat64");
     syscalls[SYS_lstat64]=syscall_hook(sys_stat64, "lstat64");
 
+    syscalls[SYS_chown]=syscall_hook(sys_chown, "chown32");
+#ifdef SYS_chown32
     syscalls[SYS_chown32]=syscall_hook(sys_chown, "chown32");
+#endif
+    syscalls[SYS_fchown]=syscall_hook(sys_chown, "fchown32");
+#ifdef SYS_fchown32
     syscalls[SYS_fchown32]=syscall_hook(sys_chown, "fchown32");
+#endif
+    syscalls[SYS_lchown]=syscall_hook(sys_chown, "lchown32");
+#ifdef SYS_lchown32
     syscalls[SYS_lchown32]=syscall_hook(sys_chown, "lchown32");
+#endif
 
     syscalls[SYS_chmod]=syscall_hook(sys_chmod, "chmod");
     syscalls[SYS_fchmod]=syscall_hook(sys_chmod, "fchmod");
@@ -84,6 +103,7 @@ static void init_handlers()
     syscalls[SYS_mmap2]=syscall_hook(sys_mmap, "mmap2");
 }
 
+// Debug related functions
 static const char *sig2str( int signum )
 {
     static char buffer[64];
@@ -135,6 +155,19 @@ static const char *state2str( pid_state::states state )
     return buffer;
 }
 
+void dump_registers( pid_t pid )
+{
+    if( log_level>0 ) {
+        void *state[PTLIB_STATE_SIZE];
+
+        ptlib_save_state( pid, state );
+
+        for( int i=0; i<PTLIB_STATE_SIZE; ++i )
+            dlog("state[%d]=%p\n", i, state[i]);
+    }
+}
+
+// State handling functions
 static void handle_exit( pid_t pid, int status, const struct rusage &usage )
 {
     // Let's see if the process doing the exiting is even registered

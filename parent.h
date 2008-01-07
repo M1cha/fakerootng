@@ -60,4 +60,6 @@ struct syscall_hook {
 
 bool allocate_process_mem( pid_t pid, pid_state *state, int sc_num );
 
+void dump_registers( pid_t pid );
+
 #endif /* PARENT_H */

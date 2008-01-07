@@ -61,28 +61,34 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state )
             dlog("execve: "PID_F" calling execve for executing %s\n", pid, cmd );
             dlog(NULL);
         }
-        state->state=pid_state::RETURN;
-    } else if( state->state==pid_state::RETURN ) {
-        state->state=pid_state::NONE;
 
-        if( ptlib_success( pid, sc_num ) ) {
-            dlog("execve: "PID_F" successfully execed a new command\n", pid );
+        // On some platforms "execve" returns, when successful, with SYS_restart_syscall or some such thing
+        state->state=pid_state::REDIRECT2;
+        state->context_state[0]=0;
+    } else if( state->state==pid_state::REDIRECT2 ) {
+        if( state->context_state[0]==0 ) {
+            state->state=pid_state::NONE;
 
-            // All memory allocations performed before the exec are now null and void
-            state->memory=NULL;
-            state->mem_size=0;
+            if( ptlib_success( pid, sc_num ) ) {
+                dlog("execve: "PID_F" successfully execed a new command\n", pid );
+
+                // All memory allocations performed before the exec are now null and void
+                state->memory=NULL;
+                state->mem_size=0;
 
 #if PTLIB_TRAP_AFTER_EXEC
-            // The platform sends a SIGTRAP to the process after a successful execve, which results in us thinking it was
-            // a syscall. We need to absorb it
-            state->state=pid_state::REDIRECT2;
+                // The platform sends a SIGTRAP to the process after a successful execve, which results in us thinking it was
+                // a syscall. We need to absorb it
+                state->state=pid_state::REDIRECT2;
+                state->context_state[0]=(void *)1;
 #endif
+            } else {
+                dlog("execve: "PID_F" failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)) );
+            }
         } else {
-            dlog("execve: "PID_F" failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)) );
+            // Nothing to do here
+            state->state=pid_state::NONE;
         }
-    } else if( state->state==pid_state::REDIRECT2 ) {
-        // Nothing to do here
-        state->state=pid_state::NONE;
     }
 
     return true;
