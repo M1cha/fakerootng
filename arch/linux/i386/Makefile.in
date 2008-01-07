@@ -1,0 +1,45 @@
+# @configure_input@
+
+libarch_la_OBJECTS=platform.lo ../os.lo
+
+libarch.la: $(libarch_la_OBJECTS) $(libarch_la_DEPENDENCIES)
+	$(LINK)  $(libarch_la_OBJECTS) $(libarch_la_LIBADD) $(LIBS)
+
+@SET_MAKE@
+
+VPATH=$(top_srcdir)/arch/$(target_os)/$(target_cpu)
+
+CC = @CC@
+CCLD = $(CC)
+DEFS = @DEFS@
+DEFAULT_INCLUDES = -I$(top_builddir) -I$(top_srcdir)/arch -I$(top_srcdir)/arch/$(target_os)/$(target_cpu)
+DEPDIR = @DEPDIR@
+LIBTOOL = @LIBTOOL@
+target_cpu = @target_cpu@
+target_os = @target_os@
+LTCOMPILE = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
+	--mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
+	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
+LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
+	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
+	$(LDFLAGS) -o $@
+
+top_builddir = @top_builddir@
+top_srcdir = @top_srcdir@
+
+%.lo: %.c $(DEPDIR)
+	$(LTCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$(notdir $*.Tpo) -c -o $@ $<
+	mv -f $(DEPDIR)/$(notdir $*.Tpo) $(DEPDIR)/$(notdir $*.Plo)
+
+$(DEPDIR):
+	mkdir -p $(DEPDIR)
+
+include $(wildcard $(DEPDIR)/*.Plo)
+
+.PHONY: clean distclean
+
+distclean: clean
+	$(RM) Makefile
+
+clean:
+	$(RM) -r .deps .libs *.o *.lo ../*.o ../*.lo ../.libs core libarch.la
