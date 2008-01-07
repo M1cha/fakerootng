@@ -56,8 +56,8 @@ struct ptlib_stat64 {
 #define INODE_F "%lld"
 
 /* Preferred stat function to use */
-#define PREF_STAT SYS_stat
-#define PREF_LSTAT SYS_lstat
-#define PREF_FSTAT SYS_fstat
+#define PREF_STAT SYS_stat64
+#define PREF_LSTAT SYS_lstat64
+#define PREF_FSTAT SYS_fstat64
 
 #endif /* PLATFORM_SPECIFIC_H */
