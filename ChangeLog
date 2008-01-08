@@ -1,3 +1,6 @@
+Version 0.04
+    * Add a PowerPC port
+
 Version 0.03
     * Add storing persistent state between runs
     * Several bug fixes
