@@ -23,7 +23,7 @@
 #include <sys/ptrace.h>
 //#include <sys/user.h>
 #include <linux/user.h>
-#include <asm-i486/ptrace.h>
+#include <asm/ptrace.h>
 #include <sys/syscall.h>
 #include <errno.h>
 

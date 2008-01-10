@@ -1,7 +1,7 @@
 #ifndef PLATFORM_SPECIFIC_H
 #define PLATFORM_SPECIFIC_H
 
-#include <asm-i486/ptrace.h>
+#include <asm/ptrace.h>
 
 /* Marks the library as supporting debugging children */
 #define PTLIB_SUPPORTS_FORK 1

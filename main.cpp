@@ -123,7 +123,7 @@ static void perform_debugger( int child_socket, int parent_socket, pid_t child )
     dlog("Debugger started\n");
 
     // Fill in the file_lie database from persistent file (if relevant)
-    if( persistent_file ) {
+    if( persistent_file[0]!='\0' ) {
         FILE *file=fopen(persistent_file, "rt");
 
         if( file!=NULL ) {
@@ -176,7 +176,7 @@ static void perform_debugger( int child_socket, int parent_socket, pid_t child )
         process_children(child, parent_socket );
     }
 
-    if( persistent_file ) {
+    if( persistent_file[0]!='\0' ) {
         FILE *file=fopen(persistent_file, "w");
 
         if( file!=NULL ) {
