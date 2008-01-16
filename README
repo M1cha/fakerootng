@@ -1,18 +1,24 @@
-Fakeroot-ng allows running a program while lieing to it that it is running with
-root privileges. Check out the man page for more details.
+This file lists bugs and limitations of fakeroot-ng. There are three lists:
+TODO - lists action items that are simply not yet implemented
+BUGS - lists functions that are implemented, but have known limitations that
+will be addressed soonish
+LIMITATIONS - lists limitations either inherent to the technology, or that
+are outside the scope of coverage intended in the foreseeable future.
 
-Fakeroot-ng basic idea is taken from "fakeroot" (check the AUTHORS file), but
-it uses a different technology that will, hopefully, allow it to go where the
-original fakeroot has been unable to go. At the moment, however, fakeroot-ng
-merely aims to catch up to the functionality fakeroot already provides.
+TODO
+- Chroot jail support
+- Wider support for "old" syscalls (16 bit getuid, 32bit stat etc.)
+- Multithreaded debugger
 
-These limitations are limitations inherent to the technology. Work arounds to
-some of them is planned, but they are documented here for completness' sake.
+BUGS
+- The "wait" type syscalls are only emulated enough to allow two specific
+  debuggers to run: fakeroot-ng and strace
+- No support for platforms where full "Wait" emulation is required yet
+- Poor handling (race) of redirected syscalls with threaded programs.
 
-Technology Limitations:
-- When in a chroot environment, we do not behave like the real thing if the
-  interpreter used to run the program (/bin/sh, ld-linux.so etc) does not exist
-  inside the chroot. We succeed where a real chroot would have failed.
-- It is not possible to run a debugger on a fakerooted process. In particular,
-  this means that it is not currently possible to run "strace" inside a
-  fakeroot environment.
+LIMITATIONS
+- In chroot, the actual interpreter file (ld-linux for ELF executable) will
+  be searched for in the real root, rather than in the chrooted jail.
+- Program has free access to the fakeroot-ng controlled memory inside the
+  program's address space
+

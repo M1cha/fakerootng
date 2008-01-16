@@ -97,16 +97,28 @@ void *ptlib_get_retval( pid_t pid )
     return (void *)ptrace( PTRACE_PEEKUSER, pid, 4*PT_R3 );
 }
 
+#define SO_MASK 0x80000000
+
 void ptlib_set_retval( pid_t pid, void *val )
 {
+    // Clear SO so we register success
+    unsigned long cr=ptrace( PTRACE_PEEKUSER, pid, PT_CCR*4, 0 );
+    cr&=~SO_MASK;
+    ptrace( PTRACE_POKEUSER, pid, PT_CCR*4, cr );
     ptrace( PTRACE_POKEUSER, pid, 4*PT_R3, val );
 }
-
-#define SO_MASK 0x10000000
 
 int ptlib_get_error( pid_t pid, int sc_num )
 {
     return (int)ptlib_get_retval( pid );
+}
+
+int ptlib_set_error( pid_t pid, int sc_num, int val )
+{
+    unsigned long cr=ptrace( PTRACE_PEEKUSER, pid, PT_CCR*4, 0 );
+    cr|=SO_MASK;
+    ptrace( PTRACE_POKEUSER, pid, PT_CCR*4, cr );
+    ptrace( PTRACE_POKEUSER, pid, 4*PT_R3, val );
 }
 
 int ptlib_success( pid_t pid, int sc_num )

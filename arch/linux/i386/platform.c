@@ -129,6 +129,11 @@ int ptlib_get_error( pid_t pid, int sc_num )
     }
 }
 
+void ptlib_set_error( pid_t pid, int sc_num, int error )
+{
+    ptlib_set_retval( pid, -error );
+}
+
 int ptlib_success( pid_t pid, int sc_num )
 {
     void *ret=ptlib_get_retval( pid );

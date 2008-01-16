@@ -20,6 +20,7 @@
 #include "config.h"
 
 #include <sys/types.h>
+#include <errno.h>
 
 #include "syscalls.h"
 #include "arch/platform.h"
@@ -107,3 +108,109 @@ bool sys_sigreturn( int sc_num, pid_t pid, pid_state *state )
 
     return true;
 }
+
+bool sys_setsid( int sc_num, pid_t pid, pid_state *state )
+{
+    // We do not do any actual manipulation on the syscall. We just keep track over the process' session ID
+    if( state->state==pid_state::NONE ) {
+        state->state=pid_state::RETURN;
+    } else if( state->state==pid_state::RETURN ) {
+        state->state=pid_state::NONE;
+
+        if( ptlib_success( pid, sc_num ) ) {
+            state->session_id=pid;
+        }
+    }
+
+    return true;
+}
+
+// This call needs to be emulated under one of two conditions:
+// 1. Platform does not support "wait" by parent on a debugged child (PTLIB_PARENT_CAN_WAIT=0)
+// 2. The parent is a debugger (we are emulating the entire ptrace interface
+bool sys_wait4( int sc_num, pid_t pid, pid_state *state )
+{
+    dlog("wait4: %d num debugees: %d num children: %d\n", pid, state->num_debugees, state->num_children );
+    bool cont=true;
+
+    if( state->state==pid_state::NONE ) {
+#if PTLIB_PARENT_CAN_WAIT
+        // Parent process can wait, so we only need to emulate the call if the process is a debugger
+        if( state->num_debugees==0 ) {
+            dlog("wait4: %d Process handled as usual\n", pid );
+            state->state=pid_state::RETURN;
+        } else
+#endif
+        {
+            state->context_state[0]=ptlib_get_argument(pid, 1); // pid
+            state->context_state[1]=ptlib_get_argument(pid, 2); // status
+            state->context_state[2]=ptlib_get_argument(pid, 3); // options
+            state->context_state[3]=ptlib_get_argument(pid, 4); // rusage
+            ptlib_set_syscall( pid, PREF_NOP ); // NOP call
+
+            state->state=pid_state::REDIRECT2;
+        }
+    } else if( state->state==pid_state::RETURN ) {
+        // The call was executed as planned
+        state->state=pid_state::NONE;
+    } else if( state->state==pid_state::REDIRECT2 ) {
+        // Test whether the (emulated) call should fail
+        // XXX This is nowhere near the exhustive tests we need to do. We only aim to emulate strace and ourselves at this point in time
+        if( state->num_children==0 && state->num_debugees==0 ) {
+            ptlib_set_error( pid, state->orig_sc, ECHILD );
+        } else {
+            // Only wait if there was no error
+            state->state=pid_state::WAITING;
+            cont=false; // By default we hang in wait for something to report
+        }
+    }
+
+    if( state->state==pid_state::WAITING ) {
+        if( !state->waiting_signals.empty() ) {
+            // Let's see what was asked for
+            pid_t wait_pid=(pid_t)state->context_state[0];
+            std::list<pid_state::wait_state>::iterator child=state->waiting_signals.begin();
+
+            if( wait_pid<-1 ) {
+                // We are looking for process with session id= -pid
+                while( child!=state->waiting_signals.end() && state[child->pid].session_id!=-wait_pid )
+                    ++child;
+            } else if( wait_pid==-1 ) {
+                // Wait for anything. Just leave child as it is
+            } else if( wait_pid==0 ) {
+                // Wait for session_id==parent's
+                while( child!=state->waiting_signals.end() && state[child->pid].session_id!=state->session_id )
+                    ++child;
+            } else {
+                // Wait for exact match
+                while( child!=state->waiting_signals.end() && child->pid!=wait_pid )
+                    ++child;
+            }
+
+            if( child!=state->waiting_signals.end() ) {
+                // We have what to report - allow the syscall to return
+                
+                // Fill in the status and rusage
+                if( state->context_state[2]!=NULL )
+                    ptlib_set_mem( pid, &child->status, state->context_state[2], sizeof(child->status) );
+                if( state->context_state[3]!=NULL )
+                    ptlib_set_mem( pid, &child->usage, state->context_state[3], sizeof(child->usage) );
+
+                ptlib_set_retval( pid, (void *)child->pid );
+                state->waiting_signals.erase( child );
+
+                state->state=pid_state::NONE;
+                cont=true;
+            }
+        }
+        
+        if( !cont && (((int)state->context_state[2])&WNOHANG)!=0 ) {
+            // Client asked never to hang
+            ptlib_set_retval( pid, 0 );
+            cont=true;
+        }
+    }
+
+    return cont;
+}
+

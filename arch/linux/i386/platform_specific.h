@@ -2,6 +2,7 @@
 #define PLATFORM_SPECIFIC_H
 
 #include <asm/ptrace.h>
+#include <sys/syscall.h>
 
 /* Marks the library as supporting debugging children */
 #define PTLIB_SUPPORTS_FORK 1
@@ -59,5 +60,6 @@ struct ptlib_stat64 {
 #define PREF_STAT SYS_stat64
 #define PREF_LSTAT SYS_lstat64
 #define PREF_FSTAT SYS_fstat64
+#define PREF_NOP SYS_geteuid32
 
 #endif /* PLATFORM_SPECIFIC_H */

@@ -62,12 +62,19 @@ escape fakeroot\-ng's control will either be closed as "not a bug" or marked as 
 .PP
 It is possible that this policy be rethought in the future. For the time being, however, you have
 been warned.
+.SH BUGS
+Plenty of those. See the "README" file for a list of known ones.
 .SH SEE ALSO
 .BR fakeroot "(1), " fakechroot "(1), " ptrace "(2), " ld.so "(8), " chroot (1)
 .SH AUTHOR
-Fakeroot-ng was written by Shachar Shemesh. Commercial support is available from his company,
-Lingnu Open Source Consulting Ltd., at http://www.lingnu.com
+Fakeroot-ng was written by Shachar Shemesh.
 .PP
 This manual page was written by Shachar Shemesh <shachar@debian.org>
-.SH PROJECT HOMEPAGE
+.SH PROJECT HOMEPAGE AND SUPPORT
 http://sourceforge.net/projects/fakerootng
+.PP
+Community support is available through the project's
+mailing list, at https://lists.sourceforge.net/lists/listinfo/fakerootng-devel.
+.PP
+Commercial support is available through Shachar's company,
+Lingnu Open Source Consulting Ltd., at http://www.lingnu.com

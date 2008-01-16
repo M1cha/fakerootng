@@ -11,11 +11,13 @@ DECLARE_SYSFUNC(getuid)
 
 // Process management
 DECLARE_SYSFUNC(fork)
-//DECLARE_SYSFUNC(wait4)
+DECLARE_SYSFUNC(wait4)
 DECLARE_SYSFUNC(vfork)
 DECLARE_SYSFUNC(clone)
 DECLARE_SYSFUNC(execve)
 DECLARE_SYSFUNC(sigreturn)
+DECLARE_SYSFUNC(setsid)
+DECLARE_SYSFUNC(ptrace)
 
 // File handling
 DECLARE_SYSFUNC(stat64)

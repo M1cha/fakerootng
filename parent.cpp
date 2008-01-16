@@ -73,7 +73,14 @@ static void init_handlers()
 //    syscalls[SYS_vfork]=syscall_hook(sys_fork, "vfork");
 //    syscalls[SYS_clone]=syscall_hook(sys_fork, "clone");
     syscalls[SYS_execve]=syscall_hook(sys_execve, "execve");
+#ifdef SYS_sigreturn
     syscalls[SYS_sigreturn]=syscall_hook(sys_sigreturn, "sigreturn");
+#endif
+    syscalls[SYS_setsid]=syscall_hook(sys_setsid, "setsid");
+#ifdef SYS_wait4
+    syscalls[SYS_wait4]=syscall_hook(sys_wait4, "wait4");
+#endif
+    syscalls[SYS_ptrace]=syscall_hook(sys_ptrace, "ptrace");
 
     syscalls[SYS_stat64]=syscall_hook(sys_stat64, "stat64");
     syscalls[SYS_fstat64]=syscall_hook(sys_stat64, "fstat64");
@@ -147,6 +154,7 @@ static const char *state2str( pid_state::states state )
         STATENAME(REDIRECT2)
         STATENAME(ALLOCATE)
         STATENAME(ALLOC_RETURN)
+        STATENAME(WAITING)
 #undef STATENAME
     }
 
@@ -168,6 +176,19 @@ void dump_registers( pid_t pid )
 }
 
 // State handling functions
+static void notify_parent( pid_t parent, const pid_state::wait_state &waiting )
+{
+    pid_state *proc_state=&state[parent];
+    proc_state->waiting_signals.push_back( waiting );
+
+    // Is the parent currently waiting?
+    if( proc_state->state==pid_state::WAITING ) {
+        // Call the original function handler, now that it has something to do
+        if( syscalls[proc_state->orig_sc].func( -1, parent, proc_state ) )
+            ptrace(PTRACE_SYSCALL, parent, 0, 0);
+    }
+}
+
 static void handle_exit( pid_t pid, int status, const struct rusage &usage )
 {
     // Let's see if the process doing the exiting is even registered
@@ -175,10 +196,31 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
      dlog(NULL);
      assert(process!=state.end());
 
-    // This function is fairly empty if the platform does not require "wait" emulation
-#if !PTLIB_PARENT_CAN_WAIT
-#error emulating parent wait not yet implemented
-#endif // PTLIB_PARENT_CAN_WAIT
+     // The process was being debugged
+     pid_state::wait_state waiting;
+
+     waiting.usage=usage;
+     waiting.pid=pid;
+     waiting.status=status;
+
+    if( process->second.debugger!=0 ) {
+        notify_parent( process->second.debugger, waiting );
+        state[process->second.debugger].num_debugees--;
+    }
+#if PTLIB_PARENT_CAN_WAIT
+    // If a parent can wait on a debugged child, we only need to notify the parent if we are emulating its "waits" anyways.
+    // In other words, we need to manually notify it IFF it is also a debugger
+    // Of course, if the debugger IS the parent, there is no need to notify it twice
+    if( state[process->second.parent].num_debugees>0 && process->second.parent!=process->second.debugger )
+#else
+    // If a parent cannot wait, we need to let it know ourselves only if it's not being debugged
+    else
+#endif
+    {
+        notify_parent( process->second.parent, waiting );
+    }
+
+    state[process->second.debugger].num_debugees--;
 
     state.erase(process);
 }
@@ -189,28 +231,118 @@ static void handle_new_process( pid_t parent, pid_t child )
     state[child].memory=state[parent].memory;
     state[child].mem_size=state[parent].mem_size;
 
-#if !PTLIB_PARENT_CAN_WAIT
+    // Copy the session information
     state[child].parent=parent;
-#error emulating parent wait not yet implemented
-#endif // PTLIB_PARENT_CAN_WAIT
+    state[child].session_id=state[parent].session_id;
+    state[parent].num_children++;
 }
 
-int process_children(pid_t first_child, int comm_fd )
+static pid_t first_child; // PID of first child
+static int comm_fd; // FD for communicating with the process "waiting" for the first child to exit
+static int num_processes; // Number of running processes
+
+int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long ret )
+{
+    long sig=0;
+
+    switch(wait_state) {
+    case SYSCALL:
+        {
+            pid_state *proc_state=&state[pid];
+            if( proc_state->state==pid_state::REDIRECT1 ) {
+                // REDIRECT1 is just a filler state between the previous call, where the arguments were set up and
+                // the call initiated, and the call's return (REDIRECT2). No need to actually call the handler
+                dlog(PID_F": Calling syscall %d redirected from %s\n", pid, ret, syscalls[proc_state->orig_sc].name );
+                proc_state->state=pid_state::REDIRECT2;
+            } else if( proc_state->state==pid_state::REDIRECT2 ) {
+                dlog(PID_F": Called syscall %d, redirected from %s\n", pid, ret, syscalls[proc_state->orig_sc].name );
+
+                if( !syscalls[proc_state->orig_sc].func( ret, pid, proc_state ) )
+                    sig=-1; // Mark for ptrace not to continue the process
+            } else if( proc_state->state==pid_state::ALLOC_RETURN ) {
+                if( !finish_allocation( ret, pid, proc_state ) )
+                    sig=-1;
+            } else {
+                // Sanity check - returning from same syscall that got us in
+                if( proc_state->state==pid_state::RETURN && ret!=proc_state->orig_sc ) {
+                    dlog("process "PID_F" orig_sc=%d actual sc=%d state=%d\n", pid, proc_state->orig_sc, ret, state2str(proc_state->state));
+                    dlog(NULL);
+                    assert( proc_state->state!=pid_state::RETURN || ret==proc_state->orig_sc );
+                }
+
+                if( proc_state->state==pid_state::NONE )
+                    // Store the syscall type here (we are not in override)
+                    proc_state->orig_sc=ret;
+
+                if( syscalls.find(ret)!=syscalls.end() ) {
+                    dlog(PID_F": Called %s(%s)\n", pid, syscalls[ret].name, state2str(proc_state->state));
+
+                    if( !syscalls[ret].func( ret, pid, proc_state ) )
+                        sig=-1; // Mark for ptrace not to continue the process
+                } else {
+                    dlog(PID_F": Unknown syscall %ld(%s)\n", pid, ret, state2str(proc_state->state));
+                    if( proc_state->state==pid_state::NONE )
+                        proc_state->state=pid_state::RETURN;
+                    else if( proc_state->state==pid_state::RETURN )
+                        proc_state->state=pid_state::NONE;
+                }
+            }
+        }
+        break;
+    case SIGNAL:
+        dlog(PID_F": Signal %s\n", pid, sig2str(ret));
+        sig=ret;
+        break;
+    case EXIT:
+    case SIGEXIT:
+        {
+            if( wait_state==EXIT )
+                dlog(PID_F": Exit with return code %ld\n", pid, ret);
+            else {
+                dlog(PID_F": Exit with %s\n", pid, sig2str(ret));
+            }
+
+            struct rusage rusage;
+            getrusage( RUSAGE_CHILDREN, &rusage );
+            handle_exit(pid, status, rusage );
+            if( pid==first_child && comm_fd!=-1 ) {
+                write( comm_fd, &status, sizeof(status) );
+                close( comm_fd );
+                comm_fd=-1;
+            }
+
+            num_processes--;
+        }
+        break;
+    case NEWPROCESS:
+        {
+            dlog(PID_F": Created new child process %ld\n", pid, ret);
+            handle_new_process( pid, ret );
+            num_processes++;
+        }
+    }
+
+    return sig;
+}
+
+int process_children(pid_t _first_child, int _comm_fd, pid_t session_id )
 {
     // Create a state for the first child
+    first_child=_first_child;
+    comm_fd=_comm_fd;
 
     state[first_child]=pid_state();
+    state[first_child].session_id=session_id; // The initial session ID
     init_handlers();
 
     dlog( "Begin the process loop\n" );
 
-    int num_processes=1;
+    num_processes=1;
 
     while(num_processes>0) {
         int status;
         pid_t pid;
         long ret;
-        int sig=0;
         
         enum PTLIB_WAIT_RET wait_state=static_cast<enum PTLIB_WAIT_RET>(ptlib_wait( &pid, &status, &ret ));
 
@@ -224,82 +356,7 @@ int process_children(pid_t first_child, int comm_fd )
             wait_state=static_cast<enum PTLIB_WAIT_RET>(ptlib_reinterpret( wait_state, pid, status, &ret ));
         }
 
-        switch(wait_state) {
-        case SYSCALL:
-            {
-                pid_state *proc_state=&state[pid];
-                if( proc_state->state==pid_state::REDIRECT1 ) {
-                    // REDIRECT1 is just a filler state between the previous call, where the arguments were set up and
-                    // the call initiated, and the call's return (REDIRECT2). No need to actually call the handler
-                    dlog(PID_F": Calling syscall %d redirected from %s\n", pid, ret, syscalls[proc_state->orig_sc].name );
-                    proc_state->state=pid_state::REDIRECT2;
-                } else if( proc_state->state==pid_state::REDIRECT2 ) {
-                    dlog(PID_F": Called syscall %d, redirected from %s\n", pid, ret, syscalls[proc_state->orig_sc].name );
-
-                    if( !syscalls[proc_state->orig_sc].func( ret, pid, proc_state ) )
-                        sig=-1; // Mark for ptrace not to continue the process
-                } else if( proc_state->state==pid_state::ALLOC_RETURN ) {
-                    if( !finish_allocation( ret, pid, proc_state ) )
-                        sig=-1;
-                } else {
-                    // Sanity check - returning from same syscall that got us in
-                    if( proc_state->state==pid_state::RETURN && ret!=proc_state->orig_sc ) {
-                        dlog("process "PID_F" orig_sc=%d actual sc=%d state=%d\n", pid, proc_state->orig_sc, ret, state2str(proc_state->state));
-                        dlog(NULL);
-                        assert( proc_state->state!=pid_state::RETURN || ret==proc_state->orig_sc );
-                    }
-                    
-                    if( proc_state->state==pid_state::NONE )
-                        // Store the syscall type here (we are not in override)
-                        proc_state->orig_sc=ret;
-
-                    if( syscalls.find(ret)!=syscalls.end() ) {
-                        dlog(PID_F": Called %s(%s)\n", pid, syscalls[ret].name, state2str(proc_state->state));
-
-                        if( !syscalls[ret].func( ret, pid, proc_state ) )
-                            sig=-1; // Mark for ptrace not to continue the process
-                    } else {
-                        dlog(PID_F": Unknown syscall %ld(%s)\n", pid, ret, state2str(proc_state->state));
-                        if( proc_state->state==pid_state::NONE )
-                            proc_state->state=pid_state::RETURN;
-                        else if( proc_state->state==pid_state::RETURN )
-                            proc_state->state=pid_state::NONE;
-                    }
-                }
-            }
-            break;
-        case SIGNAL:
-            dlog(PID_F": Signal %s\n", pid, sig2str(ret));
-            sig=ret;
-            break;
-        case EXIT:
-        case SIGEXIT:
-            {
-                if( wait_state==EXIT )
-                    dlog(PID_F": Exit with return code %ld\n", pid, ret);
-                else {
-                    dlog(PID_F": Exit with %s\n", pid, sig2str(ret));
-                }
-
-                struct rusage rusage;
-                getrusage( RUSAGE_CHILDREN, &rusage );
-                handle_exit(pid, status, rusage );
-                if( pid==first_child && comm_fd!=-1 ) {
-                    write( comm_fd, &status, sizeof(status) );
-                    close( comm_fd );
-                    comm_fd=-1;
-                }
-
-                num_processes--;
-            }
-            break;
-        case NEWPROCESS:
-            {
-                dlog(PID_F": Created new child process %ld\n", pid, ret);
-                handle_new_process( pid, ret );
-                num_processes++;
-            }
-        }
+        long sig=process_sigchld( pid, wait_state, status, ret );
 
         // The show must go on
         if( sig>=0 )
@@ -373,4 +430,14 @@ static bool finish_allocation( int sc_num, pid_t pid, pid_state *state )
     dlog("finish_allocation: "PID_F" restore state and call %s handler\n", pid, sys->name );
 
     return sys->func( sc_num, pid, state );
+}
+
+pid_state *lookup_state( pid_t pid ) {
+    __gnu_cxx::hash_map<pid_t, pid_state>::iterator process=state.find(pid);
+
+    if( process!=state.end() ) {
+        return &process->second;
+    }
+
+    return NULL;
 }

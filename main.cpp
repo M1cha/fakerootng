@@ -118,6 +118,8 @@ int parse_options( int argc, char *argv[] )
 
 static void perform_debugger( int child_socket, int parent_socket, pid_t child )
 {
+    pid_t sessid=getsid(0);
+
     // Daemonize ourselves
     setsid();
     dlog("Debugger started\n");
@@ -173,7 +175,7 @@ static void perform_debugger( int child_socket, int parent_socket, pid_t child )
     if( write( child_socket, "a", 1 )==1 ) {
         close( child_socket );
 
-        process_children(child, parent_socket );
+        process_children(child, parent_socket, sessid );
     }
 
     if( persistent_file[0]!='\0' ) {

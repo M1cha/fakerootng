@@ -42,6 +42,9 @@ int ptlib_wait( pid_t *pid, int *status, long *ret )
 {
     *pid=wait(status);
 
+    void *state[PTLIB_STATE_SIZE];
+    ptlib_save_state( *pid, state );
+
     if( WIFEXITED(*status) ) {
         *ret=WEXITSTATUS(*status);
         return EXIT;
@@ -67,6 +70,8 @@ int ptlib_wait( pid_t *pid, int *status, long *ret )
              * SIGTRACE */
             *ret=ptlib_get_syscall(*pid);
             return SYSCALL;
+        } else {
+            dlog("stopped with some other signal\n");
         }
 
         return SIGNAL;

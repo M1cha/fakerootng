@@ -10,40 +10,38 @@
 
 #include "platform_specific.h"
 
-int process_children(pid_t first_child, int comm_fd);
+int process_children(pid_t first_child, int comm_fd, pid_t session_id );
 
-#define NUM_SAVED_STATES 3
+#define NUM_SAVED_STATES 4
 
 struct pid_state {
-    enum states { INIT, NONE, RETURN, REDIRECT1, REDIRECT2, ALLOCATE, ALLOC_RETURN } state;
+    enum states { INIT, NONE, RETURN, REDIRECT1, REDIRECT2, ALLOCATE, ALLOC_RETURN, WAITING } state;
     int orig_sc; // Original system call
     void *memory; // Where and how much mem do we have inside the process's address space
     size_t mem_size;
     void *context_state[NUM_SAVED_STATES];
     void *saved_state[PTLIB_STATE_SIZE];
 
-#if !PTLIB_PARENT_CAN_WAIT
-    struct waiting_signal {
+    // "wait" simulation and recursive debuggers support
+    pid_t debugger, parent; // Which process thinks it's ptracing/parenting this one
+    int num_children, num_debugees; // How many child/debugged processes we have
+    int trace_mode; // Which ptrace mode was used to run the process
+    pid_t session_id;
+
+    struct wait_state {
+        struct rusage usage;
         pid_t pid;
         int status;
-        struct rusage usage;
-        
-        waiting_signal( pid_t _pid, int _status, const struct rusage &_usage ) : pid(_pid), status(_status), usage(_usage)
-        {
-        }
     };
-    std::list<waiting_signal> waiting_signals;
+    std::list<wait_state> waiting_signals;
 
-    pid_t parent;
-#endif // PTLIB_PARENT_CAN_WAIT
-
-    pid_state() : state(INIT), memory(NULL), mem_size(0)
-#if !PTLIB_PARENT_CAN_WAIT
-        , parent(1)
-#endif // PTLIB_PARENT_CAN_WAIT
+    pid_state() : state(INIT), memory(NULL), mem_size(0), debugger(0), parent(0), num_children(0), num_debugees(0), trace_mode(0),
+        session_id(0)
     {
     }
 };
+
+pid_state *lookup_state( pid_t pid );
 
 typedef bool (*sys_callback)( int sc_num, pid_t pid, pid_state *state );
 struct syscall_hook {
