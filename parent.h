@@ -15,7 +15,7 @@ int process_children(pid_t first_child, int comm_fd, pid_t session_id );
 #define NUM_SAVED_STATES 4
 
 struct pid_state {
-    enum states { INIT, NONE, RETURN, REDIRECT1, REDIRECT2, ALLOCATE, ALLOC_RETURN, WAITING } state;
+    enum states { INIT, NONE, RETURN, REDIRECT1, REDIRECT2, ALLOCATE, ALLOC_RETURN, WAITING, DEBUGGED1, DEBUGGED2 } state;
     int orig_sc; // Original system call
     void *memory; // Where and how much mem do we have inside the process's address space
     size_t mem_size;

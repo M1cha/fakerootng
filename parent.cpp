@@ -155,6 +155,8 @@ static const char *state2str( pid_state::states state )
         STATENAME(ALLOCATE)
         STATENAME(ALLOC_RETURN)
         STATENAME(WAITING)
+        STATENAME(DEBUGGED1)
+        STATENAME(DEBUGGED2)
 #undef STATENAME
     }
 
@@ -178,6 +180,10 @@ void dump_registers( pid_t pid )
 // State handling functions
 static void notify_parent( pid_t parent, const pid_state::wait_state &waiting )
 {
+    if( parent==1 || parent==0 ) {
+        // This process has no parent, or had a parent that already quit
+        return;
+    }
     pid_state *proc_state=&state[parent];
     proc_state->waiting_signals.push_back( waiting );
 
@@ -192,37 +198,50 @@ static void notify_parent( pid_t parent, const pid_state::wait_state &waiting )
 static void handle_exit( pid_t pid, int status, const struct rusage &usage )
 {
     // Let's see if the process doing the exiting is even registered
-     __gnu_cxx::hash_map<pid_t, pid_state>::iterator process=state.find(pid);
-     dlog(NULL);
-     assert(process!=state.end());
 
-     // The process was being debugged
-     pid_state::wait_state waiting;
+    pid_state *proc_state=lookup_state(pid);
+    dlog(NULL);
+    assert(proc_state!=NULL);
 
-     waiting.usage=usage;
-     waiting.pid=pid;
-     waiting.status=status;
+    // The process was being debugged
+    pid_state::wait_state waiting;
 
-    if( process->second.debugger!=0 ) {
-        notify_parent( process->second.debugger, waiting );
-        state[process->second.debugger].num_debugees--;
+    waiting.usage=usage;
+    waiting.pid=pid;
+    waiting.status=status;
+
+    if( proc_state->debugger!=0 ) {
+        notify_parent( proc_state->debugger, waiting );
+        state[proc_state->debugger].num_debugees--;
     }
 #if PTLIB_PARENT_CAN_WAIT
     // If a parent can wait on a debugged child, we only need to notify the parent if we are emulating its "waits" anyways.
     // In other words, we need to manually notify it IFF it is also a debugger
     // Of course, if the debugger IS the parent, there is no need to notify it twice
-    if( state[process->second.parent].num_debugees>0 && process->second.parent!=process->second.debugger )
+    if( state[proc_state->parent].num_debugees>0 && proc_state->parent!=proc_state->debugger )
 #else
     // If a parent cannot wait, we need to let it know ourselves only if it's not being debugged
     else
 #endif
     {
-        notify_parent( process->second.parent, waiting );
+        notify_parent( proc_state->parent, waiting );
     }
 
-    state[process->second.debugger].num_debugees--;
+    state[proc_state->debugger].num_debugees--;
 
-    state.erase(process);
+    // Is any process a child of this process?
+    for( __gnu_cxx::hash_map<pid_t, pid_state>::iterator i=state.begin(); i!=state.end(); ++i ) {
+        if( i->second.parent==pid ) {
+            dlog("Reparenting process %d to init from %d\n", i->first);
+            i->second.parent=1;
+        }
+
+        if( i->second.debugger==pid ) {
+            dlog("Detaching process %d from recursive debugger %d\n", i->first, pid );
+            i->second.debugger=0;
+        }
+    }
+    state.erase(pid);
 }
 
 static void handle_new_process( pid_t parent, pid_t child )
@@ -270,28 +289,73 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
                     assert( proc_state->state!=pid_state::RETURN || ret==proc_state->orig_sc );
                 }
 
-                if( proc_state->state==pid_state::NONE )
-                    // Store the syscall type here (we are not in override)
-                    proc_state->orig_sc=ret;
+                if( proc_state->state==pid_state::NONE && proc_state->debugger!=0 && proc_state->trace_mode==PTRACE_SYSCALL ) {
+                    // Notify the debugger before the syscall
+                    proc_state->context_state[0]=(void *)wait_state;
+                    proc_state->context_state[1]=(void *)status;
+                    proc_state->context_state[2]=(void *)ret;
+                    proc_state->state=pid_state::DEBUGGED1;
 
-                if( syscalls.find(ret)!=syscalls.end() ) {
-                    dlog(PID_F": Called %s(%s)\n", pid, syscalls[ret].name, state2str(proc_state->state));
-
-                    if( !syscalls[ret].func( ret, pid, proc_state ) )
-                        sig=-1; // Mark for ptrace not to continue the process
+                    pid_state::wait_state waiting;
+                    waiting.pid=pid;
+                    waiting.status=status;
+                    getrusage( RUSAGE_CHILDREN, &waiting.usage ); // XXX BUG This is the wrong function!
+                    notify_parent( proc_state->debugger, waiting );
+                    sig=-1; // We'll halt the program until the "debugger" decides what to do with it
                 } else {
-                    dlog(PID_F": Unknown syscall %ld(%s)\n", pid, ret, state2str(proc_state->state));
-                    if( proc_state->state==pid_state::NONE )
-                        proc_state->state=pid_state::RETURN;
-                    else if( proc_state->state==pid_state::RETURN )
+                    // No debugger or otherwise we need to go ahead with this syscall
+                    if( proc_state->state==pid_state::DEBUGGED1 ) {
                         proc_state->state=pid_state::NONE;
+
+                        // The debugger may have changed the system call to execute - we will respect it
+                        ret=ptlib_get_syscall( pid );
+                    }
+
+                    if( proc_state->state==pid_state::NONE )
+                        // Store the syscall type here (we are not in override)
+                        proc_state->orig_sc=ret;
+
+                    if( syscalls.find(ret)!=syscalls.end() ) {
+                        dlog(PID_F": Called %s(%s)\n", pid, syscalls[ret].name, state2str(proc_state->state));
+
+                        if( !syscalls[ret].func( ret, pid, proc_state ) )
+                            sig=-1; // Mark for ptrace not to continue the process
+                    } else {
+                        dlog(PID_F": Unknown syscall %ld(%s)\n", pid, ret, state2str(proc_state->state));
+                        if( proc_state->state==pid_state::NONE )
+                            proc_state->state=pid_state::RETURN;
+                        else if( proc_state->state==pid_state::RETURN )
+                            proc_state->state=pid_state::NONE;
+                    }
+
+                    // Check for post-syscall debugger callback
+                    if( proc_state->state==pid_state::NONE && proc_state->debugger!=0 && proc_state->trace_mode==PTRACE_SYSCALL ) {
+                        proc_state->state=pid_state::DEBUGGED2;
+
+                        pid_state::wait_state waiting;
+                        waiting.pid=pid;
+                        waiting.status=status;
+                        getrusage( RUSAGE_CHILDREN, &waiting.usage ); // XXX BUG This is the wrong function!
+                        notify_parent( proc_state->debugger, waiting );
+                        sig=-1; // Halt process until "debugger" decides it can keep on going
+                    }
                 }
             }
         }
         break;
     case SIGNAL:
         dlog(PID_F": Signal %s\n", pid, sig2str(ret));
-        sig=ret;
+        if( state[pid].debugger==0 )
+            sig=ret;
+        else {
+            // Pass the signal to the debugger
+            pid_state::wait_state waiting;
+            waiting.pid=pid;
+            waiting.status=status;
+            getrusage( RUSAGE_CHILDREN, &waiting.usage ); // XXX BUG this is the wrong function!
+            notify_parent( state[pid].debugger, waiting );
+            sig=-1;
+        }
         break;
     case EXIT:
     case SIGEXIT:
