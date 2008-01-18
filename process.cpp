@@ -127,31 +127,27 @@ bool sys_setsid( int sc_num, pid_t pid, pid_state *state )
 
 // This call needs to be emulated under one of two conditions:
 // 1. Platform does not support "wait" by parent on a debugged child (PTLIB_PARENT_CAN_WAIT=0)
-// 2. The parent is a debugger (we are emulating the entire ptrace interface
+// 2. The parent is a debugger (we are emulating the entire ptrace interface)
+//
+// Of course, with PTRACE_TRACEME, it is possible that the process not have a debugee when it
+// starts the wait, but does have one by the time wait should return. We therefor emulate the
+// entire system call, always :-(
 bool sys_wait4( int sc_num, pid_t pid, pid_state *state )
 {
     dlog("wait4: %d num debugees: %d num children: %d\n", pid, state->num_debugees, state->num_children );
     bool cont=true;
 
     if( state->state==pid_state::NONE ) {
-#if PTLIB_PARENT_CAN_WAIT
-        // Parent process can wait, so we only need to emulate the call if the process is a debugger
-        if( state->num_debugees==0 ) {
-            dlog("wait4: %d Process handled as usual\n", pid );
-            state->state=pid_state::RETURN;
-        } else
-#endif
-        {
-            state->context_state[0]=ptlib_get_argument(pid, 1); // pid
-            state->context_state[1]=ptlib_get_argument(pid, 2); // status
-            state->context_state[2]=ptlib_get_argument(pid, 3); // options
-            state->context_state[3]=ptlib_get_argument(pid, 4); // rusage
-            ptlib_set_syscall( pid, PREF_NOP ); // NOP call
+        state->context_state[0]=ptlib_get_argument(pid, 1); // pid
+        state->context_state[1]=ptlib_get_argument(pid, 2); // status
+        state->context_state[2]=ptlib_get_argument(pid, 3); // options
+        state->context_state[3]=ptlib_get_argument(pid, 4); // rusage
+        ptlib_set_syscall( pid, PREF_NOP ); // NOP call
 
-            state->state=pid_state::REDIRECT2;
-        }
+        state->state=pid_state::REDIRECT2;
     } else if( state->state==pid_state::RETURN ) {
         // The call was executed as planned
+        // XXX Unreachable code
         state->state=pid_state::NONE;
     } else if( state->state==pid_state::REDIRECT2 ) {
         // Test whether the (emulated) call should fail
@@ -191,8 +187,8 @@ bool sys_wait4( int sc_num, pid_t pid, pid_state *state )
                 // We have what to report - allow the syscall to return
                 
                 // Fill in the status and rusage
-                if( state->context_state[2]!=NULL )
-                    ptlib_set_mem( pid, &child->status, state->context_state[2], sizeof(child->status) );
+                if( state->context_state[1]!=NULL )
+                    ptlib_set_mem( pid, &child->status, state->context_state[1], sizeof(child->status) );
                 if( state->context_state[3]!=NULL )
                     ptlib_set_mem( pid, &child->usage, state->context_state[3], sizeof(child->usage) );
 

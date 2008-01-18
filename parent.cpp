@@ -184,14 +184,17 @@ static void notify_parent( pid_t parent, const pid_state::wait_state &waiting )
         // This process has no parent, or had a parent that already quit
         return;
     }
+    dlog("notify_parent: "PID_F" sent a notify about "PID_F"(%x)\n", parent, waiting.pid, waiting.status);
     pid_state *proc_state=&state[parent];
     proc_state->waiting_signals.push_back( waiting );
 
     // Is the parent currently waiting?
     if( proc_state->state==pid_state::WAITING ) {
         // Call the original function handler, now that it has something to do
-        if( syscalls[proc_state->orig_sc].func( -1, parent, proc_state ) )
+        if( syscalls[proc_state->orig_sc].func( -1, parent, proc_state ) ) {
+            dlog("notify_parent: "PID_F" released from wait\n", parent);
             ptrace(PTRACE_SYSCALL, parent, 0, 0);
+        }
     }
 }
 

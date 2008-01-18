@@ -34,6 +34,7 @@ static bool verify_permission( pid_t pid, pid_state *state )
 
     pid_state *child_state=lookup_state( traced );
     if( child_state==NULL || child_state->debugger!=pid ) {
+        dlog("ptrace verify_permission: %d failed permission - not the debugger for "PID_F"\n", pid, traced);
         errno=ESRCH;
         return false;
     }
@@ -44,15 +45,57 @@ static bool verify_permission( pid_t pid, pid_state *state )
 static bool begin_trace( pid_t debugger, pid_t child )
 {
     pid_state *child_state=lookup_state( child );
-    if( child_state==NULL || child_state->debugger!=0 ) {
+    pid_state *parent_state=lookup_state( debugger );
+
+    if( child_state==NULL || parent_state==NULL || child_state->debugger!=0 ) {
         errno=EPERM;
         return false;
     }
 
     child_state->debugger=debugger;
     child_state->trace_mode=PTRACE_CONT;
+    parent_state->num_debugees++;
 
     return true;
+}
+
+void handle_cont_syscall( pid_t pid, pid_state *state )
+{
+    if( verify_permission( pid, state ) ) {
+        state->trace_mode=(int)state->context_state[0];
+        __ptrace_request req=(__ptrace_request)state->trace_mode;
+        dlog("ptrace: %d %s("PID_F")\n", pid, req==PTRACE_CONT?"PTRACE_CONT":"PTRACE_SYSCALL",
+                (pid_t)state->context_state[1] );
+
+        long rc=ptrace( PTRACE_SYSCALL, (pid_t)state->context_state[1], state->context_state[2],
+                state->context_state[3] );
+
+        if( rc!=-1 ) {
+            dlog("ptrace: %d request successful\n", pid );
+            ptlib_set_retval( pid, (void *)rc );
+        } else {
+            ptlib_set_error( pid, state->orig_sc, errno );
+            dlog("ptrace: %d request failed: %s\n", pid, strerror(errno) );
+        }
+    }
+}
+
+bool handle_detach( pid_t pid, pid_state *state )
+{
+    if( verify_permission( pid, state ) ) {
+        dlog("ptrace: %d PTRACE_DETACH("PID_F")\n", pid, (pid_t)state->context_state[1]);
+
+        pid_state *child_state=lookup_state((pid_t)state->context_state[1]);
+
+        child_state->debugger=0;
+        state->num_debugees--;
+
+        if( child_state->state==pid_state::DEBUGGED1 || child_state->state==pid_state::DEBUGGED2 )
+            child_state->state=pid_state::NONE;
+
+        return true;
+    } else
+        return false;
 }
 
 bool sys_ptrace( int sc_num, pid_t pid, pid_state *state )
@@ -65,6 +108,9 @@ bool sys_ptrace( int sc_num, pid_t pid, pid_state *state )
         state->context_state[2]=ptlib_get_argument( pid, 3 ); // addr
         state->context_state[3]=ptlib_get_argument( pid, 4 ); // data
 
+        dlog("ptrace: %d ptrace( %d, "PID_F", %p, %p )\n", pid, state->context_state[0], state->context_state[1], state->context_state[2],
+            state->context_state[3] );
+
         ptlib_set_syscall( pid, PREF_NOP );
         state->state=pid_state::REDIRECT2;
     } else if( state->state==pid_state::REDIRECT2 ) {
@@ -74,15 +120,19 @@ bool sys_ptrace( int sc_num, pid_t pid, pid_state *state )
         switch( (int)state->context_state[0] ) {
         case PTRACE_TRACEME:
             if( begin_trace( state->parent, pid ) ) {
+                dlog("ptrace: %d PTRACE_TRACEME parent "PID_F"\n", pid, state->parent );
                 ptlib_set_retval( pid, 0 );
             } else {
+                dlog("ptrace: %d PTRACE_TRACEME failed %s\n", pid, strerror(errno) );
                 ptlib_set_error( pid, state->orig_sc, errno );
             }
             break;
         case PTRACE_ATTACH:
             if( begin_trace( pid, (pid_t)state->context_state[1] ) ) {
+                dlog("ptrace: %d PTRACE_ATTACH("PID_F") succeeded\n", pid, (pid_t)state->context_state[1] );
                 ptlib_set_retval( pid, 0 );
             } else {
+                dlog("ptrace: %d PTRACE_ATTACH("PID_F") failed %s\n", pid, (pid_t)state->context_state[1], strerror(errno) );
                 ptlib_set_error( pid, state->orig_sc, errno );
             }
             break;
@@ -104,29 +154,21 @@ bool sys_ptrace( int sc_num, pid_t pid, pid_state *state )
         case PTRACE_SETSIGINFO:
             break;
         case PTRACE_SINGLESTEP:
+            // We do not support single step right now
+            ptlib_set_error( pid, state->orig_sc, EINVAL );
+            break;
         case PTRACE_CONT:
         case PTRACE_SYSCALL:
-            if( verify_permission( pid, state ) ) {
-                state->trace_mode=(int)state->context_state[0];
-                __ptrace_request req=(__ptrace_request)state->trace_mode;
-                if( req==PTRACE_CONT )
-                    req=PTRACE_SYSCALL;
-                long rc=ptrace( req, (pid_t)state->context_state[1], state->context_state[2],
-                    state->context_state[3] );
-
-                if( rc!=-1 ) {
-                    ptlib_set_retval( pid, (void *)rc );
-                } else
-                    ptlib_set_error( pid, sc_num, errno );
-            }
+            handle_cont_syscall( pid, state );
             break;
         case PTRACE_KILL:
             break;
         case PTRACE_DETACH:
+            handle_detach( pid, state );
             break;
         default:
             dlog("ptrace: "PID_F" Unsupported option %x\n", pid, (int)state->context_state[0] );
-            ptlib_set_error(pid, state->orig_sc, EPERM);
+            ptlib_set_error(pid, state->orig_sc, EINVAL);
             break;
         }
     }
