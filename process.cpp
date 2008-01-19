@@ -162,6 +162,7 @@ bool sys_wait4( int sc_num, pid_t pid, pid_state *state )
     }
 
     if( state->state==pid_state::WAITING ) {
+        cont=false;
         if( !state->waiting_signals.empty() ) {
             // Let's see what was asked for
             pid_t wait_pid=(pid_t)state->context_state[0];

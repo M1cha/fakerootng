@@ -62,8 +62,9 @@ static bool begin_trace( pid_t debugger, pid_t child )
 void handle_cont_syscall( pid_t pid, pid_state *state )
 {
     if( verify_permission( pid, state ) ) {
-        state->trace_mode=(int)state->context_state[0];
-        __ptrace_request req=(__ptrace_request)state->trace_mode;
+        pid_state *child_state=lookup_state( (pid_t)state->context_state[1] );
+        child_state->trace_mode=(int)state->context_state[0];
+        __ptrace_request req=(__ptrace_request)child_state->trace_mode;
         dlog("ptrace: %d %s("PID_F")\n", pid, req==PTRACE_CONT?"PTRACE_CONT":"PTRACE_SYSCALL",
                 (pid_t)state->context_state[1] );
 

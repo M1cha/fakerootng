@@ -218,19 +218,15 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
         state[proc_state->debugger].num_debugees--;
     }
 #if PTLIB_PARENT_CAN_WAIT
-    // If a parent can wait on a debugged child, we only need to notify the parent if we are emulating its "waits" anyways.
-    // In other words, we need to manually notify it IFF it is also a debugger
+    // If a parent can wait on a debugged child we need to notify it even if the child is being debugged,
+    // but only if it actually has a parent (i.e. - was not reparented to init)
     // Of course, if the debugger IS the parent, there is no need to notify it twice
-    if( state[proc_state->parent].num_debugees>0 && proc_state->parent!=proc_state->debugger )
+    if( proc_state->parent!=0 && proc_state->parent!=1 && proc_state->parent!=proc_state->debugger )
 #else
     // If a parent cannot wait, we need to let it know ourselves only if it's not being debugged
     else
 #endif
-    {
         notify_parent( proc_state->parent, waiting );
-    }
-
-    state[proc_state->debugger].num_debugees--;
 
     // Is any process a child of this process?
     for( __gnu_cxx::hash_map<pid_t, pid_state>::iterator i=state.begin(); i!=state.end(); ++i ) {
