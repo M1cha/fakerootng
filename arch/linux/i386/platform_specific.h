@@ -3,6 +3,7 @@
 
 #include <asm/ptrace.h>
 #include <sys/syscall.h>
+#include <sys/resource.h>
 
 /* Marks the library as supporting debugging children */
 #define PTLIB_SUPPORTS_FORK 1
@@ -50,6 +51,8 @@ struct ptlib_stat64 {
 
         unsigned long long      ino;
 };
+
+typedef struct rusage ptlib_extra_data;
 
 /* Platform specific format specifiers for printing pid, dev and inode */
 #define PID_F "%d"

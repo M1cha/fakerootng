@@ -38,49 +38,55 @@ void ptlib_prepare( pid_t pid )
         perror("PTRACE_SETOPTIONS failed");
 }
 
-int ptlib_wait( pid_t *pid, int *status, long *ret )
+int ptlib_wait( pid_t *pid, int *status, ptlib_extra_data *data )
 {
-    *pid=wait(status);
+    *pid=wait4(-1, status, 0, data );
 
-    void *state[PTLIB_STATE_SIZE];
-    ptlib_save_state( *pid, state );
+    return *pid!=-1;
+}
 
-    if( WIFEXITED(*status) ) {
-        *ret=WEXITSTATUS(*status);
-        return EXIT;
-    } else if( WIFSIGNALED(*status) ) {
-        *ret=WTERMSIG(*status);
-        return SIGEXIT;
-    } else if( WIFSTOPPED(*status) ) {
-        *ret=WSTOPSIG(*status);
 
-        if( *ret==SIGTRAP ) {
+long ptlib_parse_wait( pid_t pid, int status, enum PTLIB_WAIT_RET *type )
+{
+    long ret;
+
+    if( WIFEXITED(status) ) {
+        ret=WEXITSTATUS(status);
+        *type=EXIT;
+    } else if( WIFSIGNALED(status) ) {
+        ret=WTERMSIG(status);
+        *type=SIGEXIT;
+    } else if( WIFSTOPPED(status) ) {
+        ret=WSTOPSIG(status);
+
+        if( ret==SIGTRAP ) {
             siginfo_t siginfo;
 
-            if( ptrace(PTRACE_GETSIGINFO, *pid, NULL, &siginfo)==0 &&
+            if( ptrace(PTRACE_GETSIGINFO, pid, NULL, &siginfo)==0 &&
                 (siginfo.si_code>>8==PTRACE_EVENT_FORK || siginfo.si_code>>8==PTRACE_EVENT_VFORK ||
                  siginfo.si_code>>8==PTRACE_EVENT_CLONE ) )
             {
-                ptrace( PTRACE_GETEVENTMSG, *pid, NULL, ret );
+                ptrace( PTRACE_GETEVENTMSG, pid, NULL, &ret );
 
-                return NEWPROCESS;
+                *type=NEWPROCESS;
+            } else {
+                /* Since we cannot reliably know when PTRACE_O_TRACESYSGOOD is supported, we always assume that's the reason for a
+                 * SIGTRACE */
+                ret=ptlib_get_syscall(pid);
+                *type=SYSCALL;
             }
-
-            /* Since we cannot reliably know when PTRACE_O_TRACESYSGOOD is supported, we always assume that's the reason for a
-             * SIGTRACE */
-            *ret=ptlib_get_syscall(*pid);
-            return SYSCALL;
         } else {
             dlog("stopped with some other signal\n");
+            *type=SIGNAL;
         }
-
-        return SIGNAL;
     } else {
         /* What is going on here? We should never get here. */
-        dlog("Process %d received unknown status %x - aborting\n", pid, *status);
+        dlog("Process %d received unknown status %x - aborting\n", pid, status);
         dlog(NULL); /* Flush the log before we abort */
         abort();
     }
+
+    return ret;
 }
 
 int ptlib_reinterpret( enum PTLIB_WAIT_RET prevstate, pid_t pid, int status, long *ret )

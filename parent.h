@@ -8,9 +8,11 @@
 
 #include <stdio.h>
 
+#include "arch/platform.h"
 #include "platform_specific.h"
 
 int process_children(pid_t first_child, int comm_fd, pid_t session_id );
+int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long ret );
 
 #define NUM_SAVED_STATES 4
 

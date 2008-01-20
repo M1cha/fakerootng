@@ -48,6 +48,13 @@ static bool begin_trace( pid_t debugger, pid_t child )
     pid_state *parent_state=lookup_state( debugger );
 
     if( child_state==NULL || parent_state==NULL || child_state->debugger!=0 ) {
+        dlog("begin_trace: %d Failed to start trace for "PID_F": child_state=%p, parent_state=%p", debugger, child, child_state,
+            parent_state );
+        if( child_state!=NULL ) {
+            dlog("child_state debugger="PID_F, child_state->debugger);
+        }
+        dlog("\n");
+
         errno=EPERM;
         return false;
     }
@@ -62,14 +69,38 @@ static bool begin_trace( pid_t debugger, pid_t child )
 void handle_cont_syscall( pid_t pid, pid_state *state )
 {
     if( verify_permission( pid, state ) ) {
-        pid_state *child_state=lookup_state( (pid_t)state->context_state[1] );
+        pid_t child=(pid_t)state->context_state[1];
+        pid_state *child_state=lookup_state( child );
         child_state->trace_mode=(int)state->context_state[0];
         __ptrace_request req=(__ptrace_request)child_state->trace_mode;
-        dlog("ptrace: %d %s("PID_F")\n", pid, req==PTRACE_CONT?"PTRACE_CONT":"PTRACE_SYSCALL",
-                (pid_t)state->context_state[1] );
+        dlog("ptrace: %d %s("PID_F")\n", pid, req==PTRACE_CONT?"PTRACE_CONT":"PTRACE_SYSCALL", child );
 
-        long rc=ptrace( PTRACE_SYSCALL, (pid_t)state->context_state[1], state->context_state[2],
-                state->context_state[3] );
+        long rc=0;
+
+        if( child_state->state==pid_state::DEBUGGED1 ) {
+            dlog("handle_cont_syscall: "PID_F" process "PID_F" was in pre-syscall hook\n", pid, child );
+            // Need to restart the syscall
+            int status=(int)child_state->context_state[1];
+            PTLIB_WAIT_RET wait_state=(PTLIB_WAIT_RET)(int)child_state->context_state[0];
+            long ret=ptlib_get_syscall( child );
+            int sig=process_sigchld( child, wait_state, status, ret );
+            // If our processing requested no special handling, use the signal requested by the debugger
+            if( sig==0 )
+                sig=(int)state->context_state[3];
+            if( sig>=0 )
+                rc=ptrace(PTRACE_SYSCALL, pid, 0, sig);
+        } else if( child_state->state==pid_state::DEBUGGED2 ) {
+            dlog("handle_cont_syscall: "PID_F" process "PID_F" was in post-syscall hook\n", pid, child );
+            child_state->state=pid_state::NONE;
+            rc=ptrace( PTRACE_SYSCALL, pid, 0, (int)state->context_state[3] );
+        } else {
+            // Our child was not stopped (at least, by us)
+            // XXX What shall we do?
+
+            dlog("handle_cont_syscall: "PID_F" process "PID_F" was started with no specific state\n", pid, child );
+            rc=ptrace( PTRACE_SYSCALL, (pid_t)state->context_state[1], state->context_state[2],
+                    state->context_state[3] );
+        }
 
         if( rc!=-1 ) {
             dlog("ptrace: %d request successful\n", pid );

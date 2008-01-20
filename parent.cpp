@@ -406,8 +406,13 @@ int process_children(pid_t _first_child, int _comm_fd, pid_t session_id )
         int status;
         pid_t pid;
         long ret;
+        ptlib_extra_data data;
         
-        enum PTLIB_WAIT_RET wait_state=static_cast<enum PTLIB_WAIT_RET>(ptlib_wait( &pid, &status, &ret ));
+        enum PTLIB_WAIT_RET wait_state;
+        if( !ptlib_wait( &pid, &status, &data ) ) {
+            dlog("ptlib_wait failed\n");
+            continue;
+        }
 
         // If this is the first time we see this process, we need to init the ptrace options for it
         if( state[pid].state==pid_state::INIT ) {
@@ -415,9 +420,9 @@ int process_children(pid_t _first_child, int _comm_fd, pid_t session_id )
 
             ptlib_prepare(pid);
             state[pid].state=pid_state::NONE;
-
-            wait_state=static_cast<enum PTLIB_WAIT_RET>(ptlib_reinterpret( wait_state, pid, status, &ret ));
         }
+
+        ret=ptlib_parse_wait( pid, status, &wait_state );
 
         long sig=process_sigchld( pid, wait_state, status, ret );
 
