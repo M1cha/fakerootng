@@ -66,7 +66,7 @@ static bool begin_trace( pid_t debugger, pid_t child )
     return true;
 }
 
-void handle_cont_syscall( pid_t pid, pid_state *state )
+static void handle_cont_syscall( pid_t pid, pid_state *state )
 {
     if( verify_permission( pid, state ) ) {
         pid_t child=(pid_t)state->context_state[1];
@@ -112,7 +112,7 @@ void handle_cont_syscall( pid_t pid, pid_state *state )
     }
 }
 
-bool handle_detach( pid_t pid, pid_state *state )
+static bool handle_detach( pid_t pid, pid_state *state )
 {
     if( verify_permission( pid, state ) ) {
         dlog("ptrace: %d PTRACE_DETACH("PID_F")\n", pid, (pid_t)state->context_state[1]);
@@ -128,6 +128,62 @@ bool handle_detach( pid_t pid, pid_state *state )
         return true;
     } else
         return false;
+}
+
+static void handle_kill( pid_t pid, pid_state *state )
+{
+    pid_t child=(pid_t)state->context_state[1];
+
+    if( verify_permission( pid, state ) ) {
+        dlog("handle_kill: %d is sending a kill to "PID_F"\n", pid, child );
+
+        ptrace(PTRACE_KILL, child, 0, 0);
+        ptlib_set_retval( pid, 0 );
+    } else {
+        ptlib_set_error( pid, state->orig_sc, errno );
+        dlog("handle_kill: %d tried to kill "PID_F": %s\n", pid, child, strerror(errno));
+    }
+}
+
+static void handle_peek_data( pid_t pid, pid_state *state )
+{
+    pid_t child=(pid_t)state->context_state[1];
+
+    if( verify_permission( pid, state ) ) {
+        errno=0;
+        long data=ptrace( (__ptrace_request)(int)state->context_state[0], child, state->context_state[2], 0 );
+        if( data!=-1 || errno==0 ) {
+            dlog("handle_peek_data: %d is peeking data from "PID_F" at address %p\n", pid, child, state->context_state[2] );
+
+            // Write the result where applicable
+            // XXX This may be a Linux only semantics - pass addres to write result to as "data" argument
+            data=ptrace(PTRACE_POKEDATA, pid, state->context_state[3], data);
+            if( data!=-1 ) {
+                ptlib_set_retval( pid, 0 );
+            } else {
+                ptlib_set_error( pid, state->orig_sc, errno );
+                dlog("handle_peek_data: Our own poke failed: %s\n", strerror(errno) );
+            }
+        }
+    } else {
+        ptlib_set_error( pid, state->orig_sc, errno );
+        dlog("handle_peek_data: %d tried get data from "PID_F": %s\n", pid, child, strerror(errno));
+    }
+}
+
+static void handle_poke_data( pid_t pid, pid_state *state )
+{
+    pid_t child=(pid_t)state->context_state[1];
+
+    if( verify_permission( pid, state ) &&
+        ptrace( (__ptrace_request)(int)state->context_state[0], child, state->context_state[2], state->context_state[3] )==0 )
+    {
+        dlog("handle_poke_data: %d is pokeing data in "PID_F" at address %p\n", pid, child, state->context_state[2] );
+        ptlib_set_retval( pid, 0 );
+    } else {
+        ptlib_set_error( pid, state->orig_sc, errno );
+        dlog("handle_poke_data: %d tried push data to "PID_F": %s\n", pid, child, strerror(errno));
+    }
 }
 
 bool sys_ptrace( int sc_num, pid_t pid, pid_state *state )
@@ -171,29 +227,42 @@ bool sys_ptrace( int sc_num, pid_t pid, pid_state *state )
         case PTRACE_PEEKTEXT:
         case PTRACE_PEEKDATA:
         case PTRACE_PEEKUSER:
+            handle_peek_data( pid, state );
+            break;
         case PTRACE_POKETEXT:
         case PTRACE_POKEDATA:
         case PTRACE_POKEUSER:
+            handle_poke_data( pid, state );
             break;
         case PTRACE_GETREGS:
         case PTRACE_GETFPREGS:
+            dlog("ptrace: %d GETREGS not yet implemented\n", pid);
+            ptlib_set_error( pid, state->orig_sc, EINVAL );
             break;
         case PTRACE_SETREGS:
         case PTRACE_SETFPREGS:
+            dlog("ptrace: %d SETREGS not yet implemented\n", pid);
+            ptlib_set_error( pid, state->orig_sc, EINVAL );
             break;
         case PTRACE_GETSIGINFO:
+            dlog("ptrace: %d GETSIGINFO not yet implemented\n", pid);
+            ptlib_set_error( pid, state->orig_sc, EINVAL );
             break;
         case PTRACE_SETSIGINFO:
+            dlog("ptrace: %d SETSIGINFO not yet implemented\n", pid);
+            ptlib_set_error( pid, state->orig_sc, EINVAL );
             break;
         case PTRACE_SINGLESTEP:
             // We do not support single step right now
             ptlib_set_error( pid, state->orig_sc, EINVAL );
+            dlog("ptrace: %d tried to call SINGLESTEP on "PID_F"\n", pid, (pid_t)state->context_state[1]);
             break;
         case PTRACE_CONT:
         case PTRACE_SYSCALL:
             handle_cont_syscall( pid, state );
             break;
         case PTRACE_KILL:
+            handle_kill( pid, state );
             break;
         case PTRACE_DETACH:
             handle_detach( pid, state );
