@@ -201,7 +201,6 @@ static void notify_parent( pid_t parent, const pid_state::wait_state &waiting )
 static void handle_exit( pid_t pid, int status, const struct rusage &usage )
 {
     // Let's see if the process doing the exiting is even registered
-
     pid_state *proc_state=lookup_state(pid);
     dlog(NULL);
     assert(proc_state!=NULL);
@@ -262,6 +261,8 @@ static int num_processes; // Number of running processes
 int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long ret )
 {
     long sig=0;
+
+    //dlog("process_sigchld: "PID_F" state=%d, status=%x, ret=%d\n", pid, wait_state, status, ret );
 
     switch(wait_state) {
     case SYSCALL:
@@ -359,9 +360,9 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
     case EXIT:
     case SIGEXIT:
         {
-            if( wait_state==EXIT )
+            if( wait_state==EXIT ) {
                 dlog(PID_F": Exit with return code %ld\n", pid, ret);
-            else {
+            } else {
                 dlog(PID_F": Exit with %s\n", pid, sig2str(ret));
             }
 

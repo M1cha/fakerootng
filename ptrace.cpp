@@ -85,14 +85,16 @@ static void handle_cont_syscall( pid_t pid, pid_state *state )
             long ret=ptlib_get_syscall( child );
             int sig=process_sigchld( child, wait_state, status, ret );
             // If our processing requested no special handling, use the signal requested by the debugger
-            if( sig==0 )
+            if( sig==0 ) {
                 sig=(int)state->context_state[3];
-            if( sig>=0 )
-                rc=ptrace(PTRACE_SYSCALL, pid, 0, sig);
+            }
+            if( sig>=0 ) {
+                rc=ptrace(PTRACE_SYSCALL, child, 0, sig);
+            }
         } else if( child_state->state==pid_state::DEBUGGED2 ) {
             dlog("handle_cont_syscall: "PID_F" process "PID_F" was in post-syscall hook\n", pid, child );
             child_state->state=pid_state::NONE;
-            rc=ptrace( PTRACE_SYSCALL, pid, 0, (int)state->context_state[3] );
+            rc=ptrace( PTRACE_SYSCALL, child, 0, (int)state->context_state[3] );
         } else {
             // Our child was not stopped (at least, by us)
             // XXX What shall we do?
