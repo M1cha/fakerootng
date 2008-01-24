@@ -33,8 +33,15 @@ static bool verify_permission( pid_t pid, pid_state *state )
     // First, find out whether the pid we work on even exists
 
     pid_state *child_state=lookup_state( traced );
-    if( child_state==NULL || child_state->debugger!=pid ) {
+    if( child_state==NULL || child_state->debugger!=pid )
+    {
         dlog("ptrace verify_permission: %d failed permission - not the debugger for "PID_F"\n", pid, traced);
+        errno=ESRCH;
+        return false;
+    }
+    if( child_state->trace_mode!=TRACE_STOPPED1 && child_state->trace_mode!=TRACE_STOPPED2 )
+    {
+        dlog("ptrace verify_permission: %d failed permission - "PID_F" is not stopped\n", pid, traced);
         errno=ESRCH;
         return false;
     }
@@ -71,13 +78,18 @@ static void handle_cont_syscall( pid_t pid, pid_state *state )
     if( verify_permission( pid, state ) ) {
         pid_t child=(pid_t)state->context_state[1];
         pid_state *child_state=lookup_state( child );
-        child_state->trace_mode=(int)state->context_state[0];
-        __ptrace_request req=(__ptrace_request)child_state->trace_mode;
-        dlog("ptrace: %d %s("PID_F")\n", pid, req==PTRACE_CONT?"PTRACE_CONT":"PTRACE_SYSCALL", child );
+        __ptrace_request req=(__ptrace_request)(int)state->context_state[0];
+        if( req==PTRACE_CONT ) {
+            child_state->trace_mode|=TRACE_CONT;
+            dlog("ptrace: %d PTRACE_CONT("PID_F")\n", pid, child );
+        } else {
+            child_state->trace_mode|=TRACE_SYSCALL;
+            dlog("ptrace: %d PTRACE_SYSCALL("PID_F")\n", pid, child );
+        }
 
         long rc=0;
 
-        if( child_state->state==pid_state::DEBUGGED1 ) {
+        if( (child_state->trace_mode&TRACE_MASK2)==TRACE_STOPPED1 ) {
             dlog("handle_cont_syscall: "PID_F" process "PID_F" was in pre-syscall hook\n", pid, child );
             // Need to restart the syscall
             int status=(int)child_state->context_state[1];
@@ -91,17 +103,18 @@ static void handle_cont_syscall( pid_t pid, pid_state *state )
             if( sig>=0 ) {
                 rc=ptrace(PTRACE_SYSCALL, child, 0, sig);
             }
-        } else if( child_state->state==pid_state::DEBUGGED2 ) {
+        } else if( (child_state->trace_mode&TRACE_MASK2)==TRACE_STOPPED2 ) {
             dlog("handle_cont_syscall: "PID_F" process "PID_F" was in post-syscall hook\n", pid, child );
-            child_state->state=pid_state::NONE;
+            child_state->trace_mode&=TRACE_MASK1;
             rc=ptrace( PTRACE_SYSCALL, child, 0, (int)state->context_state[3] );
         } else {
             // Our child was not stopped (at least, by us)
-            // XXX What shall we do?
+            // This is an internal inconsistency
 
-            dlog("handle_cont_syscall: "PID_F" process "PID_F" was started with no specific state\n", pid, child );
-            rc=ptrace( PTRACE_SYSCALL, (pid_t)state->context_state[1], state->context_state[2],
-                    state->context_state[3] );
+            dlog("handle_cont_syscall: "PID_F" process "PID_F" was started with no specific state (%x)\n", pid, child,
+                child_state->trace_mode );
+            dlog(NULL);
+            rc=-1;
         }
 
         if( rc!=-1 ) {

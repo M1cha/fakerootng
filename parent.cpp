@@ -284,17 +284,20 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
             } else {
                 // Sanity check - returning from same syscall that got us in
                 if( proc_state->state==pid_state::RETURN && ret!=proc_state->orig_sc ) {
-                    dlog("process "PID_F" orig_sc=%d actual sc=%d state=%d\n", pid, proc_state->orig_sc, ret, state2str(proc_state->state));
+                    dlog("process "PID_F" orig_sc=%d actual sc=%d state=%d\n", pid, proc_state->orig_sc, ret,
+                        state2str(proc_state->state));
                     dlog(NULL);
                     assert( proc_state->state!=pid_state::RETURN || ret==proc_state->orig_sc );
                 }
 
-                if( proc_state->state==pid_state::NONE && proc_state->debugger!=0 && proc_state->trace_mode==PTRACE_SYSCALL ) {
+                if( proc_state->state==pid_state::NONE && proc_state->debugger!=0 && proc_state->trace_mode==TRACE_SYSCALL ) {
+                    dlog(PID_F": pre-syscall hook called for debugger "PID_F"\n", pid, proc_state->debugger );
+
                     // Notify the debugger before the syscall
                     proc_state->context_state[0]=(void *)wait_state;
                     proc_state->context_state[1]=(void *)status;
                     proc_state->context_state[2]=(void *)ret;
-                    proc_state->state=pid_state::DEBUGGED1;
+                    proc_state->trace_mode=TRACE_STOPPED1;
 
                     pid_state::wait_state waiting;
                     waiting.pid=pid;
@@ -304,8 +307,8 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
                     sig=-1; // We'll halt the program until the "debugger" decides what to do with it
                 } else {
                     // No debugger or otherwise we need to go ahead with this syscall
-                    if( proc_state->state==pid_state::DEBUGGED1 ) {
-                        proc_state->state=pid_state::NONE;
+                    if( (proc_state->trace_mode&TRACE_MASK2)==TRACE_STOPPED1 ) {
+                        proc_state->trace_mode&=TRACE_MASK1;
 
                         // The debugger may have changed the system call to execute - we will respect it
                         ret=ptlib_get_syscall( pid );
@@ -329,8 +332,9 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
                     }
 
                     // Check for post-syscall debugger callback
-                    if( proc_state->state==pid_state::NONE && proc_state->debugger!=0 && proc_state->trace_mode==PTRACE_SYSCALL ) {
-                        proc_state->state=pid_state::DEBUGGED2;
+                    if( proc_state->state==pid_state::NONE && proc_state->debugger!=0 && proc_state->trace_mode==TRACE_SYSCALL ) {
+                        dlog(PID_F": notify debugger "PID_F" about post-syscall hook\n", pid, proc_state->debugger );
+                        proc_state->trace_mode=TRACE_STOPPED2;
 
                         pid_state::wait_state waiting;
                         waiting.pid=pid;
@@ -353,6 +357,7 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
             waiting.pid=pid;
             waiting.status=status;
             getrusage( RUSAGE_CHILDREN, &waiting.usage ); // XXX BUG this is the wrong function!
+            state[pid].trace_mode=TRACE_STOPPED2;
             notify_parent( state[pid].debugger, waiting );
             sig=-1;
         }

@@ -30,6 +30,16 @@ struct pid_state {
     int trace_mode; // Which ptrace mode was used to run the process
     pid_t session_id;
 
+// Values for trace_mode
+#define TRACE_DETACHED  0x0
+#define TRACE_CONT      0x1
+#define TRACE_SYSCALL   0x2
+#define TRACE_SINGLSTEP 0x3
+#define TRACE_MASK1     0x7
+#define TRACE_STOPPED1  0x10
+#define TRACE_STOPPED2  0x20
+#define TRACE_MASK2     0x70
+
     struct wait_state {
         struct rusage usage;
         pid_t pid;
@@ -37,8 +47,8 @@ struct pid_state {
     };
     std::list<wait_state> waiting_signals;
 
-    pid_state() : state(INIT), memory(NULL), mem_size(0), debugger(0), parent(0), num_children(0), num_debugees(0), trace_mode(0),
-        session_id(0)
+    pid_state() : state(INIT), memory(NULL), mem_size(0), debugger(0), parent(0), num_children(0), num_debugees(0),
+        trace_mode(TRACE_DETACHED), session_id(0)
     {
     }
 };
