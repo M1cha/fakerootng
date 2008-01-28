@@ -89,6 +89,7 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state )
         } else {
             // Nothing to do here
             state->state=pid_state::NONE;
+            dlog("execve: "PID_F" absorbed dummy SIGTRAP after successful execve\n", pid );
         }
     }
 

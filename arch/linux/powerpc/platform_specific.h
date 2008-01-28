@@ -2,6 +2,8 @@
 #define PLATFORM_SPECIFIC_H
 
 #include <asm/ptrace.h>
+#include <sys/syscall.h>
+#include <sys/resource.h>
 
 /* Marks the library as supporting debugging children */
 #define PTLIB_SUPPORTS_FORK 1
@@ -39,6 +41,8 @@ struct ptlib_stat64 {
 	unsigned int	__unused5;
 };
 
+typedef struct rusage ptlib_extra_data;
+
 /* Platform specific format specifiers for printing pid, dev and inode */
 #define PID_F "%d"
 #define DEV_F "%llx"
@@ -48,5 +52,6 @@ struct ptlib_stat64 {
 #define PREF_STAT SYS_stat64
 #define PREF_FSTAT SYS_fstat64
 #define PREF_LSTAT SYS_lstat64
+#define PREF_NOP SYS_geteuid
 
 #endif /* PLATFORM_SPECIFIC_H */

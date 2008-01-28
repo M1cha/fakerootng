@@ -249,6 +249,7 @@ bool sys_ptrace( int sc_num, pid_t pid, pid_state *state )
         case PTRACE_POKEUSER:
             handle_poke_data( pid, state );
             break;
+#if 0
         case PTRACE_GETREGS:
         case PTRACE_GETFPREGS:
             dlog("ptrace: %d GETREGS not yet implemented\n", pid);
@@ -267,6 +268,7 @@ bool sys_ptrace( int sc_num, pid_t pid, pid_state *state )
             dlog("ptrace: %d SETSIGINFO not yet implemented\n", pid);
             ptlib_set_error( pid, state->orig_sc, EINVAL );
             break;
+#endif
         case PTRACE_SINGLESTEP:
             // We do not support single step right now
             ptlib_set_error( pid, state->orig_sc, EINVAL );
