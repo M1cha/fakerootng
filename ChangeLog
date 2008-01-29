@@ -1,3 +1,6 @@
+Version 0.05
+    * Add recursive debugger support - mainly strace at the moment
+
 Version 0.04
     * Add a PowerPC port
 

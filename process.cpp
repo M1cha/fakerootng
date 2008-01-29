@@ -135,7 +135,6 @@ bool sys_setsid( int sc_num, pid_t pid, pid_state *state )
 // entire system call, always :-(
 bool sys_wait4( int sc_num, pid_t pid, pid_state *state )
 {
-    dlog("wait4: %d num debugees: %d num children: %d\n", pid, state->num_debugees, state->num_children );
     bool cont=true;
 
     if( state->state==pid_state::NONE ) {
@@ -151,14 +150,18 @@ bool sys_wait4( int sc_num, pid_t pid, pid_state *state )
         // XXX Unreachable code
         state->state=pid_state::NONE;
     } else if( state->state==pid_state::REDIRECT2 ) {
+        dlog("wait4: %d num debugees: %d num children: %d, queue %s\n", pid, state->num_debugees, state->num_children,
+                state->waiting_signals.empty()?"is empty":"has signals" );
+        state->state=pid_state::NONE;
+
         // Test whether the (emulated) call should fail
         // XXX This is nowhere near the exhustive tests we need to do. We only aim to emulate strace and ourselves at this point in time
-        if( state->num_children==0 && state->num_debugees==0 ) {
-            ptlib_set_error( pid, state->orig_sc, ECHILD );
-        } else {
+        if( state->num_children!=0 || state->num_debugees!=0 || !state->waiting_signals.empty() ) {
             // Only wait if there was no error
             state->state=pid_state::WAITING;
             cont=false; // By default we hang in wait for something to report
+        } else {
+            ptlib_set_error( pid, state->orig_sc, ECHILD );
         }
     }
 
@@ -199,6 +202,8 @@ bool sys_wait4( int sc_num, pid_t pid, pid_state *state )
 
                 state->state=pid_state::NONE;
                 cont=true;
+            } else {
+                dlog("wait4: "PID_F" hanged in wait for %d\n", pid, wait_pid );
             }
         }
         
@@ -207,8 +212,27 @@ bool sys_wait4( int sc_num, pid_t pid, pid_state *state )
             ptlib_set_retval( pid, 0 );
             cont=true;
         }
+
+        ptlib_set_syscall( pid, state->orig_sc ); // Restore original syscall
     }
 
     return cont;
+}
+
+// We just set the variables and let wait4 handle our case
+bool sys_waitpid( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->context_state[0]=ptlib_get_argument(pid, 1); // pid
+        state->context_state[1]=ptlib_get_argument(pid, 2); // status
+        state->context_state[2]=ptlib_get_argument(pid, 3); // options
+        state->context_state[3]=NULL; // rusage unused by waitpid
+        ptlib_set_syscall( pid, PREF_NOP ); // NOP call
+
+        state->state=pid_state::REDIRECT2;
+
+        return true;
+    } else
+        return sys_wait4( sc_num, pid, state );
 }
 

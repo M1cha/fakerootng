@@ -137,12 +137,14 @@ static bool handle_detach( pid_t pid, pid_state *state )
         child_state->debugger=0;
         state->num_debugees--;
 
-        if( child_state->state==pid_state::DEBUGGED1 || child_state->state==pid_state::DEBUGGED2 )
-            child_state->state=pid_state::NONE;
+        child_state->trace_mode=TRACE_DETACHED;
+        ptlib_set_retval( pid, 0 );
 
         return true;
-    } else
+    } else {
+        ptlib_set_error( pid, state->orig_sc, errno );
         return false;
+    }
 }
 
 static void handle_kill( pid_t pid, pid_state *state )
@@ -289,6 +291,8 @@ bool sys_ptrace( int sc_num, pid_t pid, pid_state *state )
             ptlib_set_error(pid, state->orig_sc, EINVAL);
             break;
         }
+
+        ptlib_set_syscall( pid, state->orig_sc );
     }
 
     return ret;

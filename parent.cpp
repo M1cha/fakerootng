@@ -80,6 +80,9 @@ static void init_handlers()
 #ifdef SYS_wait4
     syscalls[SYS_wait4]=syscall_hook(sys_wait4, "wait4");
 #endif
+#ifdef SYS_waitpid
+    syscalls[SYS_waitpid]=syscall_hook(sys_waitpid, "waitpid");
+#endif
     syscalls[SYS_ptrace]=syscall_hook(sys_ptrace, "ptrace");
 
     syscalls[SYS_stat64]=syscall_hook(sys_stat64, "stat64");
@@ -155,8 +158,6 @@ static const char *state2str( pid_state::states state )
         STATENAME(ALLOCATE)
         STATENAME(ALLOC_RETURN)
         STATENAME(WAITING)
-        STATENAME(DEBUGGED1)
-        STATENAME(DEBUGGED2)
 #undef STATENAME
     }
 
@@ -226,6 +227,12 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
     else
 #endif
         notify_parent( proc_state->parent, waiting );
+
+    pid_state *parent_state;
+    // Regardless of whether it is being notified or not, the parent's child num needs to be decreased
+    if( proc_state->parent!=0 && proc_state->parent!=1 && (parent_state=lookup_state(proc_state->parent))!=NULL ) {
+        parent_state->num_children--;
+    }
 
     // Is any process a child of this process?
     for( __gnu_cxx::hash_map<pid_t, pid_state>::iterator i=state.begin(); i!=state.end(); ++i ) {
