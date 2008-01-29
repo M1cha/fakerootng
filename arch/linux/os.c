@@ -130,6 +130,7 @@ int ptlib_get_string( pid_t pid, void *process_ptr, char *local_ptr, size_t maxl
 {
     /* Are we aligned on the "start" front? */
     int offset=((unsigned long)process_ptr)%sizeof(long);
+    process_ptr-=offset;
     int i=0;
     int done=0;
     int word_offset=0;
