@@ -116,7 +116,7 @@ int parse_options( int argc, char *argv[] )
     return optind;
 }
 
-static void perform_debugger( int parent_socket, pid_t child )
+static void perform_debugger( int child_socket, int parent_socket, pid_t child )
 {
     pid_t sessid=getsid(0);
 
@@ -148,7 +148,7 @@ static void perform_debugger( int parent_socket, pid_t child )
             fd=fileno(debug_log);
 
         for( int i=0; i<getdtablesize(); ++i ) {
-            if( i!=parent_socket && i!=fd )
+            if( i!=child_socket && i!=parent_socket && i!=fd )
                 close(i);
         }
 
@@ -171,51 +171,51 @@ static void perform_debugger( int parent_socket, pid_t child )
     }
     dlog("Debugger successfully attached to process "PID_F"\n", child );
 
-    // We are looking for a STOP and then USR1 pattern to identify the child's position.
-    kill( child, SIGCONT );
+    // Let's free the process to do the exec
+    if( write( child_socket, "a", 1 )==1 ) {
+        close( child_socket );
 
-    bool sync=false;
-    while( !sync ) {
-        int status;
-        int sig=0;
-        
-        pid_t process=wait(&status);
-        
-        if( process!=child ) {
-            dlog("Irrelevant process "PID_F" sent us status %x\n", process, status);
-            continue;
-        }
+        // If we start the processing loop too early, we might accidentally cath the "wait" where the master process (our grandparent)
+        // is waiting for our parent to terminate.
+        // In order to avoid that race, we wait until we notice that the process is sending itself a "USR1" signal to indicate it
+        // is ready.
 
-        if( WIFSTOPPED(status) ) {
-            switch( WSTOPSIG(status) ) {
-            case SIGSTOP:
-                dlog("Seen the STOP signal\n");
-                break;
-            case SIGUSR1:
-                dlog("Seen the USR1 signal - we can continue\n");
-                sync=true;
-                break;
-            case SIGTRAP:
-                // Just a result of using PTRACE_SYSCALL. Ignore and let the program continue
-                break;
-            default:
-                sig=WSTOPSIG(status);
-                dlog("Seen signal %d - let it through\n", sig);
-                break;
+        bool sync=false;
+        while( !sync ) {
+            int status;
+
+            waitpid( child, &status, 0 );
+
+            if( WIFSTOPPED(status) ) {
+                switch( WSTOPSIG(status) ) {
+                case SIGUSR1:
+                    // SIGUSR1 - that's our signal
+                    dlog("Caught SIGUSR1 by child - start special handling\n");
+                    ptrace( PTRACE_SYSCALL, child, 0, 0 );
+                    sync=true;
+                    break;
+                case SIGSTOP:
+                    dlog("Caught SIGSTOP\n");
+                    ptrace( PTRACE_CONT, child, 0, 0 ); // Continue the child in systrace mode
+                    break;
+                case SIGTRAP:
+                    dlog("Caught SIGTRAP\n");
+                    ptrace( PTRACE_CONT, child, 0, 0 ); // Continue the child in systrace mode
+                    break;
+                default:
+                    dlog("Caught signal %d\n", WSTOPSIG(status) );
+                    ptrace( PTRACE_CONT, child, 0, WSTOPSIG(status) );
+                    break;
+                }
+            } else {
+                // Stopped for whatever other reason - just continue it
+                dlog("Another stop %x\n", status );
+                ptrace( PTRACE_CONT, child, 0, 0 );
             }
-        } else if( WIFEXITED(status) ) {
-            dlog("Program terminated with return code %d\n", WEXITSTATUS(status) );
-            exit(0);
-        } else if( WIFSIGNALED(status) ) {
-            dlog("Program terminated with signal %d\n", WTERMSIG(status) );
-            exit(0);
         }
 
-        ptrace(PTRACE_SYSCALL, child, 0, sig);
+        process_children(child, parent_socket, sessid );
     }
-
-    // From this point onwards, everything is our business
-    process_children(child, parent_socket, sessid );
 
     if( persistent_file[0]!='\0' ) {
         FILE *file=fopen(persistent_file, "w");
@@ -233,22 +233,21 @@ static void perform_debugger( int parent_socket, pid_t child )
     exit(0);
 }
 
-void perform_child( char *argv[] )
+void perform_child( int child_socket, char *argv[] )
 {
     // We are the child to be debugged. Halt until the pipe tells us we can perform the exec
     if( debug_log!=NULL )
         fclose(debug_log);
 
-    // Send ourselves the STOP signal, and then the USR1 signal. The debugger looks for this pattern to know when to
-    // begin working the fakeroot magic
-    pid_t me=getpid();
-    kill( me, SIGSTOP );
-    kill( me, SIGUSR1 ); // Just a marker
+    char buffer;
+    if( read( child_socket, &buffer, 1 )==1 ) {
+        // Mark the fact that we are read to the debugger
+        kill( getpid(), SIGUSR1 );
 
-    // If we continued, then obviously the debugger is attached - go ahead with the exec
-    execvp(argv[0], argv);
+        execvp(argv[0], argv);
 
-    perror("Exec failed");
+        perror("Exec failed");
+    }
 
     exit(2);
 }
@@ -258,6 +257,14 @@ int main(int argc, char *argv[])
     int opt_offset=parse_options( argc, argv );
     if( opt_offset==-1 )
         return 1;
+
+    // We create an extra child to do the actual debugging, while the parent waits for the running child to exit.
+    int child2child[2];
+    if( pipe(child2child)<0 ) {
+        perror("child pipe failed");
+
+        return 2;
+    }
 
     if( opt_offset==argc ) {
         print_version();
@@ -278,6 +285,8 @@ int main(int argc, char *argv[])
     }
 
     if( debugger==0 ) {
+        close(child2child[0]);
+
         // We are the child, but we want to be the grandchild
         debugger=fork();
 
@@ -288,7 +297,7 @@ int main(int argc, char *argv[])
         }
 
         if( debugger==0 ) {
-            perform_debugger( -1, child );
+            perform_debugger( child2child[1], -1, child );
         }
 
         exit(0);
@@ -300,10 +309,14 @@ int main(int argc, char *argv[])
     wait(&status);
 
     if( !WIFEXITED(status) || WEXITSTATUS(status)!=0 ) {
-        fprintf(stderr, "Exiting without running process: %x\n", status);
+        fprintf(stderr, "Exiting without running process\n");
+
+        exit(1);
     }
 
-    perform_child( argv+opt_offset );
+    close( child2child[1] );
+
+    perform_child( child2child[0], argv+opt_offset );
 
     return 1;
 #else // PTLIB_PARENT_CAN_WAIT
@@ -319,8 +332,13 @@ int main(int argc, char *argv[])
     }
 
     if( child==0 ) {
-        perform_child( argv+opt_offset );
+        close( child2child[1] );
+
+        perform_child( child2child[0], argv+opt_offset );
     }
+
+    // Close the reading end of the pipe
+    close( child2child[0] );
 
     int child2parent[2];
     // Create the "other" pipe
@@ -334,13 +352,14 @@ int main(int argc, char *argv[])
     }
 
     if( debugger==0 ) {
-        perform_debugger( child2parent[1], child );
+        perform_debugger( child2child[1], child2parent[1], child );
     }
 
     // We are the actual parent. We only need to stick around until the debugger tells us that the child has exited. We won't know
     // that ourselves, because the child is effectively the child of the debugger, not us.
 
     close( child2parent[1] );
+    close( child2child[1] );
     if( debug_log!=NULL ) {
         fclose( debug_log );
         debug_log=NULL;
