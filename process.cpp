@@ -133,22 +133,18 @@ bool sys_setsid( int sc_num, pid_t pid, pid_state *state )
 // Of course, with PTRACE_TRACEME, it is possible that the process not have a debugee when it
 // starts the wait, but does have one by the time wait should return. We therefor emulate the
 // entire system call, always :-(
-bool sys_wait4( int sc_num, pid_t pid, pid_state *state )
+static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, int *param2, int param3, void *param4 )
 {
     bool cont=true;
 
     if( state->state==pid_state::NONE ) {
-        state->context_state[0]=ptlib_get_argument(pid, 1); // pid
-        state->context_state[1]=ptlib_get_argument(pid, 2); // status
-        state->context_state[2]=ptlib_get_argument(pid, 3); // options
-        state->context_state[3]=ptlib_get_argument(pid, 4); // rusage
+        state->context_state[0]=(void *)param1; // pid
+        state->context_state[1]=param2; // status
+        state->context_state[2]=(void *)param3; // options
+        state->context_state[3]=param4; // rusage
         ptlib_set_syscall( pid, PREF_NOP ); // NOP call
 
         state->state=pid_state::REDIRECT2;
-    } else if( state->state==pid_state::RETURN ) {
-        // The call was executed as planned
-        // XXX Unreachable code
-        state->state=pid_state::NONE;
     } else if( state->state==pid_state::REDIRECT2 ) {
         dlog("wait4: %d num debugees: %d num children: %d, queue %s\n", pid, state->num_debugees, state->num_children,
                 state->waiting_signals.empty()?"is empty":"has signals" );
@@ -219,20 +215,31 @@ bool sys_wait4( int sc_num, pid_t pid, pid_state *state )
     return cont;
 }
 
+bool sys_wait4( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        pid_t param1=(pid_t)ptlib_get_argument(pid, 1); // pid
+        int *param2=(int *)ptlib_get_argument(pid, 2); // status
+        int param3=(int)ptlib_get_argument(pid, 3); // options
+        void *param4=ptlib_get_argument(pid, 4); // rusage
+
+        return real_wait4( sc_num, pid, state, param1, param2, param3, param4 );
+    } else {
+        return real_wait4( sc_num, pid, state, 0, NULL, 0, NULL );
+    }
+}
+
 // We just set the variables and let wait4 handle our case
 bool sys_waitpid( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        state->context_state[0]=ptlib_get_argument(pid, 1); // pid
-        state->context_state[1]=ptlib_get_argument(pid, 2); // status
-        state->context_state[2]=ptlib_get_argument(pid, 3); // options
-        state->context_state[3]=NULL; // rusage unused by waitpid
-        ptlib_set_syscall( pid, PREF_NOP ); // NOP call
+        pid_t param1=(pid_t)ptlib_get_argument(pid, 1); // pid
+        int *param2=(int *)ptlib_get_argument(pid, 2); // status
+        int param3=(int)ptlib_get_argument(pid, 3); // options
 
-        state->state=pid_state::REDIRECT2;
-
-        return true;
-    } else
-        return sys_wait4( sc_num, pid, state );
+        return real_wait4( sc_num, pid, state, param1, param2, param3, NULL );
+    } else {
+        return real_wait4( sc_num, pid, state, 0, NULL, 0, NULL );
+    }
 }
 
