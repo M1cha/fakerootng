@@ -40,11 +40,25 @@ struct pid_state {
 #define TRACE_STOPPED2  0x20
 #define TRACE_MASK2     0x70
 
+#define DEF_VAR(type, name) private: type _##name; \
+    public: type &name() { return _##name; } const type &name() const { return _##name; }
+
     struct wait_state {
-        struct rusage usage;
-        pid_t pid;
-        int status;
+        DEF_VAR( pid_t, pid)
+        DEF_VAR( int, status)
+        DEF_VAR( struct rusage, usage)
+        DEF_VAR( bool, debugonly) // Whether a parent that is not a debugger would have got this message
+    public:
+        wait_state() : _pid(0), _status(0), _debugonly(true)
+        {
+        }
+
+        wait_state( pid_t pid, int status, const struct rusage *usage, bool debugonly ) : _pid(pid), _status(status), _usage(*usage),
+            _debugonly(debugonly)
+        {
+        }
     };
+#undef DEF_VAR
     std::list<wait_state> waiting_signals;
 
     pid_state() : state(INIT), memory(NULL), mem_size(0), debugger(0), parent(0), num_children(0), num_debugees(0),

@@ -185,7 +185,7 @@ static void notify_parent( pid_t parent, const pid_state::wait_state &waiting )
         // This process has no parent, or had a parent that already quit
         return;
     }
-    dlog("notify_parent: "PID_F" sent a notify about "PID_F"(%x)\n", parent, waiting.pid, waiting.status);
+    dlog("notify_parent: "PID_F" sent a notify about "PID_F"(%x)\n", parent, waiting.pid(), waiting.status());
     pid_state *proc_state=&state[parent];
     proc_state->waiting_signals.push_back( waiting );
 
@@ -206,27 +206,23 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
     dlog(NULL);
     assert(proc_state!=NULL);
 
-    // The process was being debugged
-    pid_state::wait_state waiting;
-
-    waiting.usage=usage;
-    waiting.pid=pid;
-    waiting.status=status;
-
-    if( proc_state->debugger!=0 ) {
-        notify_parent( proc_state->debugger, waiting );
-        state[proc_state->debugger].num_debugees--;
-    }
+    // First thing first - notify the parent
 #if PTLIB_PARENT_CAN_WAIT
     // If a parent can wait on a debugged child we need to notify it even if the child is being debugged,
     // but only if it actually has a parent (i.e. - was not reparented to init)
     // Of course, if the debugger IS the parent, there is no need to notify it twice
-    if( proc_state->parent!=0 && proc_state->parent!=1 && proc_state->parent!=proc_state->debugger )
+    if( proc_state->parent!=0 && proc_state->parent!=1 )
 #else
     // If a parent cannot wait, we need to let it know ourselves only if it's not being debugged
-    else
+    if( (proc_state->debugger==0 || proc_state->debugger==proc_state->parent) && proc_state->parent!=0 && proc_state->parent!=1 )
 #endif
-        notify_parent( proc_state->parent, waiting );
+        notify_parent( proc_state->parent, pid_state::wait_state( pid, status, &usage, false ) );
+
+    if( proc_state->debugger!=0 && proc_state->debugger!=proc_state->parent ) {
+        // The process was being debugged - notify the debugger as well
+        notify_parent( proc_state->parent, pid_state::wait_state( pid, status, &usage, true ) );
+        state[proc_state->debugger].num_debugees--;
+    }
 
     pid_state *parent_state;
     // Regardless of whether it is being notified or not, the parent's child num needs to be decreased
@@ -307,9 +303,10 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
                     proc_state->trace_mode=TRACE_STOPPED1;
 
                     pid_state::wait_state waiting;
-                    waiting.pid=pid;
-                    waiting.status=status;
-                    getrusage( RUSAGE_CHILDREN, &waiting.usage ); // XXX BUG This is the wrong function!
+                    waiting.pid()=pid;
+                    waiting.status()=status;
+                    getrusage( RUSAGE_CHILDREN, &waiting.usage() ); // XXX BUG This is the wrong function!
+                    waiting.debugonly()=true;
                     notify_parent( proc_state->debugger, waiting );
                     sig=-1; // We'll halt the program until the "debugger" decides what to do with it
                 } else {
@@ -344,9 +341,10 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
                         proc_state->trace_mode=TRACE_STOPPED2;
 
                         pid_state::wait_state waiting;
-                        waiting.pid=pid;
-                        waiting.status=status;
-                        getrusage( RUSAGE_CHILDREN, &waiting.usage ); // XXX BUG This is the wrong function!
+                        waiting.pid()=pid;
+                        waiting.status()=status;
+                        getrusage( RUSAGE_CHILDREN, &waiting.usage() ); // XXX BUG This is the wrong function!
+                        waiting.debugonly()=true;
                         notify_parent( proc_state->debugger, waiting );
                         sig=-1; // Halt process until "debugger" decides it can keep on going
                     }
@@ -361,9 +359,10 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
         else {
             // Pass the signal to the debugger
             pid_state::wait_state waiting;
-            waiting.pid=pid;
-            waiting.status=status;
-            getrusage( RUSAGE_CHILDREN, &waiting.usage ); // XXX BUG this is the wrong function!
+            waiting.pid()=pid;
+            waiting.status()=status;
+            getrusage( RUSAGE_CHILDREN, &waiting.usage() ); // XXX BUG this is the wrong function!
+            waiting.debugonly()=true;
             state[pid].trace_mode=TRACE_STOPPED2;
             notify_parent( state[pid].debugger, waiting );
             sig=-1;

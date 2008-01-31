@@ -135,34 +135,48 @@ bool sys_setsid( int sc_num, pid_t pid, pid_state *state )
 // entire system call, always :-(
 static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, int *param2, int param3, void *param4 )
 {
-    bool cont=true;
-
     if( state->state==pid_state::NONE ) {
         state->context_state[0]=(void *)param1; // pid
         state->context_state[1]=param2; // status
         state->context_state[2]=(void *)param3; // options
         state->context_state[3]=param4; // rusage
-        ptlib_set_syscall( pid, PREF_NOP ); // NOP call
 
-        state->state=pid_state::REDIRECT2;
-    } else if( state->state==pid_state::REDIRECT2 ) {
         dlog("wait4: %d num debugees: %d num children: %d, queue %s\n", pid, state->num_debugees, state->num_children,
                 state->waiting_signals.empty()?"is empty":"has signals" );
-        state->state=pid_state::NONE;
 
         // Test whether the (emulated) call should fail
         // XXX This is nowhere near the exhustive tests we need to do. We only aim to emulate strace and ourselves at this point in time
         if( state->num_children!=0 || state->num_debugees!=0 || !state->waiting_signals.empty() ) {
             // Only wait if there was no error
             state->state=pid_state::WAITING;
-            cont=false; // By default we hang in wait for something to report
         } else {
-            ptlib_set_error( pid, state->orig_sc, ECHILD );
+            // Set an ECHILD return code
+            state->state=pid_state::REDIRECT2;
+            ptlib_set_syscall( pid, PREF_NOP ); // NOP call
+            state->context_state[0]=(void *)-ECHILD;
         }
+    } else if( state->state==pid_state::REDIRECT2 ) {
+        // We may get here under two conditions.
+        // Either the wait was performed by us and a NOP was carried out, in which case context_state[0] contains 0 and context_state[1]
+        // the desired return code (negative for error)
+        // Or 
+        // A function substancially similar to wait was carried out, in which case context_state[0] contains 1
+        if( sc_num==PREF_NOP ) {
+            // Performed NOP - set return codes
+            if( ((int)state->context_state[0])>=0 )
+                ptlib_set_retval( pid, state->context_state[0] );
+            else
+                ptlib_set_error( pid, state->orig_sc, -((int)state->context_state[0]) );
+
+            ptlib_set_syscall( pid, state->orig_sc );
+        }
+        // If an actual wait syscall was carried out, we have no more manipualtions to do
+
+        ptlib_set_syscall( pid, state->orig_sc );
+        state->state=pid_state::NONE;
     }
 
     if( state->state==pid_state::WAITING ) {
-        cont=false;
         if( !state->waiting_signals.empty() ) {
             // Let's see what was asked for
             pid_t wait_pid=(pid_t)state->context_state[0];
@@ -170,49 +184,63 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
 
             if( wait_pid<-1 ) {
                 // We are looking for process with session id= -pid
-                while( child!=state->waiting_signals.end() && state[child->pid].session_id!=-wait_pid )
+                while( child!=state->waiting_signals.end() && state[child->pid()].session_id!=-wait_pid )
                     ++child;
             } else if( wait_pid==-1 ) {
                 // Wait for anything. Just leave child as it is
             } else if( wait_pid==0 ) {
                 // Wait for session_id==parent's
-                while( child!=state->waiting_signals.end() && state[child->pid].session_id!=state->session_id )
+                while( child!=state->waiting_signals.end() && state[child->pid()].session_id!=state->session_id )
                     ++child;
             } else {
                 // Wait for exact match
-                while( child!=state->waiting_signals.end() && child->pid!=wait_pid )
+                while( child!=state->waiting_signals.end() && child->pid()!=wait_pid )
                     ++child;
             }
 
             if( child!=state->waiting_signals.end() ) {
                 // We have what to report - allow the syscall to return
                 
-                // Fill in the status and rusage
-                if( state->context_state[1]!=NULL )
-                    ptlib_set_mem( pid, &child->status, state->context_state[1], sizeof(child->status) );
+                // Fill in the rusage
                 if( state->context_state[3]!=NULL )
-                    ptlib_set_mem( pid, &child->usage, state->context_state[3], sizeof(child->usage) );
+                    ptlib_set_mem( pid, &child->usage(), state->context_state[3], sizeof(child->usage()) );
 
-                ptlib_set_retval( pid, (void *)child->pid );
+                // Is this a report about a terminated program?
+                if( !child->debugonly() )
+                {
+                    // If the parent never carried out the actual "wait", the child will become a zombie
+                    // We turn the syscall into a waitpid with the child's pid explicitly given
+                    ptlib_set_syscall( pid, SYS_waitpid );
+                    ptlib_set_argument( pid, 1, (void *)child->pid() );
+                    ptlib_set_argument( pid, 2, state->context_state[1] );
+                    ptlib_set_argument( pid, 3, state->context_state[2] );
+                } else {
+                    // We need to explicitly set all the arguments
+                    if( state->context_state[1]!=NULL )
+                        ptlib_set_mem( pid, &child->status(), state->context_state[1], sizeof(child->status()) );
+
+                    ptlib_set_syscall( pid, PREF_NOP );
+
+                    state->context_state[0]=(void *)child->pid();
+                }
+
                 state->waiting_signals.erase( child );
 
-                state->state=pid_state::NONE;
-                cont=true;
+                state->state=pid_state::REDIRECT2;
             } else {
                 dlog("wait4: "PID_F" hanged in wait for %d\n", pid, wait_pid );
             }
         }
         
-        if( !cont && (((int)state->context_state[2])&WNOHANG)!=0 ) {
+        if( state->state==pid_state::WAITING && (((int)state->context_state[2])&WNOHANG)!=0 ) {
             // Client asked never to hang
-            ptlib_set_retval( pid, 0 );
-            cont=true;
+            state->state=pid_state::REDIRECT2;
+            ptlib_set_syscall( pid, PREF_NOP );
+            state->context_state[0]=0;
         }
-
-        ptlib_set_syscall( pid, state->orig_sc ); // Restore original syscall
     }
 
-    return cont;
+    return state->state!=pid_state::WAITING;
 }
 
 bool sys_wait4( int sc_num, pid_t pid, pid_state *state )
