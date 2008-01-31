@@ -1,3 +1,5 @@
+    * Fix incorrect use of hyphen as minus in the man page
+
 Version 0.05
     * Add recursive debugger support - mainly strace at the moment
 

@@ -3,7 +3,7 @@
 .SH NAME
 fakeroot\-ng \- run a command while making it believe it is running as root
 .SH SYNOPSIS
-\fBfakeroot\-ng\fP [ \fB-l\fIlogfile\fP ] [ \fB-p\fIpersist_file\fP ] [-d] \fIcommand line\fP
+\fBfakeroot\-ng\fP [ \fB\-l\fIlogfile\fP ] [ \fB\-p\fIpersist_file\fP ] [\-d] \fIcommand line\fP
 .SH DESCRIPTION
 This manual page documents the \fBfakeroot\-ng\fP command.
 .PP
