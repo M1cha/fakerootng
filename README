@@ -13,6 +13,7 @@ TODO
 BUGS
 - The "wait" type syscalls are only emulated enough to allow two specific
   debuggers to run: fakeroot-ng and strace
+- Strace does not support tracing children (i.e. - the -f option)
 - Poor handling (race) of redirected syscalls with threaded programs.
 
 LIMITATIONS
