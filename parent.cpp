@@ -89,21 +89,27 @@ static void init_handlers()
     syscalls[SYS_fstat64]=syscall_hook(sys_stat64, "fstat64");
     syscalls[SYS_lstat64]=syscall_hook(sys_stat64, "lstat64");
 
-    syscalls[SYS_chown]=syscall_hook(sys_chown, "chown32");
+    syscalls[SYS_chown]=syscall_hook(sys_chown, "chown");
 #ifdef SYS_chown32
     syscalls[SYS_chown32]=syscall_hook(sys_chown, "chown32");
 #endif
-    syscalls[SYS_fchown]=syscall_hook(sys_chown, "fchown32");
+    syscalls[SYS_fchown]=syscall_hook(sys_fchown, "fchown");
 #ifdef SYS_fchown32
-    syscalls[SYS_fchown32]=syscall_hook(sys_chown, "fchown32");
+    syscalls[SYS_fchown32]=syscall_hook(sys_fchown, "fchown32");
 #endif
-    syscalls[SYS_lchown]=syscall_hook(sys_chown, "lchown32");
+    syscalls[SYS_lchown]=syscall_hook(sys_lchown, "lchown");
 #ifdef SYS_lchown32
-    syscalls[SYS_lchown32]=syscall_hook(sys_chown, "lchown32");
+    syscalls[SYS_lchown32]=syscall_hook(sys_lchown, "lchown32");
+#endif
+#ifdef SYS_fchownat
+    syscalls[SYS_fchownat]=syscall_hook(sys_fchownat, "fchownat");
 #endif
 
     syscalls[SYS_chmod]=syscall_hook(sys_chmod, "chmod");
-    syscalls[SYS_fchmod]=syscall_hook(sys_chmod, "fchmod");
+    syscalls[SYS_fchmod]=syscall_hook(sys_fchmod, "fchmod");
+#ifdef SYS_fchmodat
+    syscalls[SYS_fchmodat]=syscall_hook(sys_fchmodat, "fchmodat");
+#endif
 
     syscalls[SYS_mknod]=syscall_hook(sys_mknod, "mknod");
     syscalls[SYS_open]=syscall_hook(sys_open, "open");

@@ -91,19 +91,32 @@ bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
     return true;
 }
 
-bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
+bool sys_statat64( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        // Entering the syscall
+        state->state=pid_state::RETURN;
+        state->context_state[0]=ptlib_get_argument( pid, 3 ); // Store the pointer to the stat struct
+        dlog("statat64: "PID_F" stored pointer at %p\n", pid, state->context_state[0] );
+
+        return true;
+    } else {
+        return sys_stat64( sc_num, pid, state ); // Return code handling is the same as for the regular stat
+    }
+}
+
+static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset, int stat_function, int extra_flags=-1 )
 {
     if( state->state==pid_state::NONE ) {
         if( state->memory==NULL ) {
             return allocate_process_mem( pid, state, sc_num );
         }
 
-        state->context_state[0]=ptlib_get_argument( pid, 1 ); // Store the filename/filedes
-        mode_t mode=(mode_t)ptlib_get_argument( pid, 2 ); // Store the requested mode
-        state->context_state[1]=(void *)mode;
+        mode_t mode=(mode_t)ptlib_get_argument( pid, mode_offset+1 ); // Store the requested mode
+        state->context_state[0]=(void *)mode;
 
         mode=mode&~07000;
-        ptlib_set_argument( pid, 2, (void *) mode ); // Zero out the S* field
+        ptlib_set_argument( pid, mode_offset+1, (void *) mode ); // Zero out the S* field
 
         dlog("chmod: "PID_F" mode %o changed to %o\n", pid, state->context_state[1], mode );
         state->state=pid_state::RETURN;
@@ -116,24 +129,18 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
             ptlib_save_state( pid, state->saved_state );
             state->orig_sc=sc_num;
 
-            ptlib_set_argument( pid, 1, state->context_state[0] );
-            ptlib_set_argument( pid, 2, state->memory );
-            switch( sc_num ) {
-            case SYS_fchmod:
-                return ptlib_generate_syscall( pid, SYS_fstat64, state->memory );
-                break;
-            case SYS_chmod:
-                return ptlib_generate_syscall( pid, SYS_lstat64, state->memory );
-                break;
-            default:
-                dlog("chmod: "PID_F" Oops! Unhandled syscall %d - abort\n", pid, sc_num );
-                dlog(NULL); // Flush the file before we crash
-                abort();
-                ptlib_restore_state( pid, state->saved_state );
-                ptlib_set_error( pid, sc_num, EFAULT );
-                state->state=pid_state::NONE;
-                break;
+            for( int i=1; i<=mode_offset; ++i )
+                ptlib_set_argument( pid, i, state->context_state[i] );
+
+            ptlib_set_argument( pid, mode_offset+1, state->memory ); // Where to store the stat result
+
+            // One anomaly handled with special case. Ugly, but not worth the interface complication
+            if( extra_flags!=-1 ) {
+                // Some of the functions require an extra flag after the usual parameters
+                ptlib_set_argument( pid, mode_offset+2, (void *)extra_flags );
             }
+
+            return ptlib_generate_syscall( pid, stat_function, state->memory );
         } else {
             state->state=pid_state::NONE;
             dlog("chmod: "PID_F" chmod failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)));
@@ -148,7 +155,7 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
         if( !get_map( stat.dev, stat.ino, &override ) ) {
             stat_override_copy( &stat, &override );
         }
-        override.mode=(override.mode&~07777)|(((mode_t)state->context_state[1])&07777);
+        override.mode=(override.mode&~07777)|(((mode_t)state->context_state[0])&07777);
 
         dlog("chmod: "PID_F" Setting override mode %o dev "DEV_F" inode "INODE_F"\n", pid, override.mode, override.dev,
             override.inode );
@@ -163,8 +170,40 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
     return true;
 }
 
-bool sys_chown( int sc_num, pid_t pid, pid_state *state )
+// The actual work is done by "real_chmod".
+bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
 {
+    if( state->state==pid_state::NONE ) {
+        state->context_state[1]=ptlib_get_argument( pid, 1 ); // Store the file name
+    }
+
+    return real_chmod( sc_num, pid, state, 1, PREF_STAT );
+}
+
+bool sys_fchmod( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->context_state[1]=ptlib_get_argument( pid, 1 ); // Store the file descriptor
+    }
+
+    return real_chmod( sc_num, pid, state, 1, PREF_FSTAT );
+}
+
+bool sys_fchmodat( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->context_state[1]=ptlib_get_argument( pid, 1 ); // Store the base dir fd
+        state->context_state[2]=ptlib_get_argument( pid, 2 ); // Store the file name
+        state->context_state[3]=ptlib_get_argument( pid, 4 ); // Store the flags
+    }
+
+    return real_chmod( sc_num, pid, state, 2, PREF_FSTATAT, (int)state->context_state[3] );
+}
+
+// context_state[0] and 1 should contain the desired uid and gid respectively
+static bool real_chown( int sc_num, pid_t pid, pid_state *state, int own_offset, int stat_function, int extra_flags=-1 )
+{
+    // XXX Do we handle the mode change following a chown (file and directory) correctly?
     if( state->state==pid_state::NONE ) {
         // We're going to need memory
         if( state->memory==NULL ) {
@@ -172,42 +211,16 @@ bool sys_chown( int sc_num, pid_t pid, pid_state *state )
         }
 
         // Map this to a stat operation
-        state->context_state[0]=ptlib_get_argument(pid, 2);
-        state->context_state[1]=ptlib_get_argument(pid, 3);
+        ptlib_set_argument( pid, own_offset+1, state->memory );
 
-        ptlib_set_argument( pid, 2, state->memory );
-
-        switch( sc_num ) {
-        case SYS_chown:
-#ifdef SYS_chown32
-        case SYS_chown32:
-#endif
-            ptlib_set_syscall( pid, PREF_STAT );
-            dlog("chown: "PID_F" redirected chown call to stat\n", pid );
-            break;
-        case SYS_fchown:
-#ifdef SYS_fchown32
-        case SYS_fchown32:
-#endif
-            ptlib_set_syscall( pid, PREF_FSTAT );
-            dlog("chown: "PID_F" redirected fchown call to fstat\n", pid );
-            break;
-        case SYS_lchown:
-#ifdef SYS_lchown32
-        case SYS_lchown32:
-#endif
-            ptlib_set_syscall( pid, PREF_LSTAT );
-            dlog("chown: "PID_F" redirected lchown call to lstat\n", pid );
-            break;
-        default:
-            dlog("chown: "PID_F" called unsupported syscall %d - abort\n", pid, sc_num );
-            dlog(NULL); // Flush the log before we crash
-            abort();
-            break;
+        if( extra_flags!=-1 ) {
+            ptlib_set_argument( pid, own_offset+2, (void *)extra_flags );
         }
 
+        ptlib_set_syscall( pid, stat_function );
+        dlog("chown: "PID_F" redirected chown call to stat\n", pid );
+
         state->state=pid_state::REDIRECT2;
-        state->orig_sc=sc_num;
     } else if( state->state==pid_state::REDIRECT2 ) {
         if( ptlib_success( pid, sc_num ) ) {
             struct ptlib_stat64 stat;
@@ -235,6 +248,47 @@ bool sys_chown( int sc_num, pid_t pid, pid_state *state )
     }
 
     return true;
+}
+
+bool sys_chown( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->context_state[0]=ptlib_get_argument(pid, 2);
+        state->context_state[1]=ptlib_get_argument(pid, 3);
+    }
+    
+    return real_chown( sc_num, pid, state, 1, PREF_STAT );
+}
+
+bool sys_fchown( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->context_state[0]=ptlib_get_argument(pid, 2);
+        state->context_state[1]=ptlib_get_argument(pid, 3);
+    }
+    
+    return real_chown( sc_num, pid, state, 1, PREF_FSTAT );
+}
+
+bool sys_lchown( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->context_state[0]=ptlib_get_argument(pid, 2);
+        state->context_state[1]=ptlib_get_argument(pid, 3);
+    }
+    
+    return real_chown( sc_num, pid, state, 1, PREF_LSTAT );
+}
+
+bool sys_fchownat( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->context_state[0]=ptlib_get_argument(pid, 3);
+        state->context_state[1]=ptlib_get_argument(pid, 4);
+        state->context_state[2]=ptlib_get_argument(pid, 5);
+    }
+    
+    return real_chown( sc_num, pid, state, 2, PREF_FSTATAT, (int)state->context_state[2] );
 }
 
 bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
