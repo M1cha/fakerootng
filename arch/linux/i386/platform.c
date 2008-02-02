@@ -139,32 +139,12 @@ int ptlib_success( pid_t pid, int sc_num )
     void *ret=ptlib_get_retval( pid );
 
     switch( sc_num ) {
-    case SYS_stat:
-    case SYS_stat64:
-    case SYS_fstat:
-    case SYS_fstat64:
-    case SYS_lstat:
-    case SYS_lstat64:
-    case SYS_chown:
-    case SYS_fchown:
-    case SYS_lchown:
-    case SYS_chmod:
-    case SYS_fchmod:
-    case SYS_mknod:
-    case SYS_open:
-    case SYS_mkdir:
-    case SYS_symlink:
-    case SYS_execve:
-        return ((int)ret)>=0;
     case SYS_mmap:
     case SYS_mmap2:
         /* -errno on error */
         return ((unsigned int)ret)<0xfffff000u;
     default:
-        dlog("ptlib_success: %d unknown syscall %d - aborting\n", pid, sc_num );
-        dlog(NULL); /* Flush the log before we crash */
-        abort(); /* We tried to assume about an unknown syscall */
-        return 0;
+        return ((int)ret)>=0;
     }
 }
 
