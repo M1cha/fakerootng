@@ -291,7 +291,7 @@ bool sys_fchownat( int sc_num, pid_t pid, pid_state *state )
     return real_chown( sc_num, pid, state, 2, PREF_FSTATAT, (int)state->context_state[2] );
 }
 
-bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
+static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset, int stat_function, int extra_flags=-1 )
 {
     if( state->state==pid_state::NONE ) {
         // Will need memory
@@ -299,10 +299,7 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
             return allocate_process_mem(pid, state, sc_num);
         }
 
-        state->context_state[0]=ptlib_get_argument( pid, 1 ); // File name
-        state->context_state[1]=ptlib_get_argument( pid, 2 ); // Mode
-        state->context_state[2]=ptlib_get_argument( pid, 3 ); // Device ID
-        mode_t mode=(mode_t)state->context_state[1];
+        mode_t mode=(mode_t)state->context_state[0];
 
         if( (mode&07000)!=0 ) {
             // Mode has a SUID set
@@ -312,28 +309,28 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
             dlog("mknod: "PID_F" tried to create %s device, turn to regular file\n", pid, S_ISCHR(mode) ? "character" : "block" );
             mode=mode&~S_IFMT | S_IFREG;
         }
-        ptlib_set_argument( pid, 2, (void *)mode );
+        ptlib_set_argument( pid, mode_offset+1, (void *)mode );
 
-        if( log_level>0 ) {
-            char name[PATH_MAX];
-
-            ptlib_get_string( pid, state->context_state[0], name, sizeof(name) );
-
-            dlog("mknod: %d mode %o name %s\n", pid, state->context_state[1], name );
-        }
+        dlog("mknod: %d mode %o\n", pid, state->context_state[1] );
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
         if( ptlib_success( pid, sc_num ) ) {
             // Need to call "stat" on the file to see what inode number it got
-            ptlib_set_argument( pid, 1, state->context_state[0] ); // File name
-            ptlib_set_argument( pid, 2, state->memory ); // Struct stat
+            for( int i=0; i<mode_offset; ++i ) {
+                ptlib_set_argument( pid, i+1, state->context_state[2+i] ); // File name etc.
+            }
+            ptlib_set_argument( pid, mode_offset+1, state->memory ); // Struct stat
+
+            if( extra_flags!=-1 ) {
+                ptlib_set_argument( pid, mode_offset+2, (void *)extra_flags );
+            }
 
             state->orig_sc=sc_num;
             state->state=pid_state::REDIRECT1;
             ptlib_save_state( pid, state->saved_state );
 
             dlog("mknod: "PID_F" Actual node creation successful. Calling stat\n", pid );
-            return ptlib_generate_syscall( pid, SYS_stat64, state->memory );
+            return ptlib_generate_syscall( pid, stat_function, state->memory );
         } else {
             // Nothing to do if the call failed
             dlog("mknod: "PID_F" call failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num) ) );
@@ -355,11 +352,11 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
             dlog("mknod: "PID_F" registering the new device in the override DB dev "DEV_F" inode "INODE_F"\n", pid,
                 stat.dev, stat.ino );
 
-            mode_t mode=(mode_t)state->context_state[1];
+            mode_t mode=(mode_t)state->context_state[0];
             if( S_ISCHR(mode) || S_ISBLK(mode) || (mode&07000)!=0) {
                 dlog("mknod: "PID_F" overriding the file type and/or mode\n", pid );
                 override.mode=override.mode&~(S_IFMT|07000) | mode&(S_IFMT|07000);
-                override.dev_id=(dev_t)state->context_state[2];
+                override.dev_id=(dev_t)state->context_state[1];
             }
 
             set_map( &override );
@@ -373,6 +370,29 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
     }
 
     return true;
+}
+
+bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->context_state[0]=ptlib_get_argument( pid, 2 ); // Mode
+        state->context_state[1]=ptlib_get_argument( pid, 3 ); // Device ID
+        state->context_state[2]=ptlib_get_argument( pid, 1 ); // File name
+    }
+
+    return real_mknod( sc_num, pid, state, 1, PREF_STAT );
+}
+
+bool sys_mknodat( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->context_state[0]=ptlib_get_argument( pid, 3 ); // Mode
+        state->context_state[1]=ptlib_get_argument( pid, 4 ); // Device ID
+        state->context_state[2]=ptlib_get_argument( pid, 1 ); // Base fd
+        state->context_state[3]=ptlib_get_argument( pid, 2 ); // File name
+    }
+
+    return real_mknod( sc_num, pid, state, 1, PREF_FSTATAT, 0 );
 }
 
 bool sys_open( int sc_num, pid_t pid, pid_state *state )
