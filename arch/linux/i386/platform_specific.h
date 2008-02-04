@@ -59,7 +59,7 @@ typedef struct rusage ptlib_extra_data;
 #define DEV_F "%llx"
 #define INODE_F "%lld"
 
-/* Preferred stat function to use */
+/* Preferred stat functions to use */
 #define PREF_STAT SYS_stat64
 #define PREF_LSTAT SYS_lstat64
 #define PREF_FSTAT SYS_fstat64

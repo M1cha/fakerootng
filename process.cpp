@@ -53,8 +53,11 @@ bool sys_fork( int sc_num, pid_t pid, pid_state *state )
     return true;
 }
 
-bool sys_execve( int sc_num, pid_t pid, pid_state *state )
+// Function interface is different - returns an extra bool to signify whether to send a trap after the call
+bool sys_execve( int sc_num, pid_t pid, pid_state *state, bool &trap_after_call )
 {
+    trap_after_call=false;
+
     if( state->state==pid_state::NONE ) {
         if( log_level>0 ) {
             char cmd[PATH_MAX];
@@ -82,14 +85,22 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state )
                 // a syscall. We need to absorb it
                 state->state=pid_state::REDIRECT2;
                 state->context_state[0]=(void *)1;
+
+                if( state->trace_mode==TRACE_SYSCALL ) {
+                    // We are not in the "NONE" state, but the syscall is over. Tell parent to trap
+                    trap_after_call=true;
+                }
 #endif
             } else {
                 dlog("execve: "PID_F" failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)) );
             }
         } else {
-            // Nothing to do here
             state->state=pid_state::NONE;
             dlog("execve: "PID_F" absorbed dummy SIGTRAP after successful execve\n", pid );
+            
+            // If the trace mode is not SYSCALL, the post handling will not generate a TRACE. If PTLIB_TRAP_AFTER_EXEC is set,
+            // a trace is required, however, even if not in TRACE_SYSCALL
+            trap_after_call=true;
         }
     }
 

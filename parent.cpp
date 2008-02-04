@@ -72,7 +72,9 @@ static void init_handlers()
 //    syscalls[SYS_fork]=syscall_hook(sys_fork, "fork");
 //    syscalls[SYS_vfork]=syscall_hook(sys_fork, "vfork");
 //    syscalls[SYS_clone]=syscall_hook(sys_fork, "clone");
-    syscalls[SYS_execve]=syscall_hook(sys_execve, "execve");
+
+//    Execve is special cased
+//    syscalls[SYS_execve]=syscall_hook(sys_execve, "execve");
 #ifdef SYS_sigreturn
     syscalls[SYS_sigreturn]=syscall_hook(sys_sigreturn, "sigreturn");
 #endif
@@ -279,6 +281,8 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
     switch(wait_state) {
     case SYSCALL:
         {
+            bool posttrap_always=false;
+
             pid_state *proc_state=&state[pid];
             if( proc_state->state==pid_state::REDIRECT1 ) {
                 // REDIRECT1 is just a filler state between the previous call, where the arguments were set up and
@@ -286,10 +290,18 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
                 dlog(PID_F": Calling syscall %d redirected from %s\n", pid, ret, syscalls[proc_state->orig_sc].name );
                 proc_state->state=pid_state::REDIRECT2;
             } else if( proc_state->state==pid_state::REDIRECT2 ) {
-                dlog(PID_F": Called syscall %d, redirected from %s\n", pid, ret, syscalls[proc_state->orig_sc].name );
+                if( proc_state->orig_sc!=SYS_execve ) {
+                    dlog(PID_F": Called syscall %d, redirected from %s\n", pid, ret, syscalls[proc_state->orig_sc].name );
 
-                if( !syscalls[proc_state->orig_sc].func( ret, pid, proc_state ) )
-                    sig=-1; // Mark for ptrace not to continue the process
+                    if( !syscalls[proc_state->orig_sc].func( ret, pid, proc_state ) )
+                        sig=-1; // Mark for ptrace not to continue the process
+                } else {
+                    // Special handling of the execve case
+                    dlog(PID_F": Called syscall %d, redirected from execve\n", pid, ret );
+
+                    if( !sys_execve( ret, pid, proc_state, posttrap_always ) )
+                        sig=-1;
+                }
             } else if( proc_state->state==pid_state::ALLOC_RETURN ) {
                 if( !finish_allocation( ret, pid, proc_state ) )
                     sig=-1;
@@ -337,6 +349,11 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
                         if( !syscalls[ret].func( ret, pid, proc_state ) ) {
                             sig=-1; // Mark for ptrace not to continue the process
                         }
+                    } else if( ret==SYS_execve ) {
+                        dlog(PID_F": Called execve(%s)\n", pid, state2str(proc_state->state));
+
+                        if( !sys_execve(ret, pid, proc_state, posttrap_always ) )
+                            sig=-1;
                     } else {
                         dlog(PID_F": Unknown syscall %ld(%s)\n", pid, ret, state2str(proc_state->state));
                         if( proc_state->state==pid_state::NONE ) {
@@ -349,7 +366,12 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
             }
 
             // Check for post-syscall debugger callback
-            if( proc_state->state==pid_state::NONE && proc_state->debugger!=0 && proc_state->trace_mode==TRACE_SYSCALL ) {
+            // If the system sends a SIGTRAP after a successful execve, the logic is entirely different
+            if( proc_state->debugger!=0 && (
+                    proc_state->state==pid_state::NONE && proc_state->trace_mode==TRACE_SYSCALL ||
+                    posttrap_always )
+              )
+            {
                 dlog(PID_F": notify debugger "PID_F" about post-syscall hook\n", pid, proc_state->debugger );
                 proc_state->trace_mode=TRACE_STOPPED2;
 
