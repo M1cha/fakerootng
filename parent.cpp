@@ -112,6 +112,9 @@ static void init_handlers()
 #endif
 
     syscalls[SYS_mknod]=syscall_hook(sys_mknod, "mknod");
+#ifdef SYS_mknodat
+    syscalls[SYS_mknodat]=syscall_hook(sys_mknodat, "mknodat");
+#endif
     syscalls[SYS_open]=syscall_hook(sys_open, "open");
     syscalls[SYS_mkdir]=syscall_hook(sys_mkdir, "mkdir");
     syscalls[SYS_symlink]=syscall_hook(sys_symlink, "symlink");
