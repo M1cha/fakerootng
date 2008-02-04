@@ -334,30 +334,32 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
                     if( syscalls.find(ret)!=syscalls.end() ) {
                         dlog(PID_F": Called %s(%s)\n", pid, syscalls[ret].name, state2str(proc_state->state));
 
-                        if( !syscalls[ret].func( ret, pid, proc_state ) )
+                        if( !syscalls[ret].func( ret, pid, proc_state ) ) {
                             sig=-1; // Mark for ptrace not to continue the process
+                        }
                     } else {
                         dlog(PID_F": Unknown syscall %ld(%s)\n", pid, ret, state2str(proc_state->state));
-                        if( proc_state->state==pid_state::NONE )
+                        if( proc_state->state==pid_state::NONE ) {
                             proc_state->state=pid_state::RETURN;
-                        else if( proc_state->state==pid_state::RETURN )
+                        } else if( proc_state->state==pid_state::RETURN ) {
                             proc_state->state=pid_state::NONE;
-                    }
-
-                    // Check for post-syscall debugger callback
-                    if( proc_state->state==pid_state::NONE && proc_state->debugger!=0 && proc_state->trace_mode==TRACE_SYSCALL ) {
-                        dlog(PID_F": notify debugger "PID_F" about post-syscall hook\n", pid, proc_state->debugger );
-                        proc_state->trace_mode=TRACE_STOPPED2;
-
-                        pid_state::wait_state waiting;
-                        waiting.pid()=pid;
-                        waiting.status()=status;
-                        getrusage( RUSAGE_CHILDREN, &waiting.usage() ); // XXX BUG This is the wrong function!
-                        waiting.debugonly()=true;
-                        notify_parent( proc_state->debugger, waiting );
-                        sig=-1; // Halt process until "debugger" decides it can keep on going
+                        }
                     }
                 }
+            }
+
+            // Check for post-syscall debugger callback
+            if( proc_state->state==pid_state::NONE && proc_state->debugger!=0 && proc_state->trace_mode==TRACE_SYSCALL ) {
+                dlog(PID_F": notify debugger "PID_F" about post-syscall hook\n", pid, proc_state->debugger );
+                proc_state->trace_mode=TRACE_STOPPED2;
+
+                pid_state::wait_state waiting;
+                waiting.pid()=pid;
+                waiting.status()=status;
+                getrusage( RUSAGE_CHILDREN, &waiting.usage() ); // XXX BUG This is the wrong function!
+                waiting.debugonly()=true;
+                notify_parent( proc_state->debugger, waiting );
+                sig=-1; // Halt process until "debugger" decides it can keep on going
             }
         }
         break;
