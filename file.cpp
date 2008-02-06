@@ -91,7 +91,8 @@ bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
     return true;
 }
 
-bool sys_statat64( int sc_num, pid_t pid, pid_state *state )
+#ifdef SYS_fstatat64
+bool sys_fstatat64( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
         // Entering the syscall
@@ -104,6 +105,7 @@ bool sys_statat64( int sc_num, pid_t pid, pid_state *state )
         return sys_stat64( sc_num, pid, state ); // Return code handling is the same as for the regular stat
     }
 }
+#endif
 
 static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset, int stat_function, int extra_flags=-1 )
 {
@@ -189,6 +191,7 @@ bool sys_fchmod( int sc_num, pid_t pid, pid_state *state )
     return real_chmod( sc_num, pid, state, 1, PREF_FSTAT );
 }
 
+#ifdef SYS_fchmodat
 bool sys_fchmodat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
@@ -199,6 +202,7 @@ bool sys_fchmodat( int sc_num, pid_t pid, pid_state *state )
 
     return real_chmod( sc_num, pid, state, 2, PREF_FSTATAT, (int)state->context_state[3] );
 }
+#endif
 
 // context_state[0] and 1 should contain the desired uid and gid respectively
 static bool real_chown( int sc_num, pid_t pid, pid_state *state, int own_offset, int stat_function, int extra_flags=-1 )
@@ -280,6 +284,7 @@ bool sys_lchown( int sc_num, pid_t pid, pid_state *state )
     return real_chown( sc_num, pid, state, 1, PREF_LSTAT );
 }
 
+#ifdef SYS_fchownat
 bool sys_fchownat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
@@ -290,6 +295,7 @@ bool sys_fchownat( int sc_num, pid_t pid, pid_state *state )
     
     return real_chown( sc_num, pid, state, 2, PREF_FSTATAT, (int)state->context_state[2] );
 }
+#endif
 
 static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset, int stat_function, int extra_flags=-1 )
 {
@@ -383,6 +389,7 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
     return real_mknod( sc_num, pid, state, 1, PREF_STAT );
 }
 
+#ifdef SYS_mknodat
 bool sys_mknodat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
@@ -394,6 +401,7 @@ bool sys_mknodat( int sc_num, pid_t pid, pid_state *state )
 
     return real_mknod( sc_num, pid, state, 1, PREF_FSTATAT, 0 );
 }
+#endif
 
 static bool real_open( int sc_num, pid_t pid, pid_state *state )
 {
@@ -459,6 +467,7 @@ bool sys_open( int sc_num, pid_t pid, pid_state *state )
     return real_open( sc_num, pid, state );
 }
 
+#ifdef SYS_openat
 bool sys_openat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
@@ -467,6 +476,7 @@ bool sys_openat( int sc_num, pid_t pid, pid_state *state )
 
     return real_open( sc_num, pid, state );
 }
+#endif
 
 static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset, int stat_function, int extra_flags=-1 )
 {
@@ -542,6 +552,7 @@ bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
     return real_mkdir( sc_num, pid, state, 1, PREF_STAT );
 }
 
+#ifdef SYS_mkdirat
 bool sys_mkdirat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
@@ -559,6 +570,7 @@ bool sys_mkdirat( int sc_num, pid_t pid, pid_state *state )
 
     return real_mkdir( sc_num, pid, state, 2, PREF_FSTATAT, 0 );
 }
+#endif
 
 static bool real_symlink( int sc_num, pid_t pid, pid_state *state, int mode_offset, int stat_function, int extra_flags=-1 )
 {
@@ -630,6 +642,7 @@ bool sys_symlink( int sc_num, pid_t pid, pid_state *state )
     return real_symlink( sc_num, pid, state, 1, PREF_LSTAT );
 }
 
+#ifdef SYS_symlinkat
 bool sys_symlinkat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
@@ -639,3 +652,4 @@ bool sys_symlinkat( int sc_num, pid_t pid, pid_state *state )
 
     return real_symlink( sc_num, pid, state, 2, PREF_FSTATAT, AT_SYMLINK_NOFOLLOW );
 }
+#endif

@@ -90,6 +90,9 @@ static void init_handlers()
     syscalls[SYS_stat64]=syscall_hook(sys_stat64, "stat64");
     syscalls[SYS_fstat64]=syscall_hook(sys_stat64, "fstat64");
     syscalls[SYS_lstat64]=syscall_hook(sys_stat64, "lstat64");
+#ifdef SYS_fstatat64
+    syscalls[SYS_fstatat64]=syscall_hook(sys_fstatat64, "fstatat64");
+#endif
 
     syscalls[SYS_chown]=syscall_hook(sys_chown, "chown");
 #ifdef SYS_chown32
