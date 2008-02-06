@@ -395,14 +395,13 @@ bool sys_mknodat( int sc_num, pid_t pid, pid_state *state )
     return real_mknod( sc_num, pid, state, 1, PREF_FSTATAT, 0 );
 }
 
-bool sys_open( int sc_num, pid_t pid, pid_state *state )
+static bool real_open( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
         // Will need memory
         if( state->memory==NULL )
             return allocate_process_mem( pid, state, sc_num );
 
-        state->context_state[0]=ptlib_get_argument( pid, 2 );
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
         // Did we request to create a new file?
@@ -412,12 +411,11 @@ bool sys_open( int sc_num, pid_t pid, pid_state *state )
 
             ptlib_save_state( pid, state->saved_state );
             state->state=pid_state::REDIRECT1;
-            state->orig_sc=sc_num;
 
             // Call fstat to find out what we have
             ptlib_set_argument( pid, 1, (void *)fd );
             ptlib_set_argument( pid, 2, state->memory );
-            return ptlib_generate_syscall( pid, SYS_fstat64, state->memory );
+            return ptlib_generate_syscall( pid, PREF_FSTAT, state->memory );
         } else
             state->state=pid_state::NONE;
     } else if( state->state==pid_state::REDIRECT2 ) {
@@ -450,6 +448,24 @@ bool sys_open( int sc_num, pid_t pid, pid_state *state )
     }
 
     return true;
+}
+
+bool sys_open( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->context_state[0]=ptlib_get_argument( pid, 2 ); //flags
+    }
+
+    return real_open( sc_num, pid, state );
+}
+
+bool sys_openat( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->context_state[0]=ptlib_get_argument( pid, 3 ); //flags
+    }
+
+    return real_open( sc_num, pid, state );
 }
 
 bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
