@@ -560,28 +560,31 @@ bool sys_mkdirat( int sc_num, pid_t pid, pid_state *state )
     return real_mkdir( sc_num, pid, state, 2, PREF_FSTATAT, 0 );
 }
 
-bool sys_symlink( int sc_num, pid_t pid, pid_state *state )
+static bool real_symlink( int sc_num, pid_t pid, pid_state *state, int mode_offset, int stat_function, int extra_flags=-1 )
 {
     if( state->state==pid_state::NONE ) {
         // Will need memory
         if( state->memory==NULL )
             return allocate_process_mem( pid, state, sc_num );
 
-        state->context_state[0]=ptlib_get_argument( pid, 2 ); // new path
-
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
         if( ptlib_success( pid, sc_num ) ) {
             dlog("symlink: "PID_F" success. Call stat to mark uid/gid override\n", pid );
-
-            state->orig_sc=sc_num;
-            state->state=pid_state::REDIRECT1;
             ptlib_save_state( pid, state->saved_state );
 
-            ptlib_set_argument( pid, 1, state->context_state[0] ); // File name
-            ptlib_set_argument( pid, 2, state->memory ); // stat structure
+            for( int i=0; i<mode_offset; ++i ) {
+                ptlib_set_argument( pid, i+1, state->context_state[i] ); // File name
+            }
+            ptlib_set_argument( pid, mode_offset+1, state->memory ); // stat structure
 
-            return ptlib_generate_syscall( pid, SYS_lstat64, state->memory );
+            if( extra_flags!=-1 ) {
+                ptlib_set_argument( pid, mode_offset+2, (void *)extra_flags );
+            }
+
+            state->state=pid_state::REDIRECT1;
+
+            return ptlib_generate_syscall( pid, stat_function, state->memory );
         } else {
             dlog("symlink: "PID_F" failed with error %s\n", pid, strerror( ptlib_get_error(pid, sc_num) ) );
             state->state=pid_state::NONE;
@@ -618,3 +621,21 @@ bool sys_symlink( int sc_num, pid_t pid, pid_state *state )
     return true;
 }
 
+bool sys_symlink( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->context_state[0]=ptlib_get_argument( pid, 2 ); // new path
+    }
+
+    return real_symlink( sc_num, pid, state, 1, PREF_LSTAT );
+}
+
+bool sys_symlinkat( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->context_state[0]=ptlib_get_argument( pid, 2 ); // dirfd
+        state->context_state[1]=ptlib_get_argument( pid, 3 ); // new path
+    }
+
+    return real_symlink( sc_num, pid, state, 2, PREF_FSTATAT, AT_SYMLINK_NOFOLLOW );
+}

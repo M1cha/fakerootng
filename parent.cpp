@@ -126,6 +126,9 @@ static void init_handlers()
     syscalls[SYS_mkdirat]=syscall_hook(sys_mkdirat, "mkdirat");
 #endif
     syscalls[SYS_symlink]=syscall_hook(sys_symlink, "symlink");
+#ifdef SYS_mkdirat
+    syscalls[SYS_symlinkat]=syscall_hook(sys_symlinkat, "symlinkat");
+#endif
 
     syscalls[SYS_mmap2]=syscall_hook(sys_mmap, "mmap2");
 }

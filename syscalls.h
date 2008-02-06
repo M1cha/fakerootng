@@ -37,6 +37,7 @@ DECLARE_SYSFUNC(openat)
 DECLARE_SYSFUNC(mkdir)
 DECLARE_SYSFUNC(mkdirat)
 DECLARE_SYSFUNC(symlink)
+DECLARE_SYSFUNC(symlinkat)
 
 // Meta required functions
 DECLARE_SYSFUNC(mmap)
