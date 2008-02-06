@@ -1,3 +1,4 @@
+Version 0.06
     * Fix bug with mknod implementation - would save state too late
     * Fix incorrect use of hyphen as minus in the man page
     * Add support for fchownat, fchmodat, mknodat, openat, mkdirat, symlinkat
