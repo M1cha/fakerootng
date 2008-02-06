@@ -468,21 +468,12 @@ bool sys_openat( int sc_num, pid_t pid, pid_state *state )
     return real_open( sc_num, pid, state );
 }
 
-bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
+static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset, int stat_function, int extra_flags=-1 )
 {
     if( state->state==pid_state::NONE ) {
         // Will need memory
         if( state->memory==NULL )
             return allocate_process_mem( pid, state, sc_num );
-
-        state->context_state[0]=ptlib_get_argument( pid, 1 ); // Directory name
-        if( log_level>0  ) {
-            char name[PATH_MAX];
-
-            ptlib_get_string( pid, state->context_state[0], name, sizeof(name) );
-
-            dlog("mkdir: %d creates %s\n", pid, name );
-        }
 
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
@@ -493,13 +484,18 @@ bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
             ptlib_save_state( pid, state->saved_state );
 
             // Perform a stat operation so we can know the directory's dev and inode
-            ptlib_set_argument( pid, 1, state->context_state[0] ); // Dir name
-            ptlib_set_argument( pid, 2, state->memory ); // stat structure
+            for( int i=0; i<mode_offset; ++i )
+                ptlib_set_argument( pid, i+1, state->context_state[i] ); // Name
+            ptlib_set_argument( pid, mode_offset+1, state->memory ); // stat structure
+
+            if( extra_flags!=-1 ) {
+                ptlib_set_argument( pid, mode_offset+2, (void *)extra_flags );
+            }
 
             state->orig_sc=sc_num;
             state->state=pid_state::REDIRECT1;
 
-            return ptlib_generate_syscall( pid, PREF_STAT, state->memory );
+            return ptlib_generate_syscall( pid, stat_function, state->memory );
         } else {
             // If mkdir failed, we don't have anything else to do.
             dlog("mkdir: "PID_F" failed with error %s\n", pid, strerror(ptlib_get_error( pid, sc_num ) ) );
@@ -527,6 +523,41 @@ bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
     }
 
     return true;
+}
+
+bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->context_state[0]=ptlib_get_argument( pid, 1 ); // Directory name
+
+        if( log_level>0  ) {
+            char name[PATH_MAX];
+
+            ptlib_get_string( pid, state->context_state[0], name, sizeof(name) );
+
+            dlog("mkdir: %d creates %s\n", pid, name );
+        }
+    }
+
+    return real_mkdir( sc_num, pid, state, 1, PREF_STAT );
+}
+
+bool sys_mkdirat( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->context_state[0]=ptlib_get_argument( pid, 1 ); // Directory name
+
+        if( log_level>0  ) {
+            char name[PATH_MAX];
+
+            ptlib_get_string( pid, state->context_state[0], name, sizeof(name) );
+            int fd=(int)ptlib_get_argument( pid, 1 );
+
+            dlog("mkdirat: %d creates %s at %x\n", pid, name, fd );
+        }
+    }
+
+    return real_mkdir( sc_num, pid, state, 2, PREF_FSTATAT, 0 );
 }
 
 bool sys_symlink( int sc_num, pid_t pid, pid_state *state )

@@ -119,9 +119,12 @@ static void init_handlers()
 #endif
     syscalls[SYS_open]=syscall_hook(sys_open, "open");
 #ifdef SYS_openat
-    syscalls[SYS_openat]=syscall_hook(sys_open, "openat");
+    syscalls[SYS_openat]=syscall_hook(sys_openat, "openat");
 #endif
     syscalls[SYS_mkdir]=syscall_hook(sys_mkdir, "mkdir");
+#ifdef SYS_mkdirat
+    syscalls[SYS_mkdirat]=syscall_hook(sys_mkdirat, "mkdirat");
+#endif
     syscalls[SYS_symlink]=syscall_hook(sys_symlink, "symlink");
 
     syscalls[SYS_mmap2]=syscall_hook(sys_mmap, "mmap2");

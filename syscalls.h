@@ -35,6 +35,7 @@ DECLARE_SYSFUNC(mknodat)
 DECLARE_SYSFUNC(open)
 DECLARE_SYSFUNC(openat)
 DECLARE_SYSFUNC(mkdir)
+DECLARE_SYSFUNC(mkdirat)
 DECLARE_SYSFUNC(symlink)
 
 // Meta required functions
