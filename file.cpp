@@ -316,6 +316,8 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
     } else if( state->state==pid_state::RETURN ) {
         if( ptlib_success( pid, sc_num ) ) {
             // Need to call "stat" on the file to see what inode number it got
+            ptlib_save_state( pid, state->saved_state );
+
             for( int i=0; i<mode_offset; ++i ) {
                 ptlib_set_argument( pid, i+1, state->context_state[2+i] ); // File name etc.
             }
@@ -325,9 +327,7 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
                 ptlib_set_argument( pid, mode_offset+2, (void *)extra_flags );
             }
 
-            state->orig_sc=sc_num;
             state->state=pid_state::REDIRECT1;
-            ptlib_save_state( pid, state->saved_state );
 
             dlog("mknod: "PID_F" Actual node creation successful. Calling stat\n", pid );
             return ptlib_generate_syscall( pid, stat_function, state->memory );
