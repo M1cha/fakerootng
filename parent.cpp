@@ -53,19 +53,19 @@ static __gnu_cxx::hash_map<pid_t, pid_state> state;
 static void init_handlers()
 {
     syscalls[SYS_geteuid]=syscall_hook(sys_getuid, "geteuid");
-#ifdef SYS_geteuid32
+#if defined(SYS_geteuid32) && HAVE_OPENAT
     syscalls[SYS_geteuid32]=syscall_hook(sys_getuid, "geteuid");
 #endif
     syscalls[SYS_getuid]=syscall_hook(sys_getuid, "getuid");
-#ifdef SYS_getuid32
+#if defined(SYS_getuid32) && HAVE_OPENAT
     syscalls[SYS_getuid32]=syscall_hook(sys_getuid, "getuid");
 #endif
     syscalls[SYS_getegid]=syscall_hook(sys_getuid, "getegid");
-#ifdef SYS_getegid32
+#if defined(SYS_getegid32) && HAVE_OPENAT
     syscalls[SYS_getegid32]=syscall_hook(sys_getuid, "getegid");
 #endif
     syscalls[SYS_getgid]=syscall_hook(sys_getuid, "getgid");
-#ifdef SYS_getgid32
+#if defined(SYS_getgid32) && HAVE_OPENAT
     syscalls[SYS_getgid32]=syscall_hook(sys_getuid, "getgid");
 #endif
 
@@ -75,14 +75,14 @@ static void init_handlers()
 
 //    Execve is special cased
 //    syscalls[SYS_execve]=syscall_hook(sys_execve, "execve");
-#ifdef SYS_sigreturn
+#if defined(SYS_sigreturn) && HAVE_OPENAT
     syscalls[SYS_sigreturn]=syscall_hook(sys_sigreturn, "sigreturn");
 #endif
     syscalls[SYS_setsid]=syscall_hook(sys_setsid, "setsid");
-#ifdef SYS_wait4
+#if defined(SYS_wait4) && HAVE_OPENAT
     syscalls[SYS_wait4]=syscall_hook(sys_wait4, "wait4");
 #endif
-#ifdef SYS_waitpid
+#if defined(SYS_waitpid) && HAVE_OPENAT
     syscalls[SYS_waitpid]=syscall_hook(sys_waitpid, "waitpid");
 #endif
     syscalls[SYS_ptrace]=syscall_hook(sys_ptrace, "ptrace");
@@ -90,46 +90,46 @@ static void init_handlers()
     syscalls[SYS_stat64]=syscall_hook(sys_stat64, "stat64");
     syscalls[SYS_fstat64]=syscall_hook(sys_stat64, "fstat64");
     syscalls[SYS_lstat64]=syscall_hook(sys_stat64, "lstat64");
-#ifdef SYS_fstatat64
+#if defined(SYS_fstatat64) && HAVE_OPENAT
     syscalls[SYS_fstatat64]=syscall_hook(sys_fstatat64, "fstatat64");
 #endif
 
     syscalls[SYS_chown]=syscall_hook(sys_chown, "chown");
-#ifdef SYS_chown32
+#if defined(SYS_chown32) && HAVE_OPENAT
     syscalls[SYS_chown32]=syscall_hook(sys_chown, "chown32");
 #endif
     syscalls[SYS_fchown]=syscall_hook(sys_fchown, "fchown");
-#ifdef SYS_fchown32
+#if defined(SYS_fchown32) && HAVE_OPENAT
     syscalls[SYS_fchown32]=syscall_hook(sys_fchown, "fchown32");
 #endif
     syscalls[SYS_lchown]=syscall_hook(sys_lchown, "lchown");
-#ifdef SYS_lchown32
+#if defined(SYS_lchown32) && HAVE_OPENAT
     syscalls[SYS_lchown32]=syscall_hook(sys_lchown, "lchown32");
 #endif
-#ifdef SYS_fchownat
+#if defined(SYS_fchownat) && HAVE_OPENAT
     syscalls[SYS_fchownat]=syscall_hook(sys_fchownat, "fchownat");
 #endif
 
     syscalls[SYS_chmod]=syscall_hook(sys_chmod, "chmod");
     syscalls[SYS_fchmod]=syscall_hook(sys_fchmod, "fchmod");
-#ifdef SYS_fchmodat
+#if defined(SYS_fchmodat) && HAVE_OPENAT
     syscalls[SYS_fchmodat]=syscall_hook(sys_fchmodat, "fchmodat");
 #endif
 
     syscalls[SYS_mknod]=syscall_hook(sys_mknod, "mknod");
-#ifdef SYS_mknodat
+#if defined(SYS_mknodat) && HAVE_OPENAT
     syscalls[SYS_mknodat]=syscall_hook(sys_mknodat, "mknodat");
 #endif
     syscalls[SYS_open]=syscall_hook(sys_open, "open");
-#ifdef SYS_openat
+#if defined(SYS_openat) && HAVE_OPENAT
     syscalls[SYS_openat]=syscall_hook(sys_openat, "openat");
 #endif
     syscalls[SYS_mkdir]=syscall_hook(sys_mkdir, "mkdir");
-#ifdef SYS_mkdirat
+#if defined(SYS_mkdirat) && HAVE_OPENAT
     syscalls[SYS_mkdirat]=syscall_hook(sys_mkdirat, "mkdirat");
 #endif
     syscalls[SYS_symlink]=syscall_hook(sys_symlink, "symlink");
-#ifdef SYS_mkdirat
+#if defined(SYS_mkdirat) && HAVE_OPENAT
     syscalls[SYS_symlinkat]=syscall_hook(sys_symlinkat, "symlinkat");
 #endif
 

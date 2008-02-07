@@ -3,7 +3,7 @@
  * root.
  */
 
-#define _ATFILE_SOURCE
+#include "../config.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -34,11 +34,13 @@ int main( int argc, char *argv[] )
         perror("file1 not created");
     }
 
+#if HAVE_OPENAT
     if( fchownat( AT_FDCWD, "file1", 0, 12, 0 )==0 ) {
         printf("file1 fchownat to 0,12\n");
     } else {
         perror("fchownat(file1, 0, 12) failed");
     }
+#endif
 
     return 0;
 }

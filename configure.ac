@@ -28,6 +28,31 @@ AC_TYPE_PID_T
 # Checks for library functions.
 AC_FUNC_FORK
 
+AC_MSG_CHECKING([whether openat class functions are supported])
+AC_COMPILE_IFELSE(
+    [AC_LANG_PROGRAM([
+    #include <sys/stat.h>
+    #include <sys/fcntl.h>
+    ], [struct stat stat; fstatat(AT_FDCWD, "/etc/passwd", &stat, AT_SYMLINK_NOFOLLOW);])],
+    [ AC_MSG_RESULT([yes])
+      AC_DEFINE([HAVE_OPENAT], [1], [Supports the openat class of functions])],
+    [
+        dnl Let's try again, this time with _ATFILE_SOURCE at the beginning
+        AC_COMPILE_IFELSE(
+            [ AC_LANG_PROGRAM([
+                #define _ATFILE_SOURCE
+                #include <sys/stat.h>
+                #include <sys/fcntl.h>
+                ], [struct stat stat; fstatat(AT_FDCWD, "/etc/passwd", &stat, AT_SYMLINK_NOFOLLOW);])],
+            [
+                AC_MSG_RESULT([_ATFILE_SOURCE])
+                AC_DEFINE([HAVE_OPENAT], [1])
+                AC_DEFINE([_ATFILE_SOURCE],[], [Enable openat functions])
+            ],
+            [ AC_MSG_RESULT([no]) ]
+        )
+    ] )
+
 # Custom steps
 
 dnl Canoninize the canonical system names
