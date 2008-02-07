@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.61)
-AC_INIT([fakeroot-ng], [0.06], [shachar@debian.org])
+AC_INIT([fakeroot-ng], [0.07], [shachar@debian.org])
 AC_CANONICAL_TARGET()
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([parent.h])

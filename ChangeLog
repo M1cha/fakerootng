@@ -1,3 +1,7 @@
+Version 0.07
+    * Fix compilation errors on platforms that don't or partially support
+      "openat"
+
 Version 0.06
     * Fix bug with mknod implementation - would save state too late
     * Fix incorrect use of hyphen as minus in the man page
