@@ -101,12 +101,12 @@ static void handle_cont_syscall( pid_t pid, pid_state *state )
                 sig=(int)state->context_state[3];
             }
             if( sig>=0 ) {
-                rc=ptrace(PTRACE_SYSCALL, child, 0, sig);
+                rc=ptlib_continue(PTRACE_SYSCALL, child, sig);
             }
         } else if( (child_state->trace_mode&TRACE_MASK2)==TRACE_STOPPED2 ) {
             dlog("handle_cont_syscall: "PID_F" process "PID_F" was in post-syscall hook\n", pid, child );
             child_state->trace_mode&=TRACE_MASK1;
-            rc=ptrace( PTRACE_SYSCALL, child, 0, (int)state->context_state[3] );
+            rc=ptlib_continue( PTRACE_SYSCALL, child, (int)state->context_state[3] );
         } else {
             // Our child was not stopped (at least, by us)
             // This is an internal inconsistency
@@ -154,7 +154,7 @@ static void handle_kill( pid_t pid, pid_state *state )
     if( verify_permission( pid, state ) ) {
         dlog("handle_kill: %d is sending a kill to "PID_F"\n", pid, child );
 
-        ptrace(PTRACE_KILL, child, 0, 0);
+        ptlib_continue(PTRACE_KILL, child, 0);
         ptlib_set_retval( pid, 0 );
     } else {
         ptlib_set_error( pid, state->orig_sc, errno );
@@ -174,7 +174,7 @@ static void handle_peek_data( pid_t pid, pid_state *state )
 
             // Write the result where applicable
             // XXX This may be a Linux only semantics - pass addres to write result to as "data" argument
-            data=ptrace(PTRACE_POKEDATA, pid, state->context_state[3], data);
+            data=ptlib_set_mem( pid, &data, state->context_state[3], sizeof(data));
             if( data!=-1 ) {
                 ptlib_set_retval( pid, 0 );
             } else {

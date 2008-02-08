@@ -40,6 +40,16 @@ static const char memory_image[]=
 
 static int mem_offset=((sizeof(memory_image)+7)/8)*8;
 
+void ptlib_init()
+{
+    // Nothing to be done on this platform
+}
+
+int ptlib_continue( int request, pid_t pid, int signal )
+{
+    return ptlib_linux_continue( request, pid, signal );
+}
+
 void ptlib_prepare_memory( pid_t pid, void **memory, size_t *size )
 {
     void *orig_mem=*memory;

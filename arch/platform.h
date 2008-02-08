@@ -10,6 +10,12 @@ extern "C" {
 
 /* Functions for abstracting the details of registers and memory layout for interpreting ptrace stacks and memory */
 
+/* Called once before any other call to ptlib functions */
+void ptlib_init();
+
+/* Continue (or detach) a halted process */
+int ptlib_continue( int request, pid_t pid, int signal );
+
 /* Called once per new process created */
 void ptlib_prepare( pid_t pid );
 

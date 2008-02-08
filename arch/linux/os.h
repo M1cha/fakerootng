@@ -1,6 +1,7 @@
 #ifndef ARCH_OS_H
 #define ARCH_OS_H
 
+int ptlib_linux_continue( int request, pid_t pid, int signal );
 void ptlib_linux_prepare( pid_t pid );
 int ptlib_linux_wait( pid_t *pid, int *status, ptlib_extra_data *data );
 long ptlib_linux_parse_wait( pid_t pid, int status, enum PTLIB_WAIT_RET *type );

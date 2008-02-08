@@ -217,7 +217,7 @@ static void notify_parent( pid_t parent, const pid_state::wait_state &waiting )
         // Call the original function handler, now that it has something to do
         if( syscalls[proc_state->orig_sc].func( -1, parent, proc_state ) ) {
             dlog("notify_parent: "PID_F" released from wait\n", parent);
-            ptrace(PTRACE_SYSCALL, parent, 0, 0);
+            ptlib_continue(PTRACE_SYSCALL, parent, 0);
         }
     }
 }
@@ -451,6 +451,9 @@ int process_children(pid_t _first_child, int _comm_fd, pid_t session_id )
     first_child=_first_child;
     comm_fd=_comm_fd;
 
+    // Initialize the ptlib library
+    ptlib_init();
+
     state[first_child]=pid_state();
     state[first_child].session_id=session_id; // The initial session ID
     init_handlers();
@@ -485,7 +488,7 @@ int process_children(pid_t _first_child, int _comm_fd, pid_t session_id )
 
         // The show must go on
         if( sig>=0 )
-            ptrace(PTRACE_SYSCALL, pid, 0, sig);
+            ptlib_continue(PTRACE_SYSCALL, pid, sig);
     }
 
     return 0;
@@ -537,7 +540,7 @@ bool sys_mmap( int sc_num, pid_t pid, pid_state *state )
             // The allocation failed. What can you do except kill the process?
             dlog("mmap: "PID_F" our memory allocation failed with error. Kill process. %s\n", pid,
                 strerror(ptlib_get_error(pid, sc_num)) );
-            ptrace( PTRACE_KILL, pid, 0, 0 );
+            ptlib_continue( PTRACE_KILL, pid, 0 );
             return false;
         }
         state->state=pid_state::NONE;
