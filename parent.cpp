@@ -53,19 +53,19 @@ static __gnu_cxx::hash_map<pid_t, pid_state> state;
 static void init_handlers()
 {
     syscalls[SYS_geteuid]=syscall_hook(sys_getuid, "geteuid");
-#if defined(SYS_geteuid32) && HAVE_OPENAT
+#if defined(SYS_geteuid32)
     syscalls[SYS_geteuid32]=syscall_hook(sys_getuid, "geteuid");
 #endif
     syscalls[SYS_getuid]=syscall_hook(sys_getuid, "getuid");
-#if defined(SYS_getuid32) && HAVE_OPENAT
+#if defined(SYS_getuid32)
     syscalls[SYS_getuid32]=syscall_hook(sys_getuid, "getuid");
 #endif
     syscalls[SYS_getegid]=syscall_hook(sys_getuid, "getegid");
-#if defined(SYS_getegid32) && HAVE_OPENAT
+#if defined(SYS_getegid32)
     syscalls[SYS_getegid32]=syscall_hook(sys_getuid, "getegid");
 #endif
     syscalls[SYS_getgid]=syscall_hook(sys_getuid, "getgid");
-#if defined(SYS_getgid32) && HAVE_OPENAT
+#if defined(SYS_getgid32)
     syscalls[SYS_getgid32]=syscall_hook(sys_getuid, "getgid");
 #endif
 
@@ -75,14 +75,14 @@ static void init_handlers()
 
 //    Execve is special cased
 //    syscalls[SYS_execve]=syscall_hook(sys_execve, "execve");
-#if defined(SYS_sigreturn) && HAVE_OPENAT
+#if defined(SYS_sigreturn)
     syscalls[SYS_sigreturn]=syscall_hook(sys_sigreturn, "sigreturn");
 #endif
     syscalls[SYS_setsid]=syscall_hook(sys_setsid, "setsid");
-#if defined(SYS_wait4) && HAVE_OPENAT
+#if defined(SYS_wait4)
     syscalls[SYS_wait4]=syscall_hook(sys_wait4, "wait4");
 #endif
-#if defined(SYS_waitpid) && HAVE_OPENAT
+#if defined(SYS_waitpid)
     syscalls[SYS_waitpid]=syscall_hook(sys_waitpid, "waitpid");
 #endif
     syscalls[SYS_ptrace]=syscall_hook(sys_ptrace, "ptrace");
@@ -95,15 +95,15 @@ static void init_handlers()
 #endif
 
     syscalls[SYS_chown]=syscall_hook(sys_chown, "chown");
-#if defined(SYS_chown32) && HAVE_OPENAT
+#if defined(SYS_chown32)
     syscalls[SYS_chown32]=syscall_hook(sys_chown, "chown32");
 #endif
     syscalls[SYS_fchown]=syscall_hook(sys_fchown, "fchown");
-#if defined(SYS_fchown32) && HAVE_OPENAT
+#if defined(SYS_fchown32)
     syscalls[SYS_fchown32]=syscall_hook(sys_fchown, "fchown32");
 #endif
     syscalls[SYS_lchown]=syscall_hook(sys_lchown, "lchown");
-#if defined(SYS_lchown32) && HAVE_OPENAT
+#if defined(SYS_lchown32)
     syscalls[SYS_lchown32]=syscall_hook(sys_lchown, "lchown32");
 #endif
 #if defined(SYS_fchownat) && HAVE_OPENAT
