@@ -31,6 +31,7 @@
 #include <stdlib.h>
 
 #include "../../platform.h"
+#include "../os.h"
 
 static const char memory_image[]=
 {
