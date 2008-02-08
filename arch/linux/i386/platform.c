@@ -31,6 +31,7 @@
 #include <stdlib.h>
 
 #include "../../platform.h"
+#include "../os.h"
 
 static const char memory_image[]=
 {
@@ -50,6 +51,21 @@ void ptlib_prepare_memory( pid_t pid, void **memory, size_t *size )
 
     /* Copy the data over */
     ptlib_set_mem( pid, memory_image, orig_mem, sizeof( memory_image ) );
+}
+
+void ptlib_prepare( pid_t pid )
+{
+    ptlib_linux_prepare( pid );
+}
+
+int ptlib_wait( pid_t *pid, int *status, ptlib_extra_data *data )
+{
+    return ptlib_linux_wait( pid, status, data );
+}
+
+long ptlib_parse_wait( pid_t pid, int status, enum PTLIB_WAIT_RET *type )
+{
+    return ptlib_linux_parse_wait( pid, status, type );
 }
 
 int ptlib_get_syscall( pid_t pid )
@@ -148,6 +164,16 @@ int ptlib_success( pid_t pid, int sc_num )
     }
 }
 
+int ptlib_get_mem( pid_t pid, void *process_ptr, void *local_ptr, size_t len )
+{
+    return ptlib_linux_get_mem( pid, process_ptr, local_ptr, len );
+}
+
+int ptlib_set_mem( pid_t pid, const void *local_ptr, void *process_ptr, size_t len )
+{
+    ptlib_linux_set_mem( pid, local_ptr, process_ptr, len );
+}
+
 void ptlib_save_state( pid_t pid, void *buffer )
 {
     ptrace( PTRACE_GETREGS, pid, 0, buffer );
@@ -157,3 +183,15 @@ void ptlib_restore_state( pid_t pid, const void *buffer )
 {
     ptrace( PTRACE_SETREGS, pid, 0, buffer );
 }
+
+int ptlib_get_string( pid_t pid, void *process_ptr, char *local_ptr, size_t maxlen )
+{
+    return ptlib_linux_get_string( pid, process_ptr, local_ptr, maxlen );
+}
+
+#if 0
+int ptlib_set_string( pid_t pid, const char *local_ptr, void *process_ptr )
+{
+    return ptlib_linux_set_string( pid, local_ptr, process_ptr );
+}
+#endif

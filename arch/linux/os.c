@@ -32,13 +32,13 @@
 
 #include "../platform.h"
 
-void ptlib_prepare( pid_t pid )
+void ptlib_linux_prepare( pid_t pid )
 {
     if( ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_TRACEFORK|PTRACE_O_TRACEVFORK|PTRACE_O_TRACECLONE)!=0 )
         perror("PTRACE_SETOPTIONS failed");
 }
 
-int ptlib_wait( pid_t *pid, int *status, ptlib_extra_data *data )
+int ptlib_linux_wait( pid_t *pid, int *status, ptlib_extra_data *data )
 {
     *pid=wait4(-1, status, 0, data );
 
@@ -46,7 +46,7 @@ int ptlib_wait( pid_t *pid, int *status, ptlib_extra_data *data )
 }
 
 
-long ptlib_parse_wait( pid_t pid, int status, enum PTLIB_WAIT_RET *type )
+long ptlib_linux_parse_wait( pid_t pid, int status, enum PTLIB_WAIT_RET *type )
 {
     long ret;
 
@@ -89,14 +89,14 @@ long ptlib_parse_wait( pid_t pid, int status, enum PTLIB_WAIT_RET *type )
     return ret;
 }
 
-int ptlib_reinterpret( enum PTLIB_WAIT_RET prevstate, pid_t pid, int status, long *ret )
+int ptlib_linux_reinterpret( enum PTLIB_WAIT_RET prevstate, pid_t pid, int status, long *ret )
 {
     // Previous state does not affect us
     // XXX if the first thing the child does is a "fork", is this statement still true?
     return prevstate;
 }
 
-int ptlib_get_mem( pid_t pid, void *process_ptr, void *local_ptr, size_t len )
+int ptlib_linux_get_mem( pid_t pid, void *process_ptr, void *local_ptr, size_t len )
 {
     int i;
     errno=0;
@@ -111,7 +111,7 @@ int ptlib_get_mem( pid_t pid, void *process_ptr, void *local_ptr, size_t len )
     return errno==0;
 }
 
-int ptlib_set_mem( pid_t pid, const void *local_ptr, void *process_ptr, size_t len )
+int ptlib_linux_set_mem( pid_t pid, const void *local_ptr, void *process_ptr, size_t len )
 {
     int i;
     errno=0;
@@ -126,7 +126,7 @@ int ptlib_set_mem( pid_t pid, const void *local_ptr, void *process_ptr, size_t l
     return errno==0;
 }
 
-int ptlib_get_string( pid_t pid, void *process_ptr, char *local_ptr, size_t maxlen )
+int ptlib_linux_get_string( pid_t pid, void *process_ptr, char *local_ptr, size_t maxlen )
 {
     /* Are we aligned on the "start" front? */
     int offset=((unsigned long)process_ptr)%sizeof(long);
@@ -152,3 +152,10 @@ int ptlib_get_string( pid_t pid, void *process_ptr, char *local_ptr, size_t maxl
 
     return i;
 } 
+
+#if 0
+// No definition just yet
+int ptlib_linux_set_string( pid_t pid, const char *local_ptr, void *process_ptr )
+{
+}
+#endif
