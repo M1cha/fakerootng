@@ -31,7 +31,7 @@
 #include "arch/platform.h"
 
 // Helper function - fill in an override structure from a stat structure
-static void stat_override_copy( const ptlib_stat64 *stat, stat_override *override )
+static void stat_override_copy( const ptlib_stat *stat, stat_override *override )
 {
     override->dev=stat->dev;
     override->inode=stat->ino;
@@ -54,7 +54,7 @@ bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
         void *returncode=ptlib_get_retval( pid );
         dlog("stat64: "PID_F" returned %x\n", pid, returncode);
         if( ptlib_success( pid, sc_num ) ) {
-            struct ptlib_stat64 ret;
+            struct ptlib_stat ret;
             struct stat_override override;
 
             ptlib_get_mem( pid, state->context_state[0], &ret, sizeof(ret) );
@@ -150,7 +150,7 @@ static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset
     } else if( state->state==pid_state::REDIRECT2 ) {
         // Update our lies database
         struct stat_override override;
-        struct ptlib_stat64 stat;
+        struct ptlib_stat stat;
 
         ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
 
@@ -227,7 +227,7 @@ static bool real_chown( int sc_num, pid_t pid, pid_state *state, int own_offset,
         state->state=pid_state::REDIRECT2;
     } else if( state->state==pid_state::REDIRECT2 ) {
         if( ptlib_success( pid, sc_num ) ) {
-            struct ptlib_stat64 stat;
+            struct ptlib_stat stat;
             struct stat_override override;
 
             ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
@@ -343,7 +343,7 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
         }
     } else if( state->state==pid_state::REDIRECT2 ) {
         if( ptlib_success( pid, sc_num ) ) {
-            ptlib_stat64 stat;
+            ptlib_stat stat;
             stat_override override;
 
             ptlib_get_mem( pid, state->memory, &stat, sizeof(stat) );
@@ -428,7 +428,7 @@ static bool real_open( int sc_num, pid_t pid, pid_state *state )
             state->state=pid_state::NONE;
     } else if( state->state==pid_state::REDIRECT2 ) {
         if( ptlib_success( pid, sc_num ) ) {
-            ptlib_stat64 stat;
+            ptlib_stat stat;
             stat_override override;
 
             ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
@@ -512,7 +512,7 @@ static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset
         }
     } else if( state->state==pid_state::REDIRECT2 ) {
         if( ptlib_success( pid, sc_num ) ) {
-            ptlib_stat64 stat;
+            ptlib_stat stat;
             stat_override override;
 
             ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
@@ -603,7 +603,7 @@ static bool real_symlink( int sc_num, pid_t pid, pid_state *state, int mode_offs
         }
     } else if( state->state==pid_state::REDIRECT2 ) {
         if( ptlib_success( pid, sc_num ) ) {
-            ptlib_stat64 stat;
+            ptlib_stat stat;
             stat_override override;
 
             ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );

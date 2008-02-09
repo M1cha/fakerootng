@@ -19,7 +19,7 @@
 
 typedef unsigned long long ptlib_inode_t;
 
-struct ptlib_stat64 {
+struct ptlib_stat {
 	unsigned long long dev;		/* Device.  */
 	unsigned long long ino;		/* File serial number.  */
 	unsigned int	mode;	/* File mode.  */

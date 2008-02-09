@@ -19,7 +19,7 @@
 
 typedef unsigned long long ptlib_inode_t;
 
-struct ptlib_stat64 {
+struct ptlib_stat {
         unsigned long long      dev;
         unsigned char   __pad0[4];
 

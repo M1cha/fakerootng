@@ -181,7 +181,7 @@ int ptlib_get_mem( pid_t pid, void *process_ptr, void *local_ptr, size_t len )
 
 int ptlib_set_mem( pid_t pid, const void *local_ptr, void *process_ptr, size_t len )
 {
-    ptlib_linux_set_mem( pid, local_ptr, process_ptr, len );
+    return ptlib_linux_set_mem( pid, local_ptr, process_ptr, len );
 }
 
 void ptlib_save_state( pid_t pid, void *buffer )
