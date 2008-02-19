@@ -168,10 +168,11 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
         }
     } else if( state->state==pid_state::REDIRECT2 ) {
         // We may get here under two conditions.
-        // Either the wait was performed by us and a NOP was carried out, in which case context_state[0] contains 0 and context_state[1]
-        // the desired return code (negative for error)
+        // Either the wait was performed by us and a NOP was carried out, in which case the syscall is going to be PREF_NOP
+        // and context_state[0] contains the desired return code (negative for error)
         // Or 
-        // A function substancially similar to wait was carried out, in which case context_state[0] contains 1
+        // A function substancially similar to wait was carried out, in which case context_state[0] contains a backup of the original
+        // content of the fourth parameter register, which may have not been used by the original syscall if it was not wait4
         if( sc_num==PREF_NOP ) {
             // Performed NOP - set return codes
             if( ((long)state->context_state[0])>=0 )
@@ -182,7 +183,7 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
             ptlib_set_syscall( pid, state->orig_sc );
         } else {
             // If an actual wait syscall was carried out, we may need to restore the original content of argument 4
-            ptlib_set_argument( pid, 4, state->saved_state[0] );
+            ptlib_set_argument( pid, 4, state->context_state[0] );
         }
 
         ptlib_set_syscall( pid, state->orig_sc );
@@ -232,7 +233,7 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
                     ptlib_set_argument( pid, 1, (void *)child->pid() );
                     ptlib_set_argument( pid, 2, state->context_state[1] );
                     ptlib_set_argument( pid, 3, state->context_state[2] );
-                    ptlib_set_argument( pid, 4, state->context_state[4] );
+                    ptlib_set_argument( pid, 4, state->context_state[3] );
                 } else {
                     // We need to explicitly set all the arguments
                     if( state->context_state[1]!=NULL )
