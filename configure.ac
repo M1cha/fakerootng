@@ -25,6 +25,19 @@ AC_CHECK_HEADERS([stdlib.h unistd.h])
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_PID_T
 
+dnl Check whether we have PTRACE_GETREGS
+AC_MSG_CHECKING([for PTRACE_GETREGS])
+AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
+        #include <sys/ptrace.h>
+        ],
+        [ptrace(PTRACE_GETREGS, 0, 0, 0);])],
+    [
+        AC_MSG_RESULT([yes])
+        AC_DEFINE([HAVE_PTRACE_GETREGS], [1], [Ptrace defines a single syscall for getting all registers])
+    ],
+    [AC_MSG_RESULT([no])])
+
+
 # Checks for library functions.
 AC_FUNC_FORK
 

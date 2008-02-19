@@ -169,6 +169,7 @@ int main()
         }
     }
 
+#if HAVE_PTRACE_GETREGS
     /* Value for PTLIB_STATE_SIZE */
     child=fork();
 
@@ -223,6 +224,7 @@ int main()
             return 1;
         }
     }
+#endif /* PTRACE_GETREGS */
 
     return 0;
 }
