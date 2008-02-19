@@ -55,5 +55,6 @@ typedef struct rusage ptlib_extra_data;
 #define PREF_FSTATAT SYS_fstatat64
 
 #define PREF_NOP SYS_geteuid
+#define PREF_MMAP SYS_mmap2
 
 #endif /* PLATFORM_SPECIFIC_H */
