@@ -174,14 +174,16 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
         // A function substancially similar to wait was carried out, in which case context_state[0] contains 1
         if( sc_num==PREF_NOP ) {
             // Performed NOP - set return codes
-            if( ((int)state->context_state[0])>=0 )
+            if( ((long)state->context_state[0])>=0 )
                 ptlib_set_retval( pid, state->context_state[0] );
             else
-                ptlib_set_error( pid, state->orig_sc, -((int)state->context_state[0]) );
+                ptlib_set_error( pid, state->orig_sc, -((long)state->context_state[0]) );
 
             ptlib_set_syscall( pid, state->orig_sc );
+        } else {
+            // If an actual wait syscall was carried out, we may need to restore the original content of argument 4
+            ptlib_set_argument( pid, 4, state->saved_state[0] );
         }
-        // If an actual wait syscall was carried out, we have no more manipualtions to do
 
         ptlib_set_syscall( pid, state->orig_sc );
         state->state=pid_state::NONE;
@@ -190,7 +192,7 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
     if( state->state==pid_state::WAITING ) {
         if( !state->waiting_signals.empty() ) {
             // Let's see what was asked for
-            pid_t wait_pid=(pid_t)state->context_state[0];
+            pid_t wait_pid=(pid_t)(long)state->context_state[0];
             std::list<pid_state::wait_state>::iterator child=state->waiting_signals.begin();
 
             if( wait_pid<-1 ) {
@@ -221,10 +223,16 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
                 {
                     // If the parent never carried out the actual "wait", the child will become a zombie
                     // We turn the syscall into a waitpid with the child's pid explicitly given
+#ifdef SYS_wait4
+                    ptlib_set_syscall( pid, SYS_wait4 );
+#else
                     ptlib_set_syscall( pid, SYS_waitpid );
+#endif
+                    state->saved_state[0]=ptlib_get_argument( pid, 4 ); // Save the fourth argument
                     ptlib_set_argument( pid, 1, (void *)child->pid() );
                     ptlib_set_argument( pid, 2, state->context_state[1] );
                     ptlib_set_argument( pid, 3, state->context_state[2] );
+                    ptlib_set_argument( pid, 4, state->context_state[4] );
                 } else {
                     // We need to explicitly set all the arguments
                     if( state->context_state[1]!=NULL )
@@ -243,7 +251,7 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
             }
         }
         
-        if( state->state==pid_state::WAITING && (((int)state->context_state[2])&WNOHANG)!=0 ) {
+        if( state->state==pid_state::WAITING && (((long)state->context_state[2])&WNOHANG)!=0 ) {
             // Client asked never to hang
             state->state=pid_state::REDIRECT2;
             ptlib_set_syscall( pid, PREF_NOP );
@@ -257,9 +265,9 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
 bool sys_wait4( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        pid_t param1=(pid_t)ptlib_get_argument(pid, 1); // pid
+        pid_t param1=(pid_t)(long)ptlib_get_argument(pid, 1); // pid
         int *param2=(int *)ptlib_get_argument(pid, 2); // status
-        int param3=(int)ptlib_get_argument(pid, 3); // options
+        int param3=(long)ptlib_get_argument(pid, 3); // options
         void *param4=ptlib_get_argument(pid, 4); // rusage
 
         return real_wait4( sc_num, pid, state, param1, param2, param3, param4 );
@@ -272,9 +280,9 @@ bool sys_wait4( int sc_num, pid_t pid, pid_state *state )
 bool sys_waitpid( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        pid_t param1=(pid_t)ptlib_get_argument(pid, 1); // pid
+        pid_t param1=(long)ptlib_get_argument(pid, 1); // pid
         int *param2=(int *)ptlib_get_argument(pid, 2); // status
-        int param3=(int)ptlib_get_argument(pid, 3); // options
+        int param3=(long)ptlib_get_argument(pid, 3); // options
 
         return real_wait4( sc_num, pid, state, param1, param2, param3, NULL );
     } else {

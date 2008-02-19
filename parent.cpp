@@ -78,6 +78,9 @@ static void init_handlers()
 #if defined(SYS_sigreturn)
     syscalls[SYS_sigreturn]=syscall_hook(sys_sigreturn, "sigreturn");
 #endif
+#if defined(SYS_rt_sigreturn)
+    syscalls[SYS_rt_sigreturn]=syscall_hook(sys_sigreturn, "sigreturn");
+#endif
     syscalls[SYS_setsid]=syscall_hook(sys_setsid, "setsid");
 #if defined(SYS_wait4)
     syscalls[SYS_wait4]=syscall_hook(sys_wait4, "wait4");
@@ -87,9 +90,18 @@ static void init_handlers()
 #endif
     syscalls[SYS_ptrace]=syscall_hook(sys_ptrace, "ptrace");
 
-    syscalls[SYS_stat64]=syscall_hook(sys_stat64, "stat64");
-    syscalls[SYS_fstat64]=syscall_hook(sys_stat64, "fstat64");
-    syscalls[SYS_lstat64]=syscall_hook(sys_stat64, "lstat64");
+    syscalls[SYS_stat]=syscall_hook(sys_stat, "stat");
+#ifdef SYS_stat64
+    syscalls[SYS_stat64]=syscall_hook(sys_stat, "stat64");
+#endif
+    syscalls[SYS_fstat]=syscall_hook(sys_stat, "fstat");
+#ifdef SYS_fstat64
+    syscalls[SYS_fstat64]=syscall_hook(sys_stat, "fstat64");
+#endif
+    syscalls[SYS_lstat]=syscall_hook(sys_stat, "lstat");
+#ifdef SYS_lstat64
+    syscalls[SYS_lstat64]=syscall_hook(sys_stat, "lstat64");
+#endif
 #if defined(SYS_fstatat64) && HAVE_OPENAT
     syscalls[SYS_fstatat64]=syscall_hook(sys_fstatat64, "fstatat64");
 #endif
@@ -133,7 +145,10 @@ static void init_handlers()
     syscalls[SYS_symlinkat]=syscall_hook(sys_symlinkat, "symlinkat");
 #endif
 
+    syscalls[SYS_mmap]=syscall_hook(sys_mmap, "mmap");
+#ifdef SYS_mmap2
     syscalls[SYS_mmap2]=syscall_hook(sys_mmap, "mmap2");
+#endif
 }
 
 // Debug related functions
@@ -196,7 +211,7 @@ void dump_registers( pid_t pid )
 
         ptlib_save_state( pid, state );
 
-        for( int i=0; i<PTLIB_STATE_SIZE; ++i )
+        for( unsigned int i=0; i<PTLIB_STATE_SIZE; ++i )
             dlog("state[%d]=%p\n", i, state[i]);
     }
 }
@@ -504,7 +519,7 @@ bool allocate_process_mem( pid_t pid, pid_state *state, int sc_num )
     state->state=pid_state::ALLOCATE;
 
     // Translate the whatever call into an mmap
-    ptlib_set_syscall( pid, SYS_mmap2 );
+    ptlib_set_syscall( pid, PREF_MMAP );
 
     ptlib_set_argument( pid, 1, 0 ); // start pointer
     ptlib_set_argument( pid, 2, (void *)sysconf(_SC_PAGESIZE) ); // Length of page - we allocate exactly one page

@@ -22,7 +22,7 @@ DECLARE_SYSFUNC(setsid)
 DECLARE_SYSFUNC(ptrace)
 
 // File handling
-DECLARE_SYSFUNC(stat64)
+DECLARE_SYSFUNC(stat)
 #ifdef SYS_fstatat64
 DECLARE_SYSFUNC(fstatat64)
 #endif

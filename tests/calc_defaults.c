@@ -134,6 +134,10 @@ int parent_wait_test()
 
 int main()
 {
+    fprintf(stderr, "Sizes: char %u, short %u, int %u, long %u, long long %u, void * %u\n", sizeof(char), sizeof(short), sizeof(int),
+        sizeof(long), sizeof(long long), sizeof(void *) );
+    fprintf(stderr, "Sizes: pid_t %u, gid_t %u, dev_t %u, ino_t %u\n", sizeof( pid_t), sizeof(gid_t), sizeof(dev_t), sizeof(ino_t) );
+
     /* Check status of PTLIB_PARENT_CAN_WAIT */
 
     pid_t child=fork();
@@ -162,6 +166,61 @@ int main()
             } else {
                 fprintf(stderr, "Couldn't determine PTLIB_PARENT_CAN_WAIT value\n");
             }
+        }
+    }
+
+    /* Value for PTLIB_STATE_SIZE */
+    child=fork();
+
+    if( child<0 ) {
+        perror("Failed to create child process");
+
+        return 1;
+    }
+
+    if( child==0 ) {
+        /* We are the child */
+        ptrace( PTRACE_TRACEME, 0, 0, 0 );
+        kill( getpid(), SIGTRAP );
+    } else {
+        /* We are the parent */
+        int status;
+
+        waitpid( child, &status, 0 );
+
+        if( WIFSTOPPED(status) ) {
+            void *buffer[4096]; /* Large enough for sure */
+            int i=0;
+            int max1, max2;
+
+            /* Set the buffer to a known state */
+            for( i=0; i<4096; ++i )
+                buffer[i]=0;
+
+            /* Transfer registers */
+            ptrace(PTRACE_GETREGS, child, 0, buffer);
+
+            /* Find out at least how high the buffer was filled */
+            for( max1=4095; max1>=0 && buffer[max1]==0; --max1)
+                buffer[max1]=(void*)1;
+
+            /* Transfer registers, again */
+            ptrace(PTRACE_GETREGS, child, 0, buffer);
+
+            /* Find out at how high the buffer was filled when initialized to a differnet value */
+            for( max2=4095; max2>max1 && buffer[max2]==(void *)1; --max2)
+                ;
+
+            /* Max2 is now how much data is being copied during a GETREGS call */
+            printf("#define PTLIB_STATE_SIZE (%d)\n", max2+1);
+
+            /* Kill the waiting process */
+            ptrace(PTRACE_KILL, child, 0, 0);
+            waitpid(child, &status, 0 );
+        } else {
+            fprintf(stderr, "Error: child %d did not trace correctly\n", child);
+
+            return 1;
         }
     }
 

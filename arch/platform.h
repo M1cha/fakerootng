@@ -38,7 +38,7 @@ int ptlib_reinterpret( enum PTLIB_WAIT_RET prestate, pid_t pid, int status, long
 
 /* Returns/sets the Program Counter (EIP on Intel) for the traced program */
 void *ptlib_get_pc( pid_t pid );
-void *ptlib_set_pc( pid_t pid );
+int ptlib_set_pc( pid_t pid, void *location );
 
 /* Syscall analysis functions - call only when stopped process just invoked a syscall */
 

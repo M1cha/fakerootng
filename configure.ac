@@ -73,7 +73,7 @@ esac
 AC_MSG_CHECKING([whether platform $target_os/$target_cpu is supported])
 
 [
-if [ ! -f "$srcdir/arch/$target_os/$target_cpu/platform.c" ]
+if [ ! -f "$srcdir/arch/$target_os/$target_cpu/platform_specific.h" ]
 then
 ]
     AC_MSG_RESULT(no)

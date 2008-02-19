@@ -41,8 +41,8 @@ static void stat_override_copy( const ptlib_stat *stat, stat_override *override 
     override->mode=stat->mode;
 }
 
-// Same function for stat64, lstat64 and fstat64
-bool sys_stat64( int sc_num, pid_t pid, pid_state *state )
+// Same function for stat, lstat and fstat
+bool sys_stat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
         // Entering the syscall
@@ -102,7 +102,7 @@ bool sys_fstatat64( int sc_num, pid_t pid, pid_state *state )
 
         return true;
     } else {
-        return sys_stat64( sc_num, pid, state ); // Return code handling is the same as for the regular stat
+        return sys_stat( sc_num, pid, state ); // Return code handling is the same as for the regular stat
     }
 }
 #endif
@@ -114,7 +114,7 @@ static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             return allocate_process_mem( pid, state, sc_num );
         }
 
-        mode_t mode=(mode_t)ptlib_get_argument( pid, mode_offset+1 ); // Store the requested mode
+        mode_t mode=(mode_t)(long)ptlib_get_argument( pid, mode_offset+1 ); // Store the requested mode
         state->context_state[0]=(void *)mode;
 
         mode=mode&~07000;
@@ -157,7 +157,7 @@ static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset
         if( !get_map( stat.dev, stat.ino, &override ) ) {
             stat_override_copy( &stat, &override );
         }
-        override.mode=(override.mode&~07777)|(((mode_t)state->context_state[0])&07777);
+        override.mode=(override.mode&~07777)|(((mode_t)(long)state->context_state[0])&07777);
 
         dlog("chmod: "PID_F" Setting override mode %o dev "DEV_F" inode "INODE_F"\n", pid, override.mode, override.dev,
             override.inode );
@@ -237,10 +237,10 @@ static bool real_chown( int sc_num, pid_t pid, pid_state *state, int own_offset,
                 stat_override_copy( &stat, &override );
             }
 
-            if( ((int)state->context_state[0])!=-1 )
-                override.uid=(int)state->context_state[0];
-            if( ((int)state->context_state[1])!=-1 )
-                override.gid=(int)state->context_state[1];
+            if( ((long)state->context_state[0])!=-1 )
+                override.uid=(long)state->context_state[0];
+            if( ((long)state->context_state[1])!=-1 )
+                override.gid=(long)state->context_state[1];
 
             dlog("chown: "PID_F" changing owner of dev "DEV_F" inode "INODE_F"\n", pid, override.dev, override.inode );
             set_map( &override );
@@ -305,7 +305,7 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             return allocate_process_mem(pid, state, sc_num);
         }
 
-        mode_t mode=(mode_t)state->context_state[0];
+        mode_t mode=(mode_t)(long)state->context_state[0];
 
         if( (mode&07000)!=0 ) {
             // Mode has a SUID set
@@ -358,7 +358,7 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             dlog("mknod: "PID_F" registering the new device in the override DB dev "DEV_F" inode "INODE_F"\n", pid,
                 stat.dev, stat.ino );
 
-            mode_t mode=(mode_t)state->context_state[0];
+            mode_t mode=(mode_t)(long)state->context_state[0];
             if( S_ISCHR(mode) || S_ISBLK(mode) || (mode&07000)!=0) {
                 dlog("mknod: "PID_F" overriding the file type and/or mode\n", pid );
                 override.mode=override.mode&~(S_IFMT|07000) | mode&(S_IFMT|07000);
@@ -413,8 +413,8 @@ static bool real_open( int sc_num, pid_t pid, pid_state *state )
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
         // Did we request to create a new file?
-        if( (((int)state->context_state[0])&O_CREAT)!=0 && ptlib_success(pid, sc_num) ) {
-            int fd=(int)ptlib_get_retval(pid);
+        if( (((long)state->context_state[0])&O_CREAT)!=0 && ptlib_success(pid, sc_num) ) {
+            int fd=(long)ptlib_get_retval(pid);
             dlog("open: "PID_F" opened fd %d, assume we actually created it\n", pid, fd );
 
             ptlib_save_state( pid, state->saved_state );
