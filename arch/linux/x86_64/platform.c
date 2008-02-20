@@ -408,7 +408,7 @@ static int is_64( pid_t pid )
                 cache_64=0; // 32 bit mode
                 break;
             default:
-                dlog("is_64: "PID_F" unknown usbsystem 0x%lx\n", cs );
+                dlog("is_64: "PID_F" unknown usbsystem 0x%lx\n", pid, cs );
                 break;
         }
 
@@ -482,7 +482,7 @@ static int translate_syscall( pid_t pid, int sc_num )
             sc=syscall_64_to_32[sc];
         } else {
             sc=-1;
-            dlog("ptlib_set_syscall: "PID_F" invalid 64 to 32 bit translation for syscall %d\n", sc_num );
+            dlog("ptlib_set_syscall: "PID_F" invalid 64 to 32 bit translation for syscall %d\n", pid, sc_num );
         }
 
         sc_num=sc;
@@ -548,7 +548,7 @@ int_ptr ptlib_get_argument( pid_t pid, int argnum )
 int ptlib_set_argument( pid_t pid, int argnum, int_ptr value )
 {
     if( argnum<1 || argnum>6 ) {
-        dlog("ptlib_get_argument: "PID_F" invalid argument number %d\n", pid, argnum);
+        dlog("ptlib_set_argument: "PID_F" invalid argument number %d\n", pid, argnum);
         errno=EINVAL;
 
         return -1;

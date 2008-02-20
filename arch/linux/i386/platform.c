@@ -115,9 +115,10 @@ int ptlib_set_argument( pid_t pid, int argnum, int_ptr value )
         return ptrace( PTRACE_POKEUSER, pid, 4*(argnum-1), value )==0;
 
     /* Illegal arg num */
-    fprintf(stderr, "Illegal argnum %d was asked for\n", argnum );
+    dlog("ptlib_set_argument: "PID_F" Illegal argnum %d was asked for\n", pid, argnum );
+    errno=EINVAL;
 
-    return 0;
+    return -1;
 }
 
 int_ptr ptlib_get_retval( pid_t pid )
@@ -149,7 +150,7 @@ int ptlib_get_error( pid_t pid, int sc_num )
     case SYS_execve:
         return -(int)ptlib_get_retval( pid );
     default:
-        dlog("ptlib_get_error: %d syscall %d not supported - aborting\n", pid, sc_num );
+        dlog("ptlib_get_error: "PID_F" syscall %d not supported - aborting\n", pid, sc_num );
         dlog(NULL); /* Flush the log before we crash */
         abort();
         return -(int)ptlib_get_retval( pid );

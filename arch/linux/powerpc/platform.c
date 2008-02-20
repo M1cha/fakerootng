@@ -102,7 +102,7 @@ int_ptr ptlib_get_argument( pid_t pid, int argnum )
         return ptrace( PTRACE_PEEKUSER, pid, 4*(PT_R3+argnum-1), 0 );
 
     /* Illegal arg num */
-    dlog("Illegal argnum %d was asked for\n", argnum );
+    dlog("ptlib_get_argument: "PID_F" Illegal argnum %d was asked for\n", pid, argnum );
     errno=EINVAL;
 
     return -1;
@@ -114,7 +114,7 @@ int ptlib_set_argument( pid_t pid, int argnum, int_ptr value )
         return ptrace( PTRACE_POKEUSER, pid, 4*(PT_R3+argnum-1), value )==0;
 
     /* Illegal arg num */
-    dlog("Illegal argnum %d was asked for\n", argnum );
+    dlog("ptlib_set_argument: "PID_F" Illegal argnum %d was asked for\n", pid, argnum );
     errno=EINVAL;
 
     return -1;
