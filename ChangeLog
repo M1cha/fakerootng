@@ -1,3 +1,13 @@
+Version 0.08
+    * Many many many code cleanups
+    * New platform (partially) supported - Linux/x86_64:
+      * Supported - basic running
+      * Not supported (well) - recursive debuggers, 32 bit programs
+    * Really fix the "openat" issue this time
+    * Add a program "calc_defaults" that attempts to detect values for a new
+      platform's platform_specific.h
+    * Write a new platform porting HOWTO
+
 Version 0.07
     * Fix compilation errors on platforms that don't or partially support
       "openat"
