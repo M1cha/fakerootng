@@ -526,29 +526,29 @@ static int arg_offset_64bit[]={
     RDI, RSI, RDX, R10, R8, R9
 };
 
-void *ptlib_get_argument( pid_t pid, int argnum )
+int_ptr ptlib_get_argument( pid_t pid, int argnum )
 {
     /* Check for error condition */
     if( argnum<1 || argnum>6 ) {
-        dlog("ptlib_get_argument: "PID_F" invalid argument number %d\n", argnum);
+        dlog("ptlib_get_argument: "PID_F" invalid argument number %d\n", pid, argnum);
         errno=EINVAL;
 
-        return NULL;
+        return -1;
     }
 
     if( is_64(pid) ) {
         /* 64 bit */
-        return (void *)ptrace( PTRACE_PEEKUSER, pid, arg_offset_64bit[argnum-1], 0 );
+        return ptrace( PTRACE_PEEKUSER, pid, arg_offset_64bit[argnum-1], 0 );
     } else {
         /* 32 bit */
-        return (void *)ptrace( PTRACE_PEEKUSER, pid, arg_offset_32bit[argnum-1], 0 );
+        return ptrace( PTRACE_PEEKUSER, pid, arg_offset_32bit[argnum-1], 0 );
     }
 }
 
-int ptlib_set_argument( pid_t pid, int argnum, void *value )
+int ptlib_set_argument( pid_t pid, int argnum, int_ptr value )
 {
     if( argnum<1 || argnum>6 ) {
-        dlog("ptlib_get_argument: "PID_F" invalid argument number %d\n", argnum);
+        dlog("ptlib_get_argument: "PID_F" invalid argument number %d\n", pid, argnum);
         errno=EINVAL;
 
         return -1;
@@ -563,17 +563,17 @@ int ptlib_set_argument( pid_t pid, int argnum, void *value )
     }
 }
 
-void *ptlib_get_retval( pid_t pid )
+int_ptr ptlib_get_retval( pid_t pid )
 {
-    return (void *)ptrace( PTRACE_PEEKUSER, pid, RAX );
+    return ptrace( PTRACE_PEEKUSER, pid, RAX );
 }
 
 int ptlib_success( pid_t pid, int sc_num )
 {
-    void *ret=ptlib_get_retval( pid );
+    unsigned long ret=ptlib_get_retval( pid );
 
     /* This heuristic is good for all syscalls we found. It may not be good for all of them */
-    return ((unsigned long)ret)<0xfffffffffffff000u;
+    return ret<0xfffffffffffff000u;
 
 #if 0
     switch( sc_num ) {
@@ -588,14 +588,14 @@ int ptlib_success( pid_t pid, int sc_num )
 
 }
 
-void ptlib_set_retval( pid_t pid, void *val )
+void ptlib_set_retval( pid_t pid, int_ptr val )
 {
     ptrace( PTRACE_POKEUSER, pid, RAX, val );
 }
 
 void ptlib_set_error( pid_t pid, int sc_num, int error )
 {
-    ptlib_set_retval( pid, (void *)(long)-error );
+    ptlib_set_retval( pid, -error );
 }
 
 int ptlib_get_error( pid_t pid, int sc_num )
