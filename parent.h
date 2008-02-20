@@ -21,7 +21,7 @@ struct pid_state {
     int orig_sc; // Original system call
     void *memory; // Where and how much mem do we have inside the process's address space
     size_t mem_size;
-    void *context_state[NUM_SAVED_STATES];
+    int_ptr context_state[NUM_SAVED_STATES];
     void *saved_state[PTLIB_STATE_SIZE];
 
     // "wait" simulation and recursive debuggers support

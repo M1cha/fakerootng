@@ -97,18 +97,19 @@ int ptlib_generate_syscall( pid_t pid, int sc_num, void *base_memory )
     return 1;
 }
 
-void *ptlib_get_argument( pid_t pid, int argnum )
+int_ptr ptlib_get_argument( pid_t pid, int argnum )
 {
     if( argnum<6 && argnum>0 )
-        return (void *)ptrace( PTRACE_PEEKUSER, pid, 4*(argnum-1), 0 );
+        return ptrace( PTRACE_PEEKUSER, pid, 4*(argnum-1), 0 );
 
     /* Illegal arg num */
-    fprintf(stderr, "Illegal argnum %d was asked for\n", argnum );
+    dlog("ptlib_get_argument: "PID_F" Illegal argnum %d was asked for\n", pid, argnum );
+    errno=EINVAL;
 
-    return NULL;
+    return -1;
 }
 
-int ptlib_set_argument( pid_t pid, int argnum, void *value )
+int ptlib_set_argument( pid_t pid, int argnum, int_ptr value )
 {
     if( argnum<=6 && argnum>0 )
         return ptrace( PTRACE_POKEUSER, pid, 4*(argnum-1), value )==0;
@@ -119,12 +120,12 @@ int ptlib_set_argument( pid_t pid, int argnum, void *value )
     return 0;
 }
 
-void *ptlib_get_retval( pid_t pid )
+int_ptr ptlib_get_retval( pid_t pid )
 {
-    return (void *)ptrace( PTRACE_PEEKUSER, pid, 4*EAX );
+    return ptrace( PTRACE_PEEKUSER, pid, 4*EAX );
 }
 
-void ptlib_set_retval( pid_t pid, void *val )
+void ptlib_set_retval( pid_t pid, int_ptr val )
 {
     ptrace( PTRACE_POKEUSER, pid, 4*EAX, val );
 }
@@ -157,12 +158,12 @@ int ptlib_get_error( pid_t pid, int sc_num )
 
 void ptlib_set_error( pid_t pid, int sc_num, int error )
 {
-    ptlib_set_retval( pid, (void *)-error );
+    ptlib_set_retval( pid, -error );
 }
 
 int ptlib_success( pid_t pid, int sc_num )
 {
-    void *ret=ptlib_get_retval( pid );
+    int ret=ptlib_get_retval( pid );
 
     switch( sc_num ) {
     case SYS_mmap:
@@ -170,7 +171,7 @@ int ptlib_success( pid_t pid, int sc_num )
         /* -errno on error */
         return ((unsigned int)ret)<0xfffff000u;
     default:
-        return ((int)ret)>=0;
+        return ret>=0;
     }
 }
 

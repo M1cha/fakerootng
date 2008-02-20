@@ -51,13 +51,13 @@ bool sys_stat( int sc_num, pid_t pid, pid_state *state )
         dlog("stat64: "PID_F" stored pointer at %p\n", pid, state->context_state[0] );
     } else if( state->state==pid_state::RETURN ) {
         // Returning from the syscall
-        void *returncode=ptlib_get_retval( pid );
+        int returncode=ptlib_get_retval( pid );
         dlog("stat64: "PID_F" returned %x\n", pid, returncode);
         if( ptlib_success( pid, sc_num ) ) {
             struct ptlib_stat ret;
             struct stat_override override;
 
-            ptlib_get_mem( pid, state->context_state[0], &ret, sizeof(ret) );
+            ptlib_get_mem( pid, (void *)state->context_state[0], &ret, sizeof(ret) );
 
             if( get_map( ret.dev, ret.ino, &override ) ) {
                 bool ok=true;
@@ -77,7 +77,7 @@ bool sys_stat( int sc_num, pid_t pid, pid_state *state )
 
                 if( ok ) {
                     dlog("stat64: "PID_F" override dev="DEV_F" inode="INODE_F" mode=%o uid=%d gid=%d\n", pid, ret.dev, ret.ino, ret.mode, ret.uid, ret.gid );
-                    ptlib_set_mem( pid, &ret, state->context_state[0], sizeof(struct stat) );
+                    ptlib_set_mem( pid, &ret, (void *)state->context_state[0], sizeof(struct stat) );
                 } else {
                     dlog("stat64: "PID_F" dev="DEV_F" inode="INODE_F" override entry corrupt - removed\n", pid, ret.dev, ret.ino );
                     remove_map( ret.dev, ret.ino );
@@ -114,11 +114,11 @@ static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             return allocate_process_mem( pid, state, sc_num );
         }
 
-        mode_t mode=(mode_t)(long)ptlib_get_argument( pid, mode_offset+1 ); // Store the requested mode
-        state->context_state[0]=(void *)mode;
+        mode_t mode=(mode_t)ptlib_get_argument( pid, mode_offset+1 ); // Store the requested mode
+        state->context_state[0]=mode;
 
         mode=mode&~07000;
-        ptlib_set_argument( pid, mode_offset+1, (void *) mode ); // Zero out the S* field
+        ptlib_set_argument( pid, mode_offset+1, mode ); // Zero out the S* field
 
         dlog("chmod: "PID_F" mode %o changed to %o\n", pid, state->context_state[1], mode );
         state->state=pid_state::RETURN;
@@ -134,12 +134,12 @@ static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             for( int i=1; i<=mode_offset; ++i )
                 ptlib_set_argument( pid, i, state->context_state[i] );
 
-            ptlib_set_argument( pid, mode_offset+1, state->memory ); // Where to store the stat result
+            ptlib_set_argument( pid, mode_offset+1, (int_ptr)state->memory ); // Where to store the stat result
 
             // One anomaly handled with special case. Ugly, but not worth the interface complication
             if( extra_flags!=-1 ) {
                 // Some of the functions require an extra flag after the usual parameters
-                ptlib_set_argument( pid, mode_offset+2, (void *)extra_flags );
+                ptlib_set_argument( pid, mode_offset+2, extra_flags );
             }
 
             return ptlib_generate_syscall( pid, stat_function, state->memory );
@@ -157,7 +157,7 @@ static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset
         if( !get_map( stat.dev, stat.ino, &override ) ) {
             stat_override_copy( &stat, &override );
         }
-        override.mode=(override.mode&~07777)|(((mode_t)(long)state->context_state[0])&07777);
+        override.mode=(override.mode&~07777)|(((mode_t)state->context_state[0])&07777);
 
         dlog("chmod: "PID_F" Setting override mode %o dev "DEV_F" inode "INODE_F"\n", pid, override.mode, override.dev,
             override.inode );
@@ -200,7 +200,7 @@ bool sys_fchmodat( int sc_num, pid_t pid, pid_state *state )
         state->context_state[3]=ptlib_get_argument( pid, 4 ); // Store the flags
     }
 
-    return real_chmod( sc_num, pid, state, 2, PREF_FSTATAT, (int)state->context_state[3] );
+    return real_chmod( sc_num, pid, state, 2, PREF_FSTATAT, state->context_state[3] );
 }
 #endif
 
@@ -215,10 +215,10 @@ static bool real_chown( int sc_num, pid_t pid, pid_state *state, int own_offset,
         }
 
         // Map this to a stat operation
-        ptlib_set_argument( pid, own_offset+1, state->memory );
+        ptlib_set_argument( pid, own_offset+1, (int_ptr)state->memory );
 
         if( extra_flags!=-1 ) {
-            ptlib_set_argument( pid, own_offset+2, (void *)extra_flags );
+            ptlib_set_argument( pid, own_offset+2, extra_flags );
         }
 
         ptlib_set_syscall( pid, stat_function );
@@ -237,10 +237,10 @@ static bool real_chown( int sc_num, pid_t pid, pid_state *state, int own_offset,
                 stat_override_copy( &stat, &override );
             }
 
-            if( ((long)state->context_state[0])!=-1 )
-                override.uid=(long)state->context_state[0];
-            if( ((long)state->context_state[1])!=-1 )
-                override.gid=(long)state->context_state[1];
+            if( ((int)state->context_state[0])!=-1 )
+                override.uid=state->context_state[0];
+            if( ((int)state->context_state[1])!=-1 )
+                override.gid=state->context_state[1];
 
             dlog("chown: "PID_F" changing owner of dev "DEV_F" inode "INODE_F"\n", pid, override.dev, override.inode );
             set_map( &override );
@@ -293,7 +293,7 @@ bool sys_fchownat( int sc_num, pid_t pid, pid_state *state )
         state->context_state[2]=ptlib_get_argument(pid, 5);
     }
     
-    return real_chown( sc_num, pid, state, 2, PREF_FSTATAT, (int)state->context_state[2] );
+    return real_chown( sc_num, pid, state, 2, PREF_FSTATAT, state->context_state[2] );
 }
 #endif
 
@@ -305,7 +305,7 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             return allocate_process_mem(pid, state, sc_num);
         }
 
-        mode_t mode=(mode_t)(long)state->context_state[0];
+        mode_t mode=(mode_t)state->context_state[0];
 
         if( (mode&07000)!=0 ) {
             // Mode has a SUID set
@@ -315,7 +315,7 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             dlog("mknod: "PID_F" tried to create %s device, turn to regular file\n", pid, S_ISCHR(mode) ? "character" : "block" );
             mode=mode&~S_IFMT | S_IFREG;
         }
-        ptlib_set_argument( pid, mode_offset+1, (void *)mode );
+        ptlib_set_argument( pid, mode_offset+1, mode );
 
         dlog("mknod: %d mode %o\n", pid, state->context_state[1] );
         state->state=pid_state::RETURN;
@@ -327,10 +327,10 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             for( int i=0; i<mode_offset; ++i ) {
                 ptlib_set_argument( pid, i+1, state->context_state[2+i] ); // File name etc.
             }
-            ptlib_set_argument( pid, mode_offset+1, state->memory ); // Struct stat
+            ptlib_set_argument( pid, mode_offset+1, (int_ptr)state->memory ); // Struct stat
 
             if( extra_flags!=-1 ) {
-                ptlib_set_argument( pid, mode_offset+2, (void *)extra_flags );
+                ptlib_set_argument( pid, mode_offset+2, extra_flags );
             }
 
             state->state=pid_state::REDIRECT1;
@@ -358,7 +358,7 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             dlog("mknod: "PID_F" registering the new device in the override DB dev "DEV_F" inode "INODE_F"\n", pid,
                 stat.dev, stat.ino );
 
-            mode_t mode=(mode_t)(long)state->context_state[0];
+            mode_t mode=(mode_t)state->context_state[0];
             if( S_ISCHR(mode) || S_ISBLK(mode) || (mode&07000)!=0) {
                 dlog("mknod: "PID_F" overriding the file type and/or mode\n", pid );
                 override.mode=override.mode&~(S_IFMT|07000) | mode&(S_IFMT|07000);
@@ -413,7 +413,7 @@ static bool real_open( int sc_num, pid_t pid, pid_state *state )
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
         // Did we request to create a new file?
-        if( (((long)state->context_state[0])&O_CREAT)!=0 && ptlib_success(pid, sc_num) ) {
+        if( (state->context_state[0]&O_CREAT)!=0 && ptlib_success(pid, sc_num) ) {
             int fd=(long)ptlib_get_retval(pid);
             dlog("open: "PID_F" opened fd %d, assume we actually created it\n", pid, fd );
 
@@ -421,8 +421,8 @@ static bool real_open( int sc_num, pid_t pid, pid_state *state )
             state->state=pid_state::REDIRECT1;
 
             // Call fstat to find out what we have
-            ptlib_set_argument( pid, 1, (void *)fd );
-            ptlib_set_argument( pid, 2, state->memory );
+            ptlib_set_argument( pid, 1, fd );
+            ptlib_set_argument( pid, 2, (int_ptr)state->memory );
             return ptlib_generate_syscall( pid, PREF_FSTAT, state->memory );
         } else
             state->state=pid_state::NONE;
@@ -496,10 +496,10 @@ static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset
             // Perform a stat operation so we can know the directory's dev and inode
             for( int i=0; i<mode_offset; ++i )
                 ptlib_set_argument( pid, i+1, state->context_state[i] ); // Name
-            ptlib_set_argument( pid, mode_offset+1, state->memory ); // stat structure
+            ptlib_set_argument( pid, mode_offset+1, (int_ptr)state->memory ); // stat structure
 
             if( extra_flags!=-1 ) {
-                ptlib_set_argument( pid, mode_offset+2, (void *)extra_flags );
+                ptlib_set_argument( pid, mode_offset+2, extra_flags );
             }
 
             state->orig_sc=sc_num;
@@ -543,7 +543,7 @@ bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
         if( log_level>0  ) {
             char name[PATH_MAX];
 
-            ptlib_get_string( pid, state->context_state[0], name, sizeof(name) );
+            ptlib_get_string( pid, (void *)state->context_state[0], name, sizeof(name) );
 
             dlog("mkdir: %d creates %s\n", pid, name );
         }
@@ -561,7 +561,7 @@ bool sys_mkdirat( int sc_num, pid_t pid, pid_state *state )
         if( log_level>0  ) {
             char name[PATH_MAX];
 
-            ptlib_get_string( pid, state->context_state[0], name, sizeof(name) );
+            ptlib_get_string( pid, (void *)state->context_state[0], name, sizeof(name) );
             int fd=(int)ptlib_get_argument( pid, 1 );
 
             dlog("mkdirat: %d creates %s at %x\n", pid, name, fd );
@@ -588,10 +588,10 @@ static bool real_symlink( int sc_num, pid_t pid, pid_state *state, int mode_offs
             for( int i=0; i<mode_offset; ++i ) {
                 ptlib_set_argument( pid, i+1, state->context_state[i] ); // File name
             }
-            ptlib_set_argument( pid, mode_offset+1, state->memory ); // stat structure
+            ptlib_set_argument( pid, mode_offset+1, (int_ptr)state->memory ); // stat structure
 
             if( extra_flags!=-1 ) {
-                ptlib_set_argument( pid, mode_offset+2, (void *)extra_flags );
+                ptlib_set_argument( pid, mode_offset+2, extra_flags );
             }
 
             state->state=pid_state::REDIRECT1;

@@ -345,9 +345,9 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
                     dlog(PID_F": pre-syscall hook called for debugger "PID_F"\n", pid, proc_state->debugger );
 
                     // Notify the debugger before the syscall
-                    proc_state->context_state[0]=(void *)wait_state;
-                    proc_state->context_state[1]=(void *)status;
-                    proc_state->context_state[2]=(void *)ret;
+                    proc_state->context_state[0]=wait_state;
+                    proc_state->context_state[1]=status;
+                    proc_state->context_state[2]=ret;
                     proc_state->trace_mode=TRACE_STOPPED1;
 
                     pid_state::wait_state waiting;
@@ -522,10 +522,10 @@ bool allocate_process_mem( pid_t pid, pid_state *state, int sc_num )
     ptlib_set_syscall( pid, PREF_MMAP );
 
     ptlib_set_argument( pid, 1, 0 ); // start pointer
-    ptlib_set_argument( pid, 2, (void *)sysconf(_SC_PAGESIZE) ); // Length of page - we allocate exactly one page
-    ptlib_set_argument( pid, 3, (void *)(PROT_EXEC|PROT_READ|PROT_WRITE) ); // Protection - allow execute
-    ptlib_set_argument( pid, 4, (void *)(MAP_PRIVATE|MAP_ANONYMOUS) ); // Flags - anonymous memory allocation
-    ptlib_set_argument( pid, 5, (void *)-1 ); // File descriptor
+    ptlib_set_argument( pid, 2, sysconf(_SC_PAGESIZE) ); // Length of page - we allocate exactly one page
+    ptlib_set_argument( pid, 3, (PROT_EXEC|PROT_READ|PROT_WRITE) ); // Protection - allow execute
+    ptlib_set_argument( pid, 4, (MAP_PRIVATE|MAP_ANONYMOUS) ); // Flags - anonymous memory allocation
+    ptlib_set_argument( pid, 5, -1 ); // File descriptor
     ptlib_set_argument( pid, 6, 0 ); // Offset
 
     return true;
@@ -542,7 +542,7 @@ bool sys_mmap( int sc_num, pid_t pid, pid_state *state )
     } else if( state->state==pid_state::ALLOCATE ) {
 
         if( ptlib_success( pid, sc_num ) ) {
-            state->memory=ptlib_get_retval( pid );
+            state->memory=(void *)ptlib_get_retval( pid );
             state->mem_size=sysconf( _SC_PAGESIZE );
             dlog("mmap: "PID_F" allocated for our use %d bytes at %p\n", pid, state->mem_size, state->memory);
             

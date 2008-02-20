@@ -48,12 +48,12 @@ int ptlib_set_syscall( pid_t pid, int sc_num ); /* Change the meaning of a just 
 int ptlib_generate_syscall( pid_t pid, int sc_num, void *base_memory ); /* Generate a new system call */
 
 /* Return the nth argument passed */
-void *ptlib_get_argument( pid_t pid, int argnum );
-int ptlib_set_argument( pid_t pid, int argnum, void *value );
+int_ptr ptlib_get_argument( pid_t pid, int argnum );
+int ptlib_set_argument( pid_t pid, int argnum, int_ptr value );
 
-void *ptlib_get_retval( pid_t pid );
+int_ptr ptlib_get_retval( pid_t pid );
 int ptlib_success( pid_t pid, int sc_num ); /* Report whether the syscall succeeded */
-void ptlib_set_retval( pid_t pid, void *val );
+void ptlib_set_retval( pid_t pid, int_ptr val );
 void ptlib_set_error( pid_t pid, int sc_num, int error );
 int ptlib_get_error( pid_t pid, int sc_num );
 

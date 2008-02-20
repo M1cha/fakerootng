@@ -96,36 +96,38 @@ int ptlib_generate_syscall( pid_t pid, int sc_num, void *base_memory )
     return 1;
 }
 
-void *ptlib_get_argument( pid_t pid, int argnum )
+int_ptr ptlib_get_argument( pid_t pid, int argnum )
 {
     if( argnum<6 && argnum>0 )
-        return (void *)ptrace( PTRACE_PEEKUSER, pid, 4*(PT_R3+argnum-1), 0 );
+        return ptrace( PTRACE_PEEKUSER, pid, 4*(PT_R3+argnum-1), 0 );
 
     /* Illegal arg num */
     dlog("Illegal argnum %d was asked for\n", argnum );
+    errno=EINVAL;
 
-    return NULL;
+    return -1;
 }
 
-int ptlib_set_argument( pid_t pid, int argnum, void *value )
+int ptlib_set_argument( pid_t pid, int argnum, int_ptr value )
 {
     if( argnum<=6 && argnum>0 )
         return ptrace( PTRACE_POKEUSER, pid, 4*(PT_R3+argnum-1), value )==0;
 
     /* Illegal arg num */
-    fprintf(stderr, "Illegal argnum %d was asked for\n", argnum );
+    dlog("Illegal argnum %d was asked for\n", argnum );
+    errno=EINVAL;
 
-    return 0;
+    return -1;
 }
 
-void *ptlib_get_retval( pid_t pid )
+int_ptr ptlib_get_retval( pid_t pid )
 {
-    return (void *)ptrace( PTRACE_PEEKUSER, pid, 4*PT_R3 );
+    return ptrace( PTRACE_PEEKUSER, pid, 4*PT_R3 );
 }
 
 #define SO_MASK 0x10000000
 
-void ptlib_set_retval( pid_t pid, void *val )
+void ptlib_set_retval( pid_t pid, int_ptr val )
 {
     // Clear SO so we register success
     unsigned long cr=ptrace( PTRACE_PEEKUSER, pid, PT_CCR*4, 0 );

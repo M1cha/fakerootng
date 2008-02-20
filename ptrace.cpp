@@ -28,7 +28,7 @@
 // Retruns true of the specified pid has permission to perform a ptrace operation
 static bool verify_permission( pid_t pid, pid_state *state )
 {
-    pid_t traced=(pid_t)(long)state->context_state[1];
+    pid_t traced=(pid_t)state->context_state[1];
 
     // First, find out whether the pid we work on even exists
 
@@ -76,9 +76,9 @@ static bool begin_trace( pid_t debugger, pid_t child )
 static void handle_cont_syscall( pid_t pid, pid_state *state )
 {
     if( verify_permission( pid, state ) ) {
-        pid_t child=(pid_t)(long)state->context_state[1];
+        pid_t child=(pid_t)state->context_state[1];
         pid_state *child_state=lookup_state( child );
-        __ptrace_request req=(__ptrace_request)(long)state->context_state[0];
+        __ptrace_request req=(__ptrace_request)state->context_state[0];
         if( req==PTRACE_CONT ) {
             child_state->trace_mode|=TRACE_CONT;
             dlog("ptrace: %d PTRACE_CONT("PID_F")\n", pid, child );
@@ -92,13 +92,13 @@ static void handle_cont_syscall( pid_t pid, pid_state *state )
         if( (child_state->trace_mode&TRACE_MASK2)==TRACE_STOPPED1 ) {
             dlog("handle_cont_syscall: "PID_F" process "PID_F" was in pre-syscall hook\n", pid, child );
             // Need to restart the syscall
-            int status=(long)child_state->context_state[1];
-            PTLIB_WAIT_RET wait_state=(PTLIB_WAIT_RET)(long)child_state->context_state[0];
+            int status=child_state->context_state[1];
+            PTLIB_WAIT_RET wait_state=(PTLIB_WAIT_RET)child_state->context_state[0];
             long ret=ptlib_get_syscall( child );
             int sig=process_sigchld( child, wait_state, status, ret );
             // If our processing requested no special handling, use the signal requested by the debugger
             if( sig==0 ) {
-                sig=(int)(long)state->context_state[3];
+                sig=(int)state->context_state[3];
             }
             if( sig>=0 ) {
                 rc=ptlib_continue(PTRACE_SYSCALL, child, sig);
@@ -106,7 +106,7 @@ static void handle_cont_syscall( pid_t pid, pid_state *state )
         } else if( (child_state->trace_mode&TRACE_MASK2)==TRACE_STOPPED2 ) {
             dlog("handle_cont_syscall: "PID_F" process "PID_F" was in post-syscall hook\n", pid, child );
             child_state->trace_mode&=TRACE_MASK1;
-            rc=ptlib_continue( PTRACE_SYSCALL, child, (int)(long)state->context_state[3] );
+            rc=ptlib_continue( PTRACE_SYSCALL, child, (int)state->context_state[3] );
         } else {
             // Our child was not stopped (at least, by us)
             // This is an internal inconsistency
@@ -119,7 +119,7 @@ static void handle_cont_syscall( pid_t pid, pid_state *state )
 
         if( rc!=-1 ) {
             dlog("ptrace: %d request successful\n", pid );
-            ptlib_set_retval( pid, (void *)rc );
+            ptlib_set_retval( pid, rc );
         } else {
             ptlib_set_error( pid, state->orig_sc, errno );
             dlog("ptrace: %d request failed: %s\n", pid, strerror(errno) );
@@ -130,9 +130,9 @@ static void handle_cont_syscall( pid_t pid, pid_state *state )
 static bool handle_detach( pid_t pid, pid_state *state )
 {
     if( verify_permission( pid, state ) ) {
-        dlog("ptrace: %d PTRACE_DETACH("PID_F")\n", pid, (pid_t)(long)state->context_state[1]);
+        dlog("ptrace: %d PTRACE_DETACH("PID_F")\n", pid, (pid_t)state->context_state[1]);
 
-        pid_state *child_state=lookup_state((pid_t)(long)state->context_state[1]);
+        pid_state *child_state=lookup_state((pid_t)state->context_state[1]);
 
         child_state->debugger=0;
         state->num_debugees--;
@@ -149,7 +149,7 @@ static bool handle_detach( pid_t pid, pid_state *state )
 
 static void handle_kill( pid_t pid, pid_state *state )
 {
-    pid_t child=(pid_t)(long)state->context_state[1];
+    pid_t child=(pid_t)state->context_state[1];
 
     if( verify_permission( pid, state ) ) {
         dlog("handle_kill: %d is sending a kill to "PID_F"\n", pid, child );
@@ -164,17 +164,17 @@ static void handle_kill( pid_t pid, pid_state *state )
 
 static void handle_peek_data( pid_t pid, pid_state *state )
 {
-    pid_t child=(pid_t)(long)state->context_state[1];
+    pid_t child=(pid_t)state->context_state[1];
 
     if( verify_permission( pid, state ) ) {
         errno=0;
-        long data=ptrace( (__ptrace_request)(long)state->context_state[0], child, state->context_state[2], 0 );
+        long data=ptrace( (__ptrace_request)state->context_state[0], child, state->context_state[2], 0 );
         if( data!=-1 || errno==0 ) {
             dlog("handle_peek_data: %d is peeking data from "PID_F" at address %p\n", pid, child, state->context_state[2] );
 
             // Write the result where applicable
             // XXX This may be a Linux only semantics - pass addres to write result to as "data" argument
-            data=ptlib_set_mem( pid, &data, state->context_state[3], sizeof(data));
+            data=ptlib_set_mem( pid, &data, (void *)state->context_state[3], sizeof(data));
             if( data!=-1 ) {
                 ptlib_set_retval( pid, 0 );
             } else {
@@ -190,10 +190,10 @@ static void handle_peek_data( pid_t pid, pid_state *state )
 
 static void handle_poke_data( pid_t pid, pid_state *state )
 {
-    pid_t child=(pid_t)(long)state->context_state[1];
+    pid_t child=(pid_t)state->context_state[1];
 
     if( verify_permission( pid, state ) &&
-        ptrace( (__ptrace_request)(long)state->context_state[0], child, state->context_state[2], state->context_state[3] )==0 )
+        ptrace( (__ptrace_request)state->context_state[0], child, state->context_state[2], state->context_state[3] )==0 )
     {
         dlog("handle_poke_data: %d is pokeing data in "PID_F" at address %p\n", pid, child, state->context_state[2] );
         ptlib_set_retval( pid, 0 );
@@ -222,7 +222,7 @@ bool sys_ptrace( int sc_num, pid_t pid, pid_state *state )
         state->state=pid_state::NONE;
 
         // Let's see what whether we need to succeed
-        switch( (long)state->context_state[0] ) {
+        switch( state->context_state[0] ) {
         case PTRACE_TRACEME:
             if( begin_trace( state->parent, pid ) ) {
                 dlog("ptrace: %d PTRACE_TRACEME parent "PID_F"\n", pid, state->parent );
@@ -233,11 +233,11 @@ bool sys_ptrace( int sc_num, pid_t pid, pid_state *state )
             }
             break;
         case PTRACE_ATTACH:
-            if( begin_trace( pid, (pid_t)(long)state->context_state[1] ) ) {
-                dlog("ptrace: "PID_F" PTRACE_ATTACH("PID_F") succeeded\n", pid, (pid_t)(long)state->context_state[1] );
+            if( begin_trace( pid, (pid_t)state->context_state[1] ) ) {
+                dlog("ptrace: "PID_F" PTRACE_ATTACH("PID_F") succeeded\n", pid, (pid_t)state->context_state[1] );
                 ptlib_set_retval( pid, 0 );
             } else {
-                dlog("ptrace: "PID_F" PTRACE_ATTACH("PID_F") failed %s\n", pid, (pid_t)(long)state->context_state[1], strerror(errno) );
+                dlog("ptrace: "PID_F" PTRACE_ATTACH("PID_F") failed %s\n", pid, (pid_t)state->context_state[1], strerror(errno) );
                 ptlib_set_error( pid, state->orig_sc, errno );
             }
             break;
@@ -274,7 +274,7 @@ bool sys_ptrace( int sc_num, pid_t pid, pid_state *state )
         case PTRACE_SINGLESTEP:
             // We do not support single step right now
             ptlib_set_error( pid, state->orig_sc, EINVAL );
-            dlog("ptrace: "PID_F" tried to call SINGLESTEP on "PID_F"\n", pid, (pid_t)(long)state->context_state[1]);
+            dlog("ptrace: "PID_F" tried to call SINGLESTEP on "PID_F"\n", pid, (pid_t)state->context_state[1]);
             break;
         case PTRACE_CONT:
         case PTRACE_SYSCALL:
@@ -287,7 +287,7 @@ bool sys_ptrace( int sc_num, pid_t pid, pid_state *state )
             handle_detach( pid, state );
             break;
         default:
-            dlog("ptrace: "PID_F" Unsupported option %lx\n", pid, (long)state->context_state[0] );
+            dlog("ptrace: "PID_F" Unsupported option %lx\n", pid, state->context_state[0] );
             ptlib_set_error(pid, state->orig_sc, EINVAL);
             break;
         }

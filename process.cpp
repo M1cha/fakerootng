@@ -61,7 +61,7 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state, bool &trap_after_call 
     if( state->state==pid_state::NONE ) {
         if( log_level>0 ) {
             char cmd[PATH_MAX];
-            ptlib_get_string( pid, ptlib_get_argument( pid, 1 ), cmd, sizeof(cmd) );
+            ptlib_get_string( pid, (void *)ptlib_get_argument( pid, 1 ), cmd, sizeof(cmd) );
             dlog("execve: "PID_F" calling execve for executing %s\n", pid, cmd );
             dlog(NULL);
         }
@@ -84,7 +84,7 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state, bool &trap_after_call 
                 // The platform sends a SIGTRAP to the process after a successful execve, which results in us thinking it was
                 // a syscall. We need to absorb it
                 state->state=pid_state::REDIRECT2;
-                state->context_state[0]=(void *)1;
+                state->context_state[0]=1;
 
                 if( state->trace_mode==TRACE_SYSCALL ) {
                     // We are not in the "NONE" state, but the syscall is over. Tell parent to trap
@@ -147,10 +147,10 @@ bool sys_setsid( int sc_num, pid_t pid, pid_state *state )
 static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, int *param2, int param3, void *param4 )
 {
     if( state->state==pid_state::NONE ) {
-        state->context_state[0]=(void *)param1; // pid
-        state->context_state[1]=param2; // status
-        state->context_state[2]=(void *)param3; // options
-        state->context_state[3]=param4; // rusage
+        state->context_state[0]=param1; // pid
+        state->context_state[1]=(int_ptr)param2; // status
+        state->context_state[2]=param3; // options
+        state->context_state[3]=(int_ptr)param4; // rusage
 
         dlog("wait4: %d num debugees: %d num children: %d, queue %s\n", pid, state->num_debugees, state->num_children,
                 state->waiting_signals.empty()?"is empty":"has signals" );
@@ -164,7 +164,7 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
             // Set an ECHILD return code
             state->state=pid_state::REDIRECT2;
             ptlib_set_syscall( pid, PREF_NOP ); // NOP call
-            state->context_state[0]=(void *)-ECHILD;
+            state->context_state[0]=-ECHILD;
         }
     } else if( state->state==pid_state::REDIRECT2 ) {
         // We may get here under two conditions.
@@ -178,7 +178,7 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
             if( ((long)state->context_state[0])>=0 )
                 ptlib_set_retval( pid, state->context_state[0] );
             else
-                ptlib_set_error( pid, state->orig_sc, -((long)state->context_state[0]) );
+                ptlib_set_error( pid, state->orig_sc, -state->context_state[0] );
 
             ptlib_set_syscall( pid, state->orig_sc );
         } else {
@@ -193,7 +193,7 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
     if( state->state==pid_state::WAITING ) {
         if( !state->waiting_signals.empty() ) {
             // Let's see what was asked for
-            pid_t wait_pid=(pid_t)(long)state->context_state[0];
+            pid_t wait_pid=(pid_t)state->context_state[0];
             std::list<pid_state::wait_state>::iterator child=state->waiting_signals.begin();
 
             if( wait_pid<-1 ) {
@@ -216,8 +216,8 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
                 // We have what to report - allow the syscall to return
                 
                 // Fill in the rusage
-                if( state->context_state[3]!=NULL )
-                    ptlib_set_mem( pid, &child->usage(), state->context_state[3], sizeof(child->usage()) );
+                if( ((void *)state->context_state[3])!=NULL )
+                    ptlib_set_mem( pid, &child->usage(), (void *)state->context_state[3], sizeof(child->usage()) );
 
                 // Is this a report about a terminated program?
                 if( !child->debugonly() )
@@ -229,19 +229,19 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
 #else
                     ptlib_set_syscall( pid, SYS_waitpid );
 #endif
-                    state->saved_state[0]=ptlib_get_argument( pid, 4 ); // Save the fourth argument
-                    ptlib_set_argument( pid, 1, (void *)child->pid() );
+                    state->saved_state[0]=(void *)ptlib_get_argument( pid, 4 ); // Save the fourth argument
+                    ptlib_set_argument( pid, 1, child->pid() );
                     ptlib_set_argument( pid, 2, state->context_state[1] );
                     ptlib_set_argument( pid, 3, state->context_state[2] );
                     ptlib_set_argument( pid, 4, state->context_state[3] );
                 } else {
                     // We need to explicitly set all the arguments
-                    if( state->context_state[1]!=NULL )
-                        ptlib_set_mem( pid, &child->status(), state->context_state[1], sizeof(child->status()) );
+                    if( ((void *)state->context_state[1])!=NULL )
+                        ptlib_set_mem( pid, &child->status(), (void *)state->context_state[1], sizeof(child->status()) );
 
                     ptlib_set_syscall( pid, PREF_NOP );
 
-                    state->context_state[0]=(void *)child->pid();
+                    state->context_state[0]=child->pid();
                 }
 
                 state->waiting_signals.erase( child );
@@ -252,7 +252,7 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
             }
         }
         
-        if( state->state==pid_state::WAITING && (((long)state->context_state[2])&WNOHANG)!=0 ) {
+        if( state->state==pid_state::WAITING && (state->context_state[2]&WNOHANG)!=0 ) {
             // Client asked never to hang
             state->state=pid_state::REDIRECT2;
             ptlib_set_syscall( pid, PREF_NOP );
@@ -266,10 +266,10 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
 bool sys_wait4( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        pid_t param1=(pid_t)(long)ptlib_get_argument(pid, 1); // pid
+        pid_t param1=(pid_t)ptlib_get_argument(pid, 1); // pid
         int *param2=(int *)ptlib_get_argument(pid, 2); // status
-        int param3=(long)ptlib_get_argument(pid, 3); // options
-        void *param4=ptlib_get_argument(pid, 4); // rusage
+        int param3=ptlib_get_argument(pid, 3); // options
+        void *param4=(void *)ptlib_get_argument(pid, 4); // rusage
 
         return real_wait4( sc_num, pid, state, param1, param2, param3, param4 );
     } else {
@@ -281,9 +281,9 @@ bool sys_wait4( int sc_num, pid_t pid, pid_state *state )
 bool sys_waitpid( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        pid_t param1=(long)ptlib_get_argument(pid, 1); // pid
+        pid_t param1=ptlib_get_argument(pid, 1); // pid
         int *param2=(int *)ptlib_get_argument(pid, 2); // status
-        int param3=(long)ptlib_get_argument(pid, 3); // options
+        int param3=ptlib_get_argument(pid, 3); // options
 
         return real_wait4( sc_num, pid, state, param1, param2, param3, NULL );
     } else {
