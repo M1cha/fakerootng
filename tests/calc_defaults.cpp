@@ -9,6 +9,10 @@
 #include <errno.h>
 #include <sys/ptrace.h>
 
+#include <iostream>
+
+using namespace std;
+
 int parent_wait_test()
 {
     int pfd[2];
@@ -134,9 +138,9 @@ int parent_wait_test()
 
 int main()
 {
-    fprintf(stderr, "Sizes: char %u, short %u, int %u, long %u, long long %u, void * %u\n", sizeof(char), sizeof(short), sizeof(int),
-        sizeof(long), sizeof(long long), sizeof(void *) );
-    fprintf(stderr, "Sizes: pid_t %u, gid_t %u, dev_t %u, ino_t %u\n", sizeof( pid_t), sizeof(gid_t), sizeof(dev_t), sizeof(ino_t) );
+    cerr<<"Sizes: char "<<sizeof(char)<<", short "<<sizeof(short)<<", int "<<sizeof(int)<<", long "<<sizeof(long)<<", long long "<<sizeof(long long)<<
+        ", void * "<<sizeof(void *)<<endl;
+    cerr<<"Sizes: pid_t "<<sizeof(pid_t)<<", gid_t "<<sizeof(gid_t)<<", dev_t "<<sizeof(dev_t)<<", ino_t "<<sizeof(ino_t)<<endl;
 
     /* Check status of PTLIB_PARENT_CAN_WAIT */
 
