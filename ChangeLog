@@ -1,3 +1,7 @@
+    * Read and writes to process memory can now be performed in any length
+      and/or alignment
+    * As a result - recursive debugger now works for x86_64 (only for 64bit)
+
 Version 0.08
     * Many many many code cleanups
     * New platform (partially) supported - Linux/x86_64:
