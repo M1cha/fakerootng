@@ -106,12 +106,32 @@ int ptlib_linux_get_mem( pid_t pid, void *process_ptr, void *local_ptr, size_t l
     int i;
     errno=0;
 
-    for( i=0; i<len/sizeof(long) && errno==0; ++i ) {
-        ((long *)local_ptr)[i]=ptrace(PTRACE_PEEKDATA, pid, process_ptr+i*sizeof(long));
-    }
+    size_t offset=((int_ptr)process_ptr)%sizeof(long);
+    process_ptr-=offset;
+    char *dst=(char *)local_ptr;
+    long buffer=ptrace(PTRACE_PEEKDATA, pid, process_ptr, 0);
+    if( buffer==-1 && errno!=0 )
+        return 0; // false means failure
 
-    /* Unaligned data lengths not yet supported */
-    assert(len%sizeof(long)==0);
+    while( len>0 ) {
+        // XXX Theoretically we can make the write faster by writing it whole "long" at a time. This, of course, requires that
+        // the alignment be correct on the receiving side as well as the sending side, which isn't trivial.
+        // For the time being, this approach is, at least, system call efficient, so we keep it.
+        *dst=((const char *)&buffer)[offset];
+
+        offset++;
+        dst++;
+        len--;
+
+        if( len>0 && offset==sizeof(long) ) {
+            process_ptr+=offset;
+            offset=0;
+
+            buffer=ptrace(PTRACE_PEEKDATA, pid, process_ptr, 0);
+            if( buffer==-1 && errno!=0 )
+                return 0; // false means failure
+        }
+    }
 
     return errno==0;
 }
