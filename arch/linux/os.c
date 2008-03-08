@@ -138,15 +138,45 @@ int ptlib_linux_get_mem( pid_t pid, void *process_ptr, void *local_ptr, size_t l
 
 int ptlib_linux_set_mem( pid_t pid, const void *local_ptr, void *process_ptr, size_t len )
 {
-    int i;
+    long buffer;
+    size_t offset=((int_ptr)process_ptr)%sizeof(long);
+    process_ptr-=offset; // Make the process PTR aligned
+
     errno=0;
 
-    for( i=0; i<len/sizeof(long) && errno==0; ++i ) {
-        ptrace(PTRACE_POKEDATA, pid, process_ptr+i*sizeof(long), ((long *)local_ptr)[i]);
+    if( offset!=0 ) {
+        // We have "Stuff" hanging before the area we need to fill - initialize the buffer
+        buffer=ptrace( PTRACE_PEEKDATA, pid, process_ptr, 0 );
     }
 
-    /* Unaligned data lengths not yet supported */
-    assert(len%sizeof(long)==0);
+    const char *src=local_ptr;
+
+    while( len>0 && errno==0 ) {
+        ((char *)&buffer)[offset]=*src;
+
+        src++;
+        offset++;
+        len--;
+
+        if( offset==sizeof(long) ) {
+            ptrace(PTRACE_POKEDATA, pid, process_ptr, buffer);
+            process_ptr+=offset;
+            offset=0;
+        }
+    }
+
+    if( errno==0 && offset!=0 ) {
+        // We have leftover data we still need to transfer. Need to make sure we are not
+        // overwriting data outside of our intended area
+        long buffer2=ptrace( PTRACE_PEEKDATA, pid, process_ptr, 0 );
+
+        int i;
+        for( i=offset; i<sizeof(long); ++i )
+            ((char *)buffer)[i]=((char *)buffer2)[i];
+
+        if( errno==0 )
+            ptrace(PTRACE_POKEDATA, pid, process_ptr, buffer);
+    }
 
     return errno==0;
 }
