@@ -20,6 +20,7 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state, bool &post_trap );
 DECLARE_SYSFUNC(sigreturn)
 DECLARE_SYSFUNC(setsid)
 DECLARE_SYSFUNC(ptrace)
+DECLARE_SYSFUNC(kill)
 
 // File handling
 DECLARE_SYSFUNC(stat)

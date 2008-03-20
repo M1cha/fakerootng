@@ -201,9 +201,7 @@ int ptlib_get_string( pid_t pid, void *process_ptr, char *local_ptr, size_t maxl
     return ptlib_linux_get_string( pid, process_ptr, local_ptr, maxlen );
 }
 
-#if 0
 int ptlib_set_string( pid_t pid, const char *local_ptr, void *process_ptr )
 {
     return ptlib_linux_set_string( pid, local_ptr, process_ptr );
 }
-#endif

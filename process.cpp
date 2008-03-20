@@ -291,3 +291,23 @@ bool sys_waitpid( int sc_num, pid_t pid, pid_state *state )
     }
 }
 
+// We want to prevent the process from killing us
+bool sys_kill( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->state=pid_state::RETURN;
+
+        if( ((pid_t)ptlib_get_argument( pid, 1 ))==getpid() ) {
+            // Process tried to send us a signal. Can't allow that
+            state->state=pid_state::REDIRECT2;
+            ptlib_set_syscall( pid, PREF_NOP);
+        }
+    } else if( state->state==pid_state::RETURN ) {
+        state->state=pid_state::NONE;
+    } else if( state->state==pid_state::REDIRECT2 ) {
+        state->state=pid_state::NONE;
+        ptlib_set_error( pid, state->orig_sc, EPERM );
+    }
+
+    return true;
+}

@@ -89,6 +89,7 @@ static void init_handlers()
     syscalls[SYS_waitpid]=syscall_hook(sys_waitpid, "waitpid");
 #endif
     syscalls[SYS_ptrace]=syscall_hook(sys_ptrace, "ptrace");
+    syscalls[SYS_kill]=syscall_hook(sys_kill, "kill");
 
     syscalls[SYS_stat]=syscall_hook(sys_stat, "stat");
 #ifdef SYS_stat64

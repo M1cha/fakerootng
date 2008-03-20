@@ -27,6 +27,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 #include <assert.h>
 
@@ -103,7 +104,6 @@ int ptlib_linux_reinterpret( enum PTLIB_WAIT_RET prevstate, pid_t pid, int statu
 
 int ptlib_linux_get_mem( pid_t pid, void *process_ptr, void *local_ptr, size_t len )
 {
-    int i;
     errno=0;
 
     size_t offset=((int_ptr)process_ptr)%sizeof(long);
@@ -208,9 +208,9 @@ int ptlib_linux_get_string( pid_t pid, void *process_ptr, char *local_ptr, size_
     return i;
 } 
 
-#if 0
-// No definition just yet
 int ptlib_linux_set_string( pid_t pid, const char *local_ptr, void *process_ptr )
 {
+    size_t len=strlen(local_ptr)+1;
+
+    return ptlib_set_mem( pid, local_ptr, process_ptr, len );
 }
-#endif
