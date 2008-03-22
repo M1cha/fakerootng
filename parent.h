@@ -7,6 +7,7 @@
 #include <list>
 
 #include <stdio.h>
+#include <string>
 
 #include "arch/platform.h"
 #include "platform_specific.h"
@@ -29,6 +30,8 @@ struct pid_state {
     int num_children, num_debugees; // How many child/debugged processes we have
     int trace_mode; // Which ptrace mode was used to run the process
     pid_t session_id;
+
+    std::string root;
 
 // Values for trace_mode
 #define TRACE_DETACHED  0x0
