@@ -146,6 +146,8 @@ static void init_handlers()
     syscalls[SYS_symlinkat]=syscall_hook(sys_symlinkat, "symlinkat");
 #endif
 
+    syscalls[SYS_chroot]=syscall_hook(sys_chroot, "chroot");
+
     syscalls[SYS_mmap]=syscall_hook(sys_mmap, "mmap");
 #ifdef SYS_mmap2
     syscalls[SYS_mmap2]=syscall_hook(sys_mmap, "mmap2");
@@ -294,6 +296,7 @@ static void handle_new_process( pid_t parent, pid_t child )
     state[child].parent=parent;
     state[child].session_id=state[parent].session_id;
     state[parent].num_children++;
+    state[child].root=state[parent].root;
 }
 
 static pid_t first_child; // PID of first child

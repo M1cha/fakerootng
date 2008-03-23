@@ -1,5 +1,6 @@
     * Implement set_string for copying a string into process space
     * Prevent the debugged process from sending a signal to the debugger
+    * Beginning of chroot support
 
 Version 0.09
     * Read and writes to process memory can now be performed in any length

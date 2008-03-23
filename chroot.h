@@ -16,4 +16,7 @@ bool chroot_is_chrooted( const pid_state *state );
 // If there was no error, but no stat was necessary, stat->st_ino will be equal -2
 std::string chroot_parse_path( const pid_state *state, char *path, const std::string &wd, struct stat *stat );
 
+// Same as above, only grab the work directory and file name from the process' state
+std::string chroot_translate_param( pid_t pid, const pid_state *state, struct stat *stat, void *process_ptr );
+
 #endif // CHROOT_H

@@ -28,6 +28,7 @@
 
 #include "syscalls.h"
 #include "file_lie.h"
+#include "chroot.h"
 #include "arch/platform.h"
 
 // Helper function - fill in an override structure from a stat structure
@@ -49,6 +50,16 @@ bool sys_stat( int sc_num, pid_t pid, pid_state *state )
         state->state=pid_state::RETURN;
         state->context_state[0]=ptlib_get_argument( pid, 2 ); // Store the pointer to the stat struct
         dlog("stat64: "PID_F" stored pointer at %p\n", pid, state->context_state[0] );
+
+        // If the process is chrooted, we need to translate the file name
+        int real_sc=ptlib_get_syscall( pid );
+        if( ( real_sc==PREF_STAT || real_sc==PREF_LSTAT ) && chroot_is_chrooted(state) ) {
+            struct stat stat;
+            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ) );
+
+            ptlib_set_string( pid, newpath.c_str(), state->memory );
+            ptlib_set_argument( pid, 1, (int_ptr)state->memory );
+        }
     } else if( state->state==pid_state::RETURN ) {
         // Returning from the syscall
         int returncode=ptlib_get_retval( pid );

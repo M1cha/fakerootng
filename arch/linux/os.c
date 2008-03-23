@@ -172,7 +172,7 @@ int ptlib_linux_set_mem( pid_t pid, const void *local_ptr, void *process_ptr, si
 
         int i;
         for( i=offset; i<sizeof(long); ++i )
-            ((char *)buffer)[i]=((char *)buffer2)[i];
+            ((char *)&buffer)[i]=((char *)&buffer2)[i];
 
         if( errno==0 )
             ptrace(PTRACE_POKEDATA, pid, process_ptr, buffer);

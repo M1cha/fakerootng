@@ -43,6 +43,8 @@ DECLARE_SYSFUNC(mkdirat)
 DECLARE_SYSFUNC(symlink)
 DECLARE_SYSFUNC(symlinkat)
 
+DECLARE_SYSFUNC(chroot)
+
 // Meta required functions
 DECLARE_SYSFUNC(mmap)
 

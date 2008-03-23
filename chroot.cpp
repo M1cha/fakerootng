@@ -174,9 +174,6 @@ std::string chroot_parse_path( const pid_state *state, char *path, const std::st
 {
     stat->st_ino=-2; // Mark this as a no-op. If we later do run a stat, it will be overridden
 
-    if( !chroot_is_chrooted(state) ) // The process is not chrooted
-        return path;
-
     if( path==NULL || path[0]=='\0' ) {
         stat->st_ino=-1;
         errno=ENOENT;
@@ -187,7 +184,43 @@ std::string chroot_parse_path( const pid_state *state, char *path, const std::st
     return chroot_parse_path_recursion( state, path, wd, stat, total_links, LAST_MILE_LINKS );
 }
 
+std::string chroot_translate_param( pid_t pid, const pid_state *state, struct stat *stat, void *process_ptr )
+{
+    char filename[PATH_MAX], wd[PATH_MAX];
+    ptlib_get_string( pid, process_ptr, filename, sizeof(filename) );
+
+    // Get the process' working dir from /proc/pid/cwd
+    snprintf( wd, sizeof(wd), "/proc/%d/cwd", pid );
+    ssize_t linklen=readlink( wd, wd, sizeof(wd) );
+    if( linklen>0 )
+        wd[linklen]='\0';
+
+    return chroot_parse_path( state, filename, wd, stat );
+}
+
 bool sys_chroot( int sc_num, pid_t pid, pid_state *state )
 {
+    if( state->state==pid_state::NONE ) {
+        // Save the path pointer and NOP the call
+        state->context_state[0]=ptlib_get_argument( pid, 1 );
+        state->state=pid_state::REDIRECT2;
+        ptlib_set_syscall( pid, PREF_NOP );
+    } else if( state->state==pid_state::REDIRECT2 ) {
+        // We may already be chrooted - need to translate the path
+        struct stat stat;
+        std::string newroot=chroot_translate_param( pid, state, &stat, (void *)state->context_state[0] );
+
+        if( (int)stat.st_ino!=-1 ) {
+            // The call succeeded
+            state->root=newroot;
+            ptlib_set_retval( pid, 0 ); // Success returns 0
+        } else {
+            // The call failed
+            ptlib_set_error( pid, sc_num, errno );
+        }
+
+        state->state=pid_state::NONE;
+    }
+
     return true;
 }

@@ -65,7 +65,7 @@ struct pid_state {
     std::list<wait_state> waiting_signals;
 
     pid_state() : state(INIT), memory(NULL), mem_size(0), debugger(0), parent(0), num_children(0), num_debugees(0),
-        trace_mode(TRACE_DETACHED), session_id(0)
+        trace_mode(TRACE_DETACHED), session_id(0), root("/")
     {
     }
 };
