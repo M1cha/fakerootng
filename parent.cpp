@@ -525,8 +525,16 @@ bool allocate_process_mem( pid_t pid, pid_state *state, int sc_num )
     // Translate the whatever call into an mmap
     ptlib_set_syscall( pid, PREF_MMAP );
 
+    // About the size....
+    // We need enough memory for two back to back strings of PATH_MAX length
+    // plus the overhead ptlib needs
+    size_t len=2*PATH_MAX+ptlib_prepare_memory_len();
+    // Might as well round it up to the nearest page size....
+    len+=sysconf(_SC_PAGESIZE)-1;
+    len-=len%sysconf(_SC_PAGESIZE);
+
     ptlib_set_argument( pid, 1, 0 ); // start pointer
-    ptlib_set_argument( pid, 2, sysconf(_SC_PAGESIZE) ); // Length of page - we allocate exactly one page
+    ptlib_set_argument( pid, 2, len ); // Length of page(s)
     ptlib_set_argument( pid, 3, (PROT_EXEC|PROT_READ|PROT_WRITE) ); // Protection - allow execute
     ptlib_set_argument( pid, 4, (MAP_PRIVATE|MAP_ANONYMOUS) ); // Flags - anonymous memory allocation
     ptlib_set_argument( pid, 5, -1 ); // File descriptor

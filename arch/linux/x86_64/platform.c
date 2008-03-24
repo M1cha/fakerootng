@@ -644,3 +644,9 @@ void ptlib_prepare_memory( pid_t pid, void **memory, size_t *size )
     /* Copy the data over */
     ptlib_set_mem( pid, memory_image, orig_mem, sizeof( memory_image ) );
 }
+
+size_t ptlib_prepare_memory_len()
+{
+    return mem_offset;
+}
+

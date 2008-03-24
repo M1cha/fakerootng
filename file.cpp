@@ -46,6 +46,10 @@ static void stat_override_copy( const ptlib_stat *stat, stat_override *override 
 bool sys_stat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        // Will need memory
+        if( state->memory==NULL )
+            return allocate_process_mem( pid, state, sc_num );
+
         // Entering the syscall
         state->state=pid_state::RETURN;
         state->context_state[0]=ptlib_get_argument( pid, 2 ); // Store the pointer to the stat struct

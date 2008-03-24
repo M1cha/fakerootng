@@ -62,6 +62,12 @@ void ptlib_prepare_memory( pid_t pid, void **memory, size_t *size )
     ptlib_set_mem( pid, memory_image, orig_mem, sizeof( memory_image ) );
 }
 
+
+size_t ptlib_prepare_memory_len()
+{
+    return mem_offset;
+}
+
 void ptlib_prepare( pid_t pid )
 {
     ptlib_linux_prepare( pid );
