@@ -668,3 +668,88 @@ bool sys_symlinkat( int sc_num, pid_t pid, pid_state *state )
     return real_symlink( sc_num, pid, state, 2, PREF_FSTATAT, AT_SYMLINK_NOFOLLOW );
 }
 #endif
+
+bool sys_chdir( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        // Will need memory
+        if( state->memory==NULL )
+            return allocate_process_mem( pid, state, sc_num );
+
+        state->state=pid_state::RETURN;
+
+        // If the process is chrooted, we need to translate the file name
+        if( chroot_is_chrooted(state) ) {
+            struct stat stat;
+            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ) );
+
+            ptlib_set_string( pid, newpath.c_str(), state->memory );
+            ptlib_set_argument( pid, 1, (int_ptr)state->memory );
+        }
+    } else if( state->state==pid_state::RETURN ) {
+        state->state=pid_state::NONE;
+    }
+
+    return true;
+}
+
+bool sys_getcwd( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        // Will need memory
+        if( state->memory==NULL )
+            return allocate_process_mem( pid, state, sc_num );
+
+        state->state=pid_state::RETURN;
+
+        // If the process is chrooted, we need to translate the directory name
+        if( chroot_is_chrooted(state) ) {
+            // We don't want to report the real current directory, of course!
+            state->context_state[0]=ptlib_get_argument( pid, 1 ); // Buffer
+            state->context_state[1]=ptlib_get_argument( pid, 2 ); // Buffer len
+
+            // Perform the actual call into our buffer
+            ptlib_set_argument( pid, 1, (int_ptr)state->memory );
+            ptlib_set_argument( pid, 2, PATH_MAX );
+        }
+    } else if( state->state==pid_state::RETURN ) {
+        state->state=pid_state::NONE;
+
+        if( ptlib_success( pid, sc_num ) && chroot_is_chrooted(state) ) {
+            // We are inside a chroot, and the call was successful
+            char buffer[PATH_MAX];
+            ptlib_get_string( pid, state->memory, buffer, sizeof(buffer) );
+            char tmp=buffer[state->root.length()];
+            buffer[state->root.length()]='\0';
+            char *ptr=buffer;
+
+            if( ( tmp=='/' || tmp=='\0' ) && state->root==buffer ) {
+                // Current directory is inside the chroot jail - need to truncate the prefix
+                if( tmp=='/' ) {
+                    ptr+=state->root.length();
+                    *ptr=tmp;
+                } else {
+                    // The current directory is the new root
+                    strcpy( buffer, "/" );
+                }
+            } else {
+                // Current directory is outside of the jail - pass it to the program as is
+                buffer[state->root.length()]=tmp;
+            }
+
+            // Emulate the actual call
+            size_t len=strlen(ptr);
+
+            if( len<state->context_state[1] ) {
+                // Buffer is large enough
+                ptlib_set_string( pid, ptr, (void *)state->context_state[0] );
+                ptlib_set_retval( pid, len+1 );
+            } else {
+                // The buffer is not large enough
+                ptlib_set_error( pid, sc_num, ERANGE );
+            }
+        }
+    }
+
+    return true;
+}

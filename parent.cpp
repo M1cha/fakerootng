@@ -147,6 +147,8 @@ static void init_handlers()
 #endif
 
     syscalls[SYS_chroot]=syscall_hook(sys_chroot, "chroot");
+    syscalls[SYS_chdir]=syscall_hook(sys_chdir, "chdir");
+    syscalls[SYS_getcwd]=syscall_hook(sys_getcwd, "getcwd");
 
     syscalls[SYS_mmap]=syscall_hook(sys_mmap, "mmap");
 #ifdef SYS_mmap2
