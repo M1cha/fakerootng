@@ -18,5 +18,6 @@ std::string chroot_parse_path( const pid_state *state, char *path, const std::st
 
 // Same as above, only grab the work directory and file name from the process' state
 std::string chroot_translate_param( pid_t pid, const pid_state *state, struct stat *stat, void *process_ptr );
+std::string chroot_translate_paramat( pid_t pid, const pid_state *state, struct stat *stat, void *process_ptr, int dirfd );
 
 #endif // CHROOT_H

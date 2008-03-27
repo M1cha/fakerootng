@@ -421,10 +421,6 @@ bool sys_mknodat( int sc_num, pid_t pid, pid_state *state )
 static bool real_open( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        // Will need memory
-        if( state->memory==NULL )
-            return allocate_process_mem( pid, state, sc_num );
-
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
         // Did we request to create a new file?
@@ -476,6 +472,18 @@ static bool real_open( int sc_num, pid_t pid, pid_state *state )
 bool sys_open( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        // Will need memory
+        if( state->memory==NULL )
+            return allocate_process_mem( pid, state, sc_num );
+
+        if( chroot_is_chrooted( state ) ) {
+            struct stat stat;
+            std::string newpath(chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ) ));
+
+            // Copy it over the the allocated memory
+            ptlib_set_string( pid, newpath.c_str(), state->memory );
+            ptlib_set_argument( pid, 1, (int_ptr)state->memory );
+        }
         state->context_state[0]=ptlib_get_argument( pid, 2 ); //flags
     }
 
@@ -486,6 +494,10 @@ bool sys_open( int sc_num, pid_t pid, pid_state *state )
 bool sys_openat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        // Will need memory
+        if( state->memory==NULL )
+            return allocate_process_mem( pid, state, sc_num );
+
         state->context_state[0]=ptlib_get_argument( pid, 3 ); //flags
     }
 
