@@ -14,10 +14,11 @@ bool chroot_is_chrooted( const pid_state *state );
 // If there is some error (say - file not found) stat->st_ino will be equal -1 and errno
 // will be set
 // If there was no error, but no stat was necessary, stat->st_ino will be equal -2
-std::string chroot_parse_path( const pid_state *state, char *path, const std::string &wd, struct stat *stat );
+std::string chroot_parse_path( const pid_state *state, char *path, const std::string &wd, struct stat *stat, bool resolve_last_link );
 
 // Same as above, only grab the work directory and file name from the process' state
-std::string chroot_translate_param( pid_t pid, const pid_state *state, struct stat *stat, void *process_ptr );
-std::string chroot_translate_paramat( pid_t pid, const pid_state *state, struct stat *stat, void *process_ptr, int dirfd );
+std::string chroot_translate_param( pid_t pid, const pid_state *state, struct stat *stat, void *process_ptr, bool resolve_last_link );
+std::string chroot_translate_paramat( pid_t pid, const pid_state *state, struct stat *stat, void *process_ptr, int dirfd,
+    bool resolve_last_link );
 
 #endif // CHROOT_H

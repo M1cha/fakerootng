@@ -59,7 +59,7 @@ bool sys_stat( int sc_num, pid_t pid, pid_state *state )
         int real_sc=ptlib_get_syscall( pid );
         if( ( real_sc==PREF_STAT || real_sc==PREF_LSTAT ) && chroot_is_chrooted(state) ) {
             struct stat stat;
-            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ) );
+            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), real_sc!=PREF_LSTAT );
 
             ptlib_set_string( pid, newpath.c_str(), state->memory );
             ptlib_set_argument( pid, 1, (int_ptr)state->memory );
@@ -478,7 +478,7 @@ bool sys_open( int sc_num, pid_t pid, pid_state *state )
 
         if( chroot_is_chrooted( state ) ) {
             struct stat stat;
-            std::string newpath(chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ) ));
+            std::string newpath(chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), true ));
 
             // Copy it over the the allocated memory
             ptlib_set_string( pid, newpath.c_str(), state->memory );
@@ -693,7 +693,7 @@ bool sys_chdir( int sc_num, pid_t pid, pid_state *state )
         // If the process is chrooted, we need to translate the file name
         if( chroot_is_chrooted(state) ) {
             struct stat stat;
-            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ) );
+            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), true );
 
             ptlib_set_string( pid, newpath.c_str(), state->memory );
             ptlib_set_argument( pid, 1, (int_ptr)state->memory );

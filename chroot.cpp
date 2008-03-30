@@ -42,7 +42,7 @@ bool chroot_is_chrooted( const pid_state *state )
 
 // XXX The memory efficiency of the implementation can use a DRASTIC improvement
 static std::string chroot_parse_path_recursion( const pid_state *state, char *path, const std::string &wd, struct stat *stat,
-    int &global_link_count, int dir_link_count )
+    int &global_link_count, int dir_link_count, bool resolve_links )
 {
     std::string partial_path;
     
@@ -64,7 +64,7 @@ static std::string chroot_parse_path_recursion( const pid_state *state, char *pa
         // A slash appears in the file name, and it is not the first character
         
         path[last_slash]='\0'; // Chop off the file part
-        dir_part=chroot_parse_path_recursion( state, path, wd, stat, global_link_count, LOCAL_LINKS ); // Translate the rest of the path
+        dir_part=chroot_parse_path_recursion( state, path, wd, stat, global_link_count, LOCAL_LINKS, true ); // Translate the rest of the path
 
         if( (int)stat->st_ino==-1 ) {
             // Pass the error on - no further processing
@@ -122,7 +122,7 @@ static std::string chroot_parse_path_recursion( const pid_state *state, char *pa
     }
 
     // Is this a symbolic link?
-    while( dir_link_count>0 && S_ISLNK(stat->st_mode) ) {
+    while( resolve_links && dir_link_count>0 && S_ISLNK(stat->st_mode) ) {
         if( (dir_link_count--)==0 || (global_link_count--)==0 ) {
             // We are out of patience for link processing
             errno=ELOOP;
@@ -162,7 +162,7 @@ static std::string chroot_parse_path_recursion( const pid_state *state, char *pa
             }
         } else {
             // The symlink is a complex path - use ourselves recursively to figure out where it actually links to
-            return chroot_parse_path_recursion( state, buffer, dir_part, stat, global_link_count, dir_link_count );
+            return chroot_parse_path_recursion( state, buffer, dir_part, stat, global_link_count, dir_link_count, false );
         }
     }
 
@@ -170,7 +170,7 @@ static std::string chroot_parse_path_recursion( const pid_state *state, char *pa
 }
 
 // Actual implementation - some sanity checking, and then call the recursive version
-std::string chroot_parse_path( const pid_state *state, char *path, const std::string &wd, struct stat *stat )
+std::string chroot_parse_path( const pid_state *state, char *path, const std::string &wd, struct stat *stat, bool resolve_last_link )
 {
     stat->st_ino=-2; // Mark this as a no-op. If we later do run a stat, it will be overridden
 
@@ -181,10 +181,10 @@ std::string chroot_parse_path( const pid_state *state, char *path, const std::st
     }
 
     int total_links=GLOBAL_LINKS;
-    return chroot_parse_path_recursion( state, path, wd, stat, total_links, LAST_MILE_LINKS );
+    return chroot_parse_path_recursion( state, path, wd, stat, total_links, LAST_MILE_LINKS, resolve_last_link );
 }
 
-std::string chroot_translate_param( pid_t pid, const pid_state *state, struct stat *stat, void *process_ptr )
+std::string chroot_translate_param( pid_t pid, const pid_state *state, struct stat *stat, void *process_ptr, bool resolve_last_link )
 {
     char filename[PATH_MAX], wd[PATH_MAX];
     ptlib_get_string( pid, process_ptr, filename, sizeof(filename) );
@@ -195,7 +195,7 @@ std::string chroot_translate_param( pid_t pid, const pid_state *state, struct st
     if( linklen>0 )
         wd[linklen]='\0';
 
-    return chroot_parse_path( state, filename, wd, stat );
+    return chroot_parse_path( state, filename, wd, stat, resolve_last_link );
 }
 
 bool sys_chroot( int sc_num, pid_t pid, pid_state *state )
@@ -208,7 +208,7 @@ bool sys_chroot( int sc_num, pid_t pid, pid_state *state )
     } else if( state->state==pid_state::REDIRECT2 ) {
         // We may already be chrooted - need to translate the path
         struct stat stat;
-        std::string newroot=chroot_translate_param( pid, state, &stat, (void *)state->context_state[0] );
+        std::string newroot=chroot_translate_param( pid, state, &stat, (void *)state->context_state[0], true );
 
         if( (int)stat.st_ino!=-1 ) {
             // The call succeeded
