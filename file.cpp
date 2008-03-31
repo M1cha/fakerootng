@@ -580,7 +580,7 @@ static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset
 
 bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
 {
-    if( state->state==pid_state::NONE ) {
+    if( state->state==pid_state::NONE && state->memory!=NULL ) {
         state->context_state[0]=ptlib_get_argument( pid, 1 ); // Directory name
 
         if( log_level>0  ) {
@@ -589,6 +589,14 @@ bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
             ptlib_get_string( pid, (void *)state->context_state[0], name, sizeof(name) );
 
             dlog("mkdir: %d creates %s\n", pid, name );
+        }
+
+        if( chroot_is_chrooted(state) ) {
+            struct stat stat;
+            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), true );
+
+            ptlib_set_string( pid, newpath.c_str(), (char *)state->memory+sizeof(ptlib_stat) );
+            ptlib_set_argument( pid, 1, (int_ptr)state->memory+sizeof(ptlib_stat) );
         }
     }
 
