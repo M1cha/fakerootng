@@ -271,9 +271,17 @@ static bool real_chown( int sc_num, pid_t pid, pid_state *state, int own_offset,
 
 bool sys_chown( int sc_num, pid_t pid, pid_state *state )
 {
-    if( state->state==pid_state::NONE ) {
+    if( state->state==pid_state::NONE && state->memory!=NULL ) {
         state->context_state[0]=ptlib_get_argument(pid, 2);
         state->context_state[1]=ptlib_get_argument(pid, 3);
+
+        if( chroot_is_chrooted(state) ) {
+            struct stat stat;
+            std::string translated_path=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), true );
+
+            ptlib_set_string( pid, translated_path.c_str(), (char *)state->memory+sizeof(ptlib_stat) );
+            ptlib_set_argument( pid, 1, (int_ptr)state->memory+sizeof(ptlib_stat) );
+        }
     }
     
     return real_chown( sc_num, pid, state, 1, PREF_STAT );
@@ -291,9 +299,17 @@ bool sys_fchown( int sc_num, pid_t pid, pid_state *state )
 
 bool sys_lchown( int sc_num, pid_t pid, pid_state *state )
 {
-    if( state->state==pid_state::NONE ) {
+    if( state->state==pid_state::NONE && state->memory!=NULL ) {
         state->context_state[0]=ptlib_get_argument(pid, 2);
         state->context_state[1]=ptlib_get_argument(pid, 3);
+
+        if( chroot_is_chrooted(state) ) {
+            struct stat stat;
+            std::string translated_path=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), false );
+
+            ptlib_set_string( pid, translated_path.c_str(), (char *)state->memory+sizeof(ptlib_stat) );
+            ptlib_set_argument( pid, 1, (int_ptr)state->memory+sizeof(ptlib_stat) );
+        }
     }
     
     return real_chown( sc_num, pid, state, 1, PREF_LSTAT );
