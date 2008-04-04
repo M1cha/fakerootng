@@ -181,7 +181,17 @@ std::string chroot_parse_path( const pid_state *state, char *path, const std::st
     }
 
     int total_links=GLOBAL_LINKS;
-    return chroot_parse_path_recursion( state, path, wd, stat, total_links, LAST_MILE_LINKS, resolve_last_link );
+
+    if( log_level==0 )
+        return chroot_parse_path_recursion( state, path, wd, stat, total_links, LAST_MILE_LINKS, resolve_last_link );
+    else {
+        dlog("chroot_parse_path: translating %s with work dir of %s\n", path, wd.c_str());
+
+        std::string ret=chroot_parse_path_recursion( state, path, wd, stat, total_links, LAST_MILE_LINKS, resolve_last_link );
+        dlog("chroot_parse_path: translated path is %s\n", ret.c_str() );
+
+        return ret;
+    }
 }
 
 std::string chroot_translate_param( pid_t pid, const pid_state *state, struct stat *stat, void *process_ptr, bool resolve_last_link )
