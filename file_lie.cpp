@@ -19,7 +19,7 @@
 */
 #include "config.h"
 
-#include <ext/hash_map>
+#include MAP_INCLUDE
 
 #include <sys/types.h>
 #include <unistd.h>
@@ -44,7 +44,7 @@ struct db_key_hash {
     size_t operator()(const db_key &key) const { return key.inode; };
 };
 
-typedef __gnu_cxx::hash_map<db_key, stat_override, db_key_hash> file_hash;
+typedef MAP_CLASS<db_key, stat_override, db_key_hash> file_hash;
 
 static file_hash map_hash;
 

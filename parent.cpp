@@ -30,7 +30,7 @@
 #include <sys/syscall.h>
 #include <sys/mman.h>
 
-#include <ext/hash_map>
+#include MAP_INCLUDE
 
 #include <stdio.h>
 #include <assert.h>
@@ -48,10 +48,10 @@ static bool finish_allocation( int sc_num, pid_t pid, pid_state *state );
 
 
 // Keep track of handled syscalls
-static __gnu_cxx::hash_map<int, syscall_hook> syscalls;
+static MAP_CLASS<int, syscall_hook> syscalls;
 
 // Keep track of the states for the various processes
-static __gnu_cxx::hash_map<pid_t, pid_state> state;
+static MAP_CLASS<pid_t, pid_state> state;
 
 static void init_handlers()
 {
@@ -277,7 +277,7 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
     }
 
     // Is any process a child of this process?
-    for( __gnu_cxx::hash_map<pid_t, pid_state>::iterator i=state.begin(); i!=state.end(); ++i ) {
+    for( MAP_CLASS<pid_t, pid_state>::iterator i=state.begin(); i!=state.end(); ++i ) {
         if( i->second.parent==pid ) {
             dlog("Reparenting process %d to init from %d\n", i->first);
             i->second.parent=1;
@@ -593,7 +593,7 @@ static bool finish_allocation( int sc_num, pid_t pid, pid_state *state )
 }
 
 pid_state *lookup_state( pid_t pid ) {
-    __gnu_cxx::hash_map<pid_t, pid_state>::iterator process=state.find(pid);
+    MAP_CLASS<pid_t, pid_state>::iterator process=state.find(pid);
 
     if( process!=state.end() ) {
         return &process->second;
