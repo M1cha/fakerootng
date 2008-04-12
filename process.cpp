@@ -20,7 +20,10 @@
 #include "config.h"
 
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <errno.h>
+#include <limits.h>
+#include <string.h>
 
 #include "syscalls.h"
 #include "arch/platform.h"

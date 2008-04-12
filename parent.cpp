@@ -35,6 +35,9 @@
 #include <stdio.h>
 #include <assert.h>
 
+#include <limits.h>
+#include <string.h>
+
 #include "arch/platform.h"
 
 #include "syscalls.h"
@@ -401,7 +404,7 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
             // Check for post-syscall debugger callback
             // If the system sends a SIGTRAP after a successful execve, the logic is entirely different
             if( proc_state->debugger!=0 && (
-                    proc_state->state==pid_state::NONE && proc_state->trace_mode==TRACE_SYSCALL ||
+                    (proc_state->state==pid_state::NONE && proc_state->trace_mode==TRACE_SYSCALL) ||
                     posttrap_always )
               )
             {

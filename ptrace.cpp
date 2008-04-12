@@ -22,6 +22,8 @@
 #include <sys/ptrace.h>
 #include <errno.h>
 
+#include <string.h>
+
 #include "syscalls.h"
 #include "arch/platform.h"
 

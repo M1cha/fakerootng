@@ -25,6 +25,8 @@
 #include <errno.h>
 
 #include <assert.h>
+#include <limits.h>
+#include <string.h>
 
 #include "syscalls.h"
 #include "parent.h"

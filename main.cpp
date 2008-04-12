@@ -29,6 +29,9 @@
 #include <stdarg.h>
 #include <errno.h>
 
+#include <limits.h>
+#include <string.h>
+
 #include "arch/platform.h"
 #include "parent.h"
 #include "file_lie.h"

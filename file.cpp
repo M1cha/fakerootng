@@ -25,6 +25,9 @@
 #include <fcntl.h>
 
 #include <assert.h>
+#include <limits.h>
+
+#include <string.h>
 
 #include "syscalls.h"
 #include "file_lie.h"
@@ -88,7 +91,7 @@ bool sys_stat( int sc_num, pid_t pid, pid_state *state )
                     // If the override is not a device, and the types do not match, this is not a valid entry
                     ok=(S_IFMT&ret.mode)==(S_IFMT&override.mode);
                 }
-                ret.mode=ret.mode&(~(07000|S_IFMT)) | override.mode&(07000|S_IFMT);
+                ret.mode=(ret.mode&(~(07000|S_IFMT))) | (override.mode&(07000|S_IFMT));
 
                 if( ok ) {
                     dlog("stat64: "PID_F" override dev="DEV_F" inode="INODE_F" mode=%o uid=%d gid=%d\n", pid, ret.dev, ret.ino, ret.mode, ret.uid, ret.gid );
@@ -344,7 +347,7 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
         }
         if( S_ISCHR(mode) || S_ISBLK(mode) ) {
             dlog("mknod: "PID_F" tried to create %s device, turn to regular file\n", pid, S_ISCHR(mode) ? "character" : "block" );
-            mode=mode&~S_IFMT | S_IFREG;
+            mode=(mode&~S_IFMT) | S_IFREG;
         }
         ptlib_set_argument( pid, mode_offset+1, mode );
 
@@ -392,7 +395,7 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             mode_t mode=(mode_t)state->context_state[0];
             if( S_ISCHR(mode) || S_ISBLK(mode) || (mode&07000)!=0) {
                 dlog("mknod: "PID_F" overriding the file type and/or mode\n", pid );
-                override.mode=override.mode&~(S_IFMT|07000) | mode&(S_IFMT|07000);
+                override.mode=(override.mode&~(S_IFMT|07000)) | (mode&(S_IFMT|07000));
                 override.dev_id=(dev_t)state->context_state[1];
             }
 
