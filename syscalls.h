@@ -46,6 +46,7 @@ DECLARE_SYSFUNC(symlinkat)
 DECLARE_SYSFUNC(chroot)
 DECLARE_SYSFUNC(chdir)
 DECLARE_SYSFUNC(getcwd)
+DECLARE_SYSFUNC(munmap)
 
 // Meta required functions
 DECLARE_SYSFUNC(mmap)

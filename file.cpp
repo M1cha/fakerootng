@@ -800,3 +800,123 @@ bool sys_getcwd( int sc_num, pid_t pid, pid_state *state )
 
     return true;
 }
+
+bool sys_munmap( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE || state->state==pid_state::REDIRECT1 ) {
+        if( state->state==pid_state::NONE ) {
+            // This is our first time entering this munmap
+            state->context_state[2]=0; // No state to restore
+        }
+
+        state->state=pid_state::RETURN;
+        state->context_state[0]=0; // 0 is the next start address to unmap, 1 is the new length
+        state->context_state[1]=0; // len=0 means we have no more mmaps to perform
+
+        // Is this an attempt to release one of the memory areas we own?
+        int_ptr start=ptlib_get_argument( pid, 1 );
+        int_ptr end=start+ptlib_get_argument( pid, 2 );
+
+        // If end wraps around then the kernel will fail this anyways
+        // Same goes if the page size is not aligned or the length is zero
+        if( start>end || (start%sysconf(_SC_PAGESIZE))!=0 || start==end )
+            return true;
+
+        // Put the lower of the two addreses in addr1
+        int_ptr addr1=(int_ptr)state->shared_memory, addr2=(int_ptr)state->memory;
+        size_t len1=static_mem_size, len2=shared_mem_size-ptlib_prepare_memory_len();
+        const char *name1="static", *name2="shared";
+
+        if( addr1>addr2 ) {
+            int_ptr tmp=addr1;
+            addr1=addr2;
+            addr2=tmp;
+
+            size_t tmplen=len1;
+            len1=len2;
+            len2=tmplen;
+
+            const char *tmpname=name1;
+            name1=name2;
+            name2=tmpname;
+        }
+
+        state->state=pid_state::REDIRECT2;
+        if( start<addr1 && end>addr1 ) {
+            // The unmap range covers the lower range
+            dlog("sys_munmap: "PID_F" tried to unmap range %p-%p, which conflicts with our %s range %p-%p\n",
+                pid, start, end, name1, addr1, addr1+len1 );
+
+            if( end>addr1+len1 ) {
+                // There is an area to unmap above the lower range - mark it for a second syscall
+                state->context_state[0]=addr1+len1;
+                state->context_state[1]=end-state->context_state[0];
+            }
+
+            end=addr1;
+        } else if( start>=addr1 && start<addr1+len1 ) {
+            // The start pointer is inside the lower memory range
+            dlog("sys_munmap: "PID_F" tried to unmap range %p-%p, which conflicts with our %s range %p-%p\n",
+                pid, start, end, name1, addr1, addr1+len1 );
+
+            start=addr1+len1;
+        } else if( start<addr2 && end>addr2 ) {
+            // The unmap area covers the upper memory range
+            dlog("sys_munmap: "PID_F" tried to unmap range %p-%p, which conflicts with our %s range %p-%p\n",
+                pid, start, end, name2, addr2, addr2+len2 );
+
+            if( end>addr2+len2 ) {
+                // There is an area to unmap above the upper range - mark it for a second (third?) syscall
+                state->context_state[0]=addr2+len2;
+                state->context_state[1]=end-state->context_state[0];
+            }
+            
+            end=addr2;
+        } else if( start>=addr2 && start<addr2+len2 ) {
+            // The start pointer is inside the upper memory range
+            dlog("sys_munmap: "PID_F" tried to unmap range %p-%p, which conflicts with our %s range %p-%p\n",
+                pid, start, end, name2, addr2, addr2+len2 );
+
+            start=addr2+len2;
+        } else {
+            // The unmap range was a-ok. No need to touch the syscall at all
+            state->state=pid_state::RETURN;
+            return true;
+        }
+
+        // We had to change the parameters because of an overlap
+        ptlib_set_argument( pid, 1, start );
+        ptlib_set_argument( pid, 2, end-start );
+    } else if( state->state==pid_state::RETURN || state->state==pid_state::REDIRECT2 ) {
+        state->state=pid_state::NONE;
+
+        if( ptlib_success( pid, sc_num ) ) {
+            bool last=(state->context_state[1]==0);
+
+            // If we are not done yet, we will need to store this position and come back to it
+            if( state->context_state[2]==0 && !last ) {
+                ptlib_save_state( pid, state->saved_state );
+                state->context_state[2]=1;
+            }
+
+            if( !last ) {
+                // We split the munmap into several calls - there are more calls to perform
+                // Use REDIRECT3 rather than NONE so that strace won't see the extra call
+                state->state=pid_state::REDIRECT3;
+
+                ptlib_set_argument( pid, 1, state->context_state[0] );
+                ptlib_set_argument( pid, 2, state->context_state[1] );
+                return ptlib_generate_syscall( pid, sc_num, state->shared_memory );
+            }
+        } else {
+            // The syscall failed - we will end it here even if we thought we had something more to do
+            dlog("sys_munmap: "PID_F" failed: %s\n", pid, strerror(ptlib_get_error(pid, sc_num)));
+        }
+
+        if( state->context_state[2]==1 ) {
+            ptlib_restore_state( pid, state->saved_state );
+        }
+    }
+
+    return true;
+}

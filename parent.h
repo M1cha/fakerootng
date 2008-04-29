@@ -14,13 +14,15 @@
 
 #include "shared_mem.h"
 
+extern size_t static_mem_size, shared_mem_size;
+
 int process_children(pid_t first_child, int comm_fd, pid_t session_id );
 int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long ret );
 
 #define NUM_SAVED_STATES 5
 
 struct pid_state {
-    enum states { INIT, NONE, RETURN, REDIRECT1, REDIRECT2, ALLOCATE, ALLOC_RETURN, WAITING } state;
+    enum states { INIT, NONE, RETURN, REDIRECT1, REDIRECT2, REDIRECT3, ALLOCATE, ALLOC_RETURN, WAITING } state;
     int orig_sc; // Original system call
 
     void *memory; // Where and how much mem do we have inside the process's address space
