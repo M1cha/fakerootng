@@ -33,13 +33,14 @@
 #include "../../platform.h"
 #include "../os.h"
 
-static const char memory_image[]=
+#define mem_offset 8
+
+static const char memory_image[mem_offset]=
 {
     0xcd, 0x80, /* int 0x80 - syscall */
     0x00, 0x00, /* Pad */
 };
 
-static int mem_offset=((sizeof(memory_image)+7)/8)*8;
 
 void ptlib_init()
 {
@@ -51,16 +52,9 @@ int ptlib_continue( int request, pid_t pid, int signal )
     return ptlib_linux_continue( request, pid, signal );
 }
 
-void ptlib_prepare_memory( pid_t pid, void **memory, size_t *size )
+const void *ptlib_prepare_memory( )
 {
-    void *orig_mem=*memory;
-
-    /* Move the pointer to a multiple of 8 */
-    (*memory)+=mem_offset;
-    (*size)-=mem_offset;
-
-    /* Copy the data over */
-    ptlib_set_mem( pid, memory_image, orig_mem, sizeof( memory_image ) );
+    return memory_image;
 }
 
 size_t ptlib_prepare_memory_len()
@@ -138,28 +132,7 @@ void ptlib_set_retval( pid_t pid, int_ptr val )
 
 int ptlib_get_error( pid_t pid, int sc_num )
 {
-    switch( sc_num ) {
-    case SYS_chmod:
-    case SYS_fchmod:
-    case SYS_mmap:
-    case SYS_mknod:
-    case SYS_mkdir:
-    case SYS_open:
-    case SYS_chown:
-    case SYS_fchown:
-    case SYS_lchown:
-    case SYS_stat64:
-    case SYS_lstat64:
-    case SYS_fstat64:
-    case SYS_symlink:
-    case SYS_execve:
-        return -(int)ptlib_get_retval( pid );
-    default:
-        dlog("ptlib_get_error: "PID_F" syscall %d not supported - aborting\n", pid, sc_num );
-        dlog(NULL); /* Flush the log before we crash */
-        abort();
-        return -(int)ptlib_get_retval( pid );
-    }
+    return -(int)ptlib_get_retval( pid );
 }
 
 void ptlib_set_error( pid_t pid, int sc_num, int error )

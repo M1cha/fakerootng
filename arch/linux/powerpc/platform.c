@@ -33,12 +33,11 @@
 #include "../../platform.h"
 #include "../os.h"
 
-static const char memory_image[]=
+#define mem_offset 8
+static const char memory_image[mem_offset]=
 {
     0x44, 0x00, 0x00, 0x02, /* sc */
 };
-
-static int mem_offset=((sizeof(memory_image)+7)/8)*8;
 
 void ptlib_init()
 {
@@ -50,16 +49,9 @@ int ptlib_continue( int request, pid_t pid, int signal )
     return ptlib_linux_continue( request, pid, signal );
 }
 
-void ptlib_prepare_memory( pid_t pid, void **memory, size_t *size )
+const void *ptlib_prepare_memory( )
 {
-    void *orig_mem=*memory;
-
-    /* Move the pointer to a multiple of 8 */
-    (*memory)+=mem_offset;
-    (*size)-=mem_offset;
-
-    /* Copy the data over */
-    ptlib_set_mem( pid, memory_image, orig_mem, sizeof( memory_image ) );
+    return memory_image;
 }
 
 

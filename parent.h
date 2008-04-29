@@ -12,6 +12,8 @@
 #include "arch/platform.h"
 #include "platform_specific.h"
 
+#include "shared_mem.h"
+
 int process_children(pid_t first_child, int comm_fd, pid_t session_id );
 int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long ret );
 
@@ -20,8 +22,11 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
 struct pid_state {
     enum states { INIT, NONE, RETURN, REDIRECT1, REDIRECT2, ALLOCATE, ALLOC_RETURN, WAITING } state;
     int orig_sc; // Original system call
+
     void *memory; // Where and how much mem do we have inside the process's address space
-    size_t mem_size;
+    void *shared_memory; // Process address of shared memory
+    shared_mem shared_mem_local; // local pointers to the shared memory
+
     int_ptr context_state[NUM_SAVED_STATES];
     void *saved_state[PTLIB_STATE_SIZE];
 
@@ -64,8 +69,8 @@ struct pid_state {
 #undef DEF_VAR
     std::list<wait_state> waiting_signals;
 
-    pid_state() : state(INIT), memory(NULL), mem_size(0), debugger(0), parent(0), num_children(0), num_debugees(0),
-        trace_mode(TRACE_DETACHED), session_id(0), root("/")
+    pid_state() : state(INIT), memory(NULL), shared_memory(NULL), shared_mem_local(), debugger(0),
+        parent(0), num_children(0), num_debugees(0), trace_mode(TRACE_DETACHED), session_id(0), root("/")
     {
     }
 };

@@ -29,7 +29,8 @@
 #include "../../platform.h"
 #include "../os.h"
 
-static const char memory_image[]=
+#define mem_offset 8
+static const char memory_image[mem_offset]=
 {
     0xcd, 0x80, /* int 0x80 - syscall for 32 bit */
     0x00, 0x00, /* Pad */
@@ -37,7 +38,6 @@ static const char memory_image[]=
     0x00, 0x00, /* Pad */
 };
 
-static int mem_offset=((sizeof(memory_image)+7)/8)*8;
 static int syscall_instr64_offset=4;
 
 /* All entries stating "-1" mean unimplemented (32bit) function
@@ -633,16 +633,9 @@ void ptlib_restore_state( pid_t pid, const void *buffer )
     ptrace( PTRACE_SETREGS, pid, 0, buffer );
 }
 
-void ptlib_prepare_memory( pid_t pid, void **memory, size_t *size )
+const void *ptlib_prepare_memory( )
 {
-    void *orig_mem=*memory;
-
-    /* Move the pointer to a multiple of 8 */
-    (*memory)+=mem_offset;
-    (*size)-=mem_offset;
-
-    /* Copy the data over */
-    ptlib_set_mem( pid, memory_image, orig_mem, sizeof( memory_image ) );
+    return memory_image;
 }
 
 size_t ptlib_prepare_memory_len()

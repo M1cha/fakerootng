@@ -27,6 +27,7 @@
 
 #include "syscalls.h"
 #include "arch/platform.h"
+#include "process.h"
 
 bool sys_getuid( int sc_num, pid_t pid, pid_state *state )
 {
@@ -49,6 +50,31 @@ bool sys_fork( int sc_num, pid_t pid, pid_state *state )
     // Dummy handling for now
     if( state->state==pid_state::NONE ) {
         state->state=pid_state::RETURN;
+    } else if( state->state==pid_state::RETURN ) {
+        state->state=pid_state::NONE;
+    }
+
+    return true;
+}
+
+bool sys_clone( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->state=pid_state::RETURN;
+
+        // Need to mark context_state[0] based on the type of new process being created
+        state->context_state[0]=0;
+        int_ptr flags=ptlib_get_argument( pid, 1 );
+
+        if( (flags&(CLONE_PARENT|CLONE_THREAD))!=0 )
+            state->context_state[0]|=NEW_PROCESS_SAME_PARENT;
+        if( (flags&CLONE_FS)!=0 )
+            state->context_state[0]|=NEW_PROCESS_SAME_ROOT;
+        if( (flags&CLONE_FILES)!=0 )
+            state->context_state[0]|=NEW_PROCESS_SAME_FD;
+        if( (flags&CLONE_VM)!=0 )
+            state->context_state[0]|=NEW_PROCESS_SAME_VM;
+
     } else if( state->state==pid_state::RETURN ) {
         state->state=pid_state::NONE;
     }
@@ -81,7 +107,8 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state, bool &trap_after_call 
 
                 // All memory allocations performed before the exec are now null and void
                 state->memory=NULL;
-                state->mem_size=0;
+                state->shared_memory=NULL;
+                state->shared_mem_local=shared_mem();
 
 #if PTLIB_TRAP_AFTER_EXEC
                 // The platform sends a SIGTRAP to the process after a successful execve, which results in us thinking it was
