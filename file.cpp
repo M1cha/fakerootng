@@ -160,7 +160,7 @@ static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset
                 ptlib_set_argument( pid, mode_offset+2, extra_flags );
             }
 
-            return ptlib_generate_syscall( pid, stat_function, state->memory );
+            return ptlib_generate_syscall( pid, stat_function, state->shared_memory );
         } else {
             state->state=pid_state::NONE;
             dlog("chmod: "PID_F" chmod failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)));
@@ -370,7 +370,7 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             state->state=pid_state::REDIRECT1;
 
             dlog("mknod: "PID_F" Actual node creation successful. Calling stat\n", pid );
-            return ptlib_generate_syscall( pid, stat_function, state->memory );
+            return ptlib_generate_syscall( pid, stat_function, state->shared_memory );
         } else {
             // Nothing to do if the call failed
             dlog("mknod: "PID_F" call failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num) ) );
@@ -453,7 +453,7 @@ static bool real_open( int sc_num, pid_t pid, pid_state *state )
             // Call fstat to find out what we have
             ptlib_set_argument( pid, 1, fd );
             ptlib_set_argument( pid, 2, (int_ptr)state->memory );
-            return ptlib_generate_syscall( pid, PREF_FSTAT, state->memory );
+            return ptlib_generate_syscall( pid, PREF_FSTAT, state->shared_memory );
         } else
             state->state=pid_state::NONE;
     } else if( state->state==pid_state::REDIRECT2 ) {
@@ -500,8 +500,8 @@ bool sys_open( int sc_num, pid_t pid, pid_state *state )
             std::string newpath(chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), true ));
 
             // Copy it over the the allocated memory
-            ptlib_set_string( pid, newpath.c_str(), state->memory );
-            ptlib_set_argument( pid, 1, (int_ptr)state->memory );
+            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
+            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
         }
         state->context_state[0]=ptlib_get_argument( pid, 2 ); //flags
     }
@@ -551,7 +551,7 @@ static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset
             state->orig_sc=sc_num;
             state->state=pid_state::REDIRECT1;
 
-            return ptlib_generate_syscall( pid, stat_function, state->memory );
+            return ptlib_generate_syscall( pid, stat_function, state->shared_memory );
         } else {
             // If mkdir failed, we don't have anything else to do.
             dlog("mkdir: "PID_F" failed with error %s\n", pid, strerror(ptlib_get_error( pid, sc_num ) ) );
@@ -650,7 +650,7 @@ static bool real_symlink( int sc_num, pid_t pid, pid_state *state, int mode_offs
 
             state->state=pid_state::REDIRECT1;
 
-            return ptlib_generate_syscall( pid, stat_function, state->memory );
+            return ptlib_generate_syscall( pid, stat_function, state->shared_memory );
         } else {
             dlog("symlink: "PID_F" failed with error %s\n", pid, strerror( ptlib_get_error(pid, sc_num) ) );
             state->state=pid_state::NONE;
@@ -916,6 +916,33 @@ bool sys_munmap( int sc_num, pid_t pid, pid_state *state )
         if( state->context_state[2]==1 ) {
             ptlib_restore_state( pid, state->saved_state );
         }
+    }
+
+    return true;
+}
+
+bool sys_link( int sc_num, pid_t pid, pid_state *state )
+{
+    // XXX lock memory
+    if( state->state==pid_state::NONE ) {
+        state->state=pid_state::RETURN;
+
+        if( chroot_is_chrooted( state ) ) {
+            struct stat stat;
+            // Translate the "oldpath"
+            std::string newpath(chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), true ) );
+
+            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
+            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
+
+            // Translate the "newpath"
+            newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 2 ), true );
+
+            strcpy( state->shared_mem_local.getc()+PATH_MAX, newpath.c_str() );
+            ptlib_set_argument( pid, 2, ((int_ptr)state->shared_memory)+PATH_MAX );
+        }
+    } else if( state->state==pid_state::RETURN ) {
+        state->state=pid_state::NONE;
     }
 
     return true;

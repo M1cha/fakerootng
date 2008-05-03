@@ -25,6 +25,7 @@ public:
     shared_mem &operator =( const shared_mem &rhs );
 
     void *get() { return data!=NULL ? data->local_pointer : NULL; }
+    char *getc() { return (char *)get(); }
     void set_pid( pid_t pid ) { us=pid; }
 
     // Casts
