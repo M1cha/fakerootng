@@ -214,3 +214,20 @@ int ptlib_linux_set_string( pid_t pid, const char *local_ptr, void *process_ptr 
 
     return ptlib_set_mem( pid, local_ptr, process_ptr, len );
 }
+
+ssize_t ptlib_linux_get_cwd( pid_t pid, char *buffer, size_t buff_size )
+{
+    char tmpbuff[20]; /* Leave enough chars for the digits */
+    sprintf(tmpbuff, "/proc/"PID_F"/cwd", pid );
+
+    return readlink( tmpbuff, buffer, buff_size );
+}
+
+ssize_t ptlib_linux_get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
+{
+    char tmpbuff[40];
+    sprintf(tmpbuff, "/proc/"PID_F"/fd/%d", pid, fd );
+
+    return readlink( tmpbuff, buffer, buff_size );
+}
+

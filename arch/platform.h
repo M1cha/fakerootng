@@ -66,6 +66,11 @@ int ptlib_set_mem( pid_t pid, const void *local_ptr, void *process_ptr, size_t l
 int ptlib_get_string( pid_t pid, void *process_ptr, char *local_ptr, size_t maxlen );
 int ptlib_set_string( pid_t pid, const char *local_ptr, void *process_ptr );
 
+/* Get a process' current directory and open fds */
+/* Return value is as for "readlink" */
+ssize_t ptlib_get_cwd( pid_t pid, char *buffer, size_t buff_size );
+ssize_t ptlib_get_fd( pid_t pid, int fd, char *buffer, size_t buff_size );
+
 /* Save/restore the process state */
 void ptlib_save_state( pid_t pid, void *buffer );
 void ptlib_restore_state( pid_t pid, const void *buffer );

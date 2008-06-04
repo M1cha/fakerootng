@@ -623,6 +623,16 @@ int ptlib_set_string( pid_t pid, const char *local_ptr, void *process_ptr )
     return ptlib_linux_set_string( pid, local_ptr, process_ptr );
 }
 
+ssize_t ptlib_get_cwd( pid_t pid, char *buffer, size_t buff_size )
+{
+    return ptlib_linux_get_cwd( pid, buffer, buff_size );
+}
+
+ssize_t ptlib_get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
+{
+    return ptlib_linux_get_fd( pid, fd, buffer, buff_size );
+}
+
 void ptlib_save_state( pid_t pid, void *buffer )
 {
     ptrace( PTRACE_GETREGS, pid, 0, buffer );
