@@ -201,11 +201,8 @@ std::string chroot_translate_param( pid_t pid, const pid_state *state, struct st
     char filename[PATH_MAX], wd[PATH_MAX];
     ptlib_get_string( pid, process_ptr, filename, sizeof(filename) );
 
-    // Get the process' working dir from /proc/pid/cwd
-    snprintf( wd, sizeof(wd), "/proc/%d/cwd", pid );
-    ssize_t linklen=readlink( wd, wd, sizeof(wd) );
-    if( linklen>0 )
-        wd[linklen]='\0';
+    // Get the process' working dir
+    ptlib_get_cwd( pid, wd, sizeof(wd) );
 
     return chroot_parse_path( state, filename, wd, stat, resolve_last_link );
 }

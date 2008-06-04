@@ -26,6 +26,7 @@
 #include <signal.h>
 
 #include <stdio.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -220,7 +221,12 @@ ssize_t ptlib_linux_get_cwd( pid_t pid, char *buffer, size_t buff_size )
     char tmpbuff[20]; /* Leave enough chars for the digits */
     sprintf(tmpbuff, "/proc/"PID_F"/cwd", pid );
 
-    return readlink( tmpbuff, buffer, buff_size );
+    ssize_t ret=readlink( tmpbuff, buffer, buff_size>0 ? buff_size-1 : 0 );
+
+    if( ret>0 )
+        buffer[ret]='\0';
+
+    return ret;
 }
 
 ssize_t ptlib_linux_get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
@@ -228,6 +234,11 @@ ssize_t ptlib_linux_get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
     char tmpbuff[40];
     sprintf(tmpbuff, "/proc/"PID_F"/fd/%d", pid, fd );
 
-    return readlink( tmpbuff, buffer, buff_size );
+    ssize_t ret=readlink( tmpbuff, buffer, buff_size>0 ? buff_size-1 : 0 );
+
+    if( ret>0 )
+        buffer[ret]='\0';
+
+    return ret;
 }
 
