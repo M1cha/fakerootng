@@ -21,6 +21,7 @@
 
 #include <sys/stat.h>
 #include <sys/syscall.h>
+#include <sys/ptrace.h>
 #include <errno.h>
 #include <fcntl.h>
 
@@ -943,6 +944,73 @@ bool sys_link( int sc_num, pid_t pid, pid_state *state )
         }
     } else if( state->state==pid_state::RETURN ) {
         state->state=pid_state::NONE;
+    }
+
+    return true;
+}
+
+bool sys_unlink( int sc_num, pid_t pid, pid_state *state )
+{
+    // XXX lock memory
+    if( state->state==pid_state::NONE ) {
+
+        state->context_state[0]=0; // Beginning of syscall
+        state->context_state[1]=0; // No forced error
+
+        if( chroot_is_chrooted( state ) ) {
+            struct stat stat;
+            // Translate the filename. If the last path component is a symlink, that is what we want deleted
+            std::string newpath(chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), false ) );
+
+            if( stat.st_ino==(ino_t)-1 ) {
+                // We had an error translating the file name - pass the error on
+                state->state=pid_state::REDIRECT2;
+                state->context_state[1]=errno;
+                ptlib_set_syscall(pid, PREF_NOP);
+
+                return true;
+            }
+
+            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
+            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
+        }
+
+        // Keep a copy of the file name
+        state->context_state[2]=ptlib_get_argument( pid, 1 );
+
+        // We need to know whether the file was, indeed, deleted. One method goes like this
+        // First, open the file. Next, unlink the file. Then, fstat the file.
+        // Problem - cannot do that for symbolic links.
+        //
+        // Second method - lstat the file before, unlink. If link count before was 1, inode
+        // is no more.
+        // Problem - someone else may have linked it while between the lstat and the unlink.
+        //
+        // Third method - link the file to a temporary name, unlink the original, check link
+        // count on temporary name.
+        // Problem - not easy to translate relative name to one that can be used from another
+        // process. On Linux, we do that using "linkat"
+
+        char buffer[PATH_MAX];
+        sprintf(buffer, "/proc/%d/cwd", pid);
+        int process_wd=open(buffer, O_RDWR);
+        if( process_wd==-1 ) {
+            dlog("sys_unlink: Failed to open \"%s\": %s\n", buffer, strerror(errno) );
+
+            ptlib_continue( pid, PTRACE_KILL, 0 );
+
+            return false;
+        }
+    } else if( state->state==pid_state::REDIRECT2 ) {
+        state->state=pid_state::NONE;
+
+        if( state->context_state[1]!=0 ) {
+            // We need to force an error
+            ptlib_set_error( pid, state->orig_sc, state->context_state[1] );
+            state->state=pid_state::NONE;
+
+            return true;
+        }
     }
 
     return true;
