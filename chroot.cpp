@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #include <assert.h>
 #include <limits.h>
@@ -206,6 +207,31 @@ std::string chroot_translate_param( pid_t pid, const pid_state *state, struct st
 
     return chroot_parse_path( state, filename, wd, stat, resolve_last_link );
 }
+
+#if HAVE_OPENAT
+// Same as chroot_translate_param, only for the *at family of functions
+std::string chroot_translate_paramat( pid_t pid, const pid_state *state, struct stat *stat, void *process_ptr, int dirfd,
+    bool resolve_last_link )
+{
+    char filename[PATH_MAX], wd[PATH_MAX];
+    ptlib_get_string( pid, process_ptr, filename, sizeof(filename) );
+
+    // Get the process' working dir
+    if( filename[0]=='/' ) {
+        // Absolute path - we don't care what the current directory is
+        wd[0]='/';
+        wd[1]='\0';
+    } else if( dirfd==AT_FDCWD ) {
+        ptlib_get_cwd( pid, wd, sizeof(wd) );
+    } else {
+        if( ptlib_get_fd( pid, dirfd, wd, sizeof(wd) )<0 ) {
+            stat->st_ino=-1;
+        }
+    }
+
+    return chroot_parse_path( state, filename, wd, stat, resolve_last_link );
+}
+#endif
 
 bool sys_chroot( int sc_num, pid_t pid, pid_state *state )
 {

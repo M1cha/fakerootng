@@ -26,31 +26,17 @@
 
 #include "file_lie.h"
 
-struct db_key {
-    dev_t dev;
-    ptlib_inode_t inode;
-
-    db_key() : dev(0), inode(0)
-    {
-    }
-    db_key( dev_t _dev, ino_t _inode ) : dev(_dev), inode(_inode)
-    {
-    }
-
-    bool operator==( const db_key &rhs ) const { return dev==rhs.dev && inode==rhs.inode; }
-};
-
 struct db_key_hash {
-    size_t operator()(const db_key &key) const { return key.inode; };
+    size_t operator()(const override_key &key) const { return key.inode; };
 };
 
-typedef MAP_CLASS<db_key, stat_override, db_key_hash> file_hash;
+typedef MAP_CLASS<override_key, stat_override, db_key_hash> file_hash;
 
 static file_hash map_hash;
 
 bool get_map( dev_t dev, ptlib_inode_t inode, stat_override *stat )
 {
-    file_hash::iterator i(map_hash.find( db_key( dev, inode) ));
+    file_hash::iterator i(map_hash.find( override_key( dev, inode) ));
 
     if( i!=map_hash.end() ) {
         *stat=i->second;
@@ -62,12 +48,12 @@ bool get_map( dev_t dev, ptlib_inode_t inode, stat_override *stat )
 
 void set_map( const stat_override *stat )
 {
-    map_hash[db_key(stat->dev, stat->inode)]=*stat;
+    map_hash[override_key(stat->dev, stat->inode)]=*stat;
 }
 
 void remove_map( dev_t dev, ptlib_inode_t inode )
 {
-    file_hash::iterator i(map_hash.find( db_key( dev, inode) ));
+    file_hash::iterator i(map_hash.find( override_key( dev, inode) ));
 
     if( i!=map_hash.end() )
         map_hash.erase(i);
@@ -91,7 +77,9 @@ void save_map( FILE *file )
         const struct stat_override *override;
 
         override=&(i->second);
-        fprintf( file, "dev="DEV_F",ino="INODE_F",mode=%o,uid=%d,gid=%d,rdev="DEV_F"\n", override->dev, override->inode,
-            override->mode, override->uid, override->gid, override->dev_id );
+        if( !override->transient ) {
+            fprintf( file, "dev="DEV_F",ino="INODE_F",mode=%o,uid=%d,gid=%d,rdev="DEV_F"\n", override->dev, override->inode,
+                    override->mode, override->uid, override->gid, override->dev_id );
+        }
     }
 }

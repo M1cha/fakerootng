@@ -14,6 +14,25 @@ struct stat_override {
     uid_t uid;
     gid_t gid;
     dev_t dev_id;
+    bool transient;
+
+    stat_override() : transient(false)
+    {
+    }
+};
+
+struct override_key {
+    dev_t dev;
+    ptlib_inode_t inode;
+
+    override_key() : dev(0), inode(0)
+    {
+    }
+    override_key( dev_t _dev, ino_t _inode ) : dev(_dev), inode(_inode)
+    {
+    }
+
+    bool operator==( const override_key &rhs ) const { return dev==rhs.dev && inode==rhs.inode; }
 };
 
 // Returns the information inside the database about a file with the given dev and inode

@@ -466,7 +466,9 @@ static bool real_open( int sc_num, pid_t pid, pid_state *state )
 
             // XXX The test whether we just created a new file is not the most accurate in the world
             // In particular, if the previous instance was deleted, this will misbehave
-            if( !get_map( stat.dev, stat.ino, &override ) ) {
+            // Fixed: if the previous instance was deleted BY US, this should now be ok
+            // Still, /dev/null is routinely found in the map for no good reason due to this code
+            if( !get_map( stat.dev, stat.ino, &override ) || override.transient ) {
                 // If the map already exists, assume we did not create a new file and don't touch the owners
                 stat_override_copy( &stat, &override );
 
@@ -949,6 +951,13 @@ bool sys_link( int sc_num, pid_t pid, pid_state *state )
     return true;
 }
 
+// In this function, context_state holds:
+// 0 - state machine for redirected syscalls
+// 1 - forced error number
+// 2 - pointer to file name
+// 
+// after the lstat stage:
+// 2 - 0: just delete. 1: need to mark for deletion from the override db as well
 bool sys_unlink( int sc_num, pid_t pid, pid_state *state )
 {
     // XXX lock memory
@@ -991,16 +1000,12 @@ bool sys_unlink( int sc_num, pid_t pid, pid_state *state )
         // Problem - not easy to translate relative name to one that can be used from another
         // process. On Linux, we do that using "linkat"
 
-        char buffer[PATH_MAX];
-        sprintf(buffer, "/proc/%d/cwd", pid);
-        int process_wd=open(buffer, O_RDWR);
-        if( process_wd==-1 ) {
-            dlog("sys_unlink: Failed to open \"%s\": %s\n", buffer, strerror(errno) );
+        // We now implement the second method
+        ptlib_set_syscall( pid, PREF_LSTAT );
+        ptlib_set_argument( pid, 2, (int_ptr)state->memory );
 
-            ptlib_continue( pid, PTRACE_KILL, 0 );
+        state->state=pid_state::REDIRECT2;
 
-            return false;
-        }
     } else if( state->state==pid_state::REDIRECT2 ) {
         state->state=pid_state::NONE;
 
@@ -1010,6 +1015,66 @@ bool sys_unlink( int sc_num, pid_t pid, pid_state *state )
             state->state=pid_state::NONE;
 
             return true;
+        }
+
+        // Handle the actual state machine
+        switch( state->context_state[0] ) {
+        case 0:
+            // lstat returned
+            {
+                if( ptlib_success( pid, sc_num ) ) {
+                    ptlib_stat stat;
+
+                    ptlib_get_mem( pid, state->memory, &stat, sizeof(stat) );
+
+                    if( stat.nlink==1 ) {
+                        // Store the relevant data in the shared memory
+                        struct override_key *key=reinterpret_cast<override_key *>(state->shared_mem_local.getc()+PATH_MAX);
+                        key->dev=stat.dev;
+                        key->inode=stat.ino;
+
+                        state->context_state[2]=1;
+                    } else {
+                        state->context_state[2]=0;
+                    }
+
+                    // Perform the actual unlink operation
+                    ptlib_save_state( pid, state->saved_state );
+                    ptlib_generate_syscall( pid, state->orig_sc, state->shared_memory );
+                    state->state=pid_state::REDIRECT1;
+                    state->context_state[0]=1;
+                } else {
+                    // lstat syscall failed - pass the error along
+                    state->state=pid_state::NONE;
+                }
+            }
+            break;
+        case 1:
+            // unlink returned
+            {
+                bool success=ptlib_success( pid, sc_num );
+                int error=success?0:ptlib_get_error( pid, sc_num );
+
+                ptlib_restore_state( pid, state->saved_state );
+
+                if( success ) {
+                    if( state->context_state[2]==1 ) {
+                        // Need to erase the override from our database
+                        struct override_key *key=reinterpret_cast<override_key *>(state->shared_mem_local.getc()+PATH_MAX);
+                        stat_override map;
+
+                        if( get_map( key->dev, key->inode, &map ) ) {
+                            map.transient=true;
+                            set_map( &map );
+                            dlog("sys_unlink: "PID_F" inode "INODE_F" in override mapping marked transient\n", pid, key->inode );
+                        }
+                    }
+                } else {
+                    // The "restore state" command overwrote the error
+                    ptlib_set_error( pid, sc_num, error );
+                }
+            }
+            break;
         }
     }
 
