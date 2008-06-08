@@ -416,6 +416,16 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
 bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        if( chroot_is_chrooted(state) ) {
+            struct stat stat;
+            // mknod will not follow a symlink as last element of a path
+            std::string newpath(chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), false ) );
+
+            // Copy it over the the allocated memory
+            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
+            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
+        }
+
         state->context_state[0]=ptlib_get_argument( pid, 2 ); // Mode
         state->context_state[1]=ptlib_get_argument( pid, 3 ); // Device ID
         state->context_state[2]=ptlib_get_argument( pid, 1 ); // File name
