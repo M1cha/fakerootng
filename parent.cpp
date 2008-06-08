@@ -156,6 +156,7 @@ static void init_handlers()
     syscalls[SYS_link]=syscall_hook(sys_link, "link");
     syscalls[SYS_unlink]=syscall_hook(sys_unlink, "unlink");
     syscalls[SYS_access]=syscall_hook(sys_access, "access");
+    syscalls[SYS_rename]=syscall_hook(sys_rename, "rename");
 
     syscalls[SYS_chroot]=syscall_hook(sys_chroot, "chroot");
     syscalls[SYS_chdir]=syscall_hook(sys_chdir, "chdir");
@@ -713,7 +714,7 @@ static bool handle_memory_allocation( int sc_num, pid_t pid, pid_state *state )
             state->context_state[1]=ptlib_get_retval( pid );
 
             // Perform the mmap
-            ptlib_set_argument( pid, 1, NULL );
+            ptlib_set_argument( pid, 1, (int_ptr)NULL );
             ptlib_set_argument( pid, 2, shared_mem_size );
             ptlib_set_argument( pid, 3, PROT_READ|PROT_EXEC );
             ptlib_set_argument( pid, 4, MAP_SHARED );
