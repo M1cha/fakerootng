@@ -620,8 +620,9 @@ bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
             struct stat stat;
             std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), true );
 
-            ptlib_set_string( pid, newpath.c_str(), (char *)state->memory+sizeof(ptlib_stat) );
-            ptlib_set_argument( pid, 1, (int_ptr)state->memory+sizeof(ptlib_stat) );
+            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
+            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
+            state->context_state[0]=(int_ptr)state->shared_memory; // Directory name
         }
     }
 
