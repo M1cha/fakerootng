@@ -286,10 +286,10 @@ bool sys_chown( int sc_num, pid_t pid, pid_state *state )
 
         if( chroot_is_chrooted(state) ) {
             struct stat stat;
-            std::string translated_path=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), true );
+            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), true );
 
-            ptlib_set_string( pid, translated_path.c_str(), (char *)state->memory+sizeof(ptlib_stat) );
-            ptlib_set_argument( pid, 1, (int_ptr)state->memory+sizeof(ptlib_stat) );
+            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
+            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
         }
     }
     
@@ -1215,7 +1215,7 @@ bool sys_rmdir( int sc_num, pid_t pid, pid_state *state )
     return true;
 }
 
-bool sys_readlink( int sc_num, pid_t pid, pid_state *state )
+bool sys_generic_chroot_support_param1( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
         state->state=pid_state::RETURN;

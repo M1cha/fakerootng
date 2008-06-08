@@ -51,7 +51,7 @@ DECLARE_SYSFUNC(unlink)
 DECLARE_SYSFUNC(access)
 DECLARE_SYSFUNC(rename)
 DECLARE_SYSFUNC(rmdir)
-DECLARE_SYSFUNC(readlink)
+DECLARE_SYSFUNC(generic_chroot_support_param1)
 
 DECLARE_SYSFUNC(chroot)
 DECLARE_SYSFUNC(chdir)
