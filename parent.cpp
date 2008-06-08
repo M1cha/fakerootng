@@ -158,6 +158,7 @@ static void init_handlers()
     syscalls[SYS_access]=syscall_hook(sys_access, "access");
     syscalls[SYS_rename]=syscall_hook(sys_rename, "rename");
     syscalls[SYS_rmdir]=syscall_hook(sys_rmdir, "rmdir");
+    syscalls[SYS_readlink]=syscall_hook(sys_readlink, "readlink");
 
     syscalls[SYS_chroot]=syscall_hook(sys_chroot, "chroot");
     syscalls[SYS_chdir]=syscall_hook(sys_chdir, "chdir");

@@ -50,10 +50,6 @@ static void stat_override_copy( const ptlib_stat *stat, stat_override *override 
 bool sys_stat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        // Will need memory
-        if( state->memory==NULL )
-            return allocate_process_mem( pid, state, sc_num );
-
         // Entering the syscall
         state->state=pid_state::RETURN;
         state->context_state[0]=ptlib_get_argument( pid, 2 ); // Store the pointer to the stat struct
@@ -65,8 +61,8 @@ bool sys_stat( int sc_num, pid_t pid, pid_state *state )
             struct stat stat;
             std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), real_sc!=PREF_LSTAT );
 
-            ptlib_set_string( pid, newpath.c_str(), state->memory );
-            ptlib_set_argument( pid, 1, (int_ptr)state->memory );
+            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
+            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
         }
     } else if( state->state==pid_state::RETURN ) {
         // Returning from the syscall
@@ -1214,6 +1210,25 @@ bool sys_rmdir( int sc_num, pid_t pid, pid_state *state )
 
             state->state=pid_state::NONE;
         }
+    }
+
+    return true;
+}
+
+bool sys_readlink( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->state=pid_state::RETURN;
+
+        if( chroot_is_chrooted( state ) ) {
+            struct stat stat;
+            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), false );
+
+            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
+            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
+        }
+    } else if( state->state==pid_state::RETURN ) {
+        state->state=pid_state::NONE;
     }
 
     return true;
