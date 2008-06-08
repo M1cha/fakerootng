@@ -21,13 +21,16 @@
 
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <errno.h>
 #include <limits.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "syscalls.h"
 #include "arch/platform.h"
 #include "process.h"
+#include "chroot.h"
 
 bool sys_getuid( int sc_num, pid_t pid, pid_state *state )
 {
@@ -83,11 +86,17 @@ bool sys_clone( int sc_num, pid_t pid, pid_state *state )
 }
 
 // Function interface is different - returns an extra bool to signify whether to send a trap after the call
+// context_state[0] is state machine:
+// 0 - just returned from execve
+// 1 - got a SIGTRAP after execve
+// if context_state[1] is not 0, force error on syscall
 bool sys_execve( int sc_num, pid_t pid, pid_state *state, bool &trap_after_call )
 {
     trap_after_call=false;
 
     if( state->state==pid_state::NONE ) {
+        state->context_state[1]=0; // Don't force error by default
+
         if( log_level>0 ) {
             char cmd[PATH_MAX];
             ptlib_get_string( pid, (void *)ptlib_get_argument( pid, 1 ), cmd, sizeof(cmd) );
@@ -95,14 +104,32 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state, bool &trap_after_call 
             dlog(NULL);
         }
 
+        if( chroot_is_chrooted( state ) ) {
+            struct stat stat;
+
+            std::string newpath(chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), true ) );
+
+            if( stat.st_ino!=(ino_t)-1 ) {
+                strcpy( state->shared_mem_local.getc(), newpath.c_str() );
+                ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
+            } else {
+                // We had an error translating the file name - pass the error on
+                state->context_state[1]=errno;
+
+                ptlib_set_syscall( pid, PREF_NOP );
+                // REDIRECT2 is set anyways
+            }
+        }
+
         // On some platforms "execve" returns, when successful, with SYS_restart_syscall or some such thing
         state->state=pid_state::REDIRECT2;
         state->context_state[0]=0;
     } else if( state->state==pid_state::REDIRECT2 ) {
         if( state->context_state[0]==0 ) {
+            // Execve returned
             state->state=pid_state::NONE;
 
-            if( ptlib_success( pid, sc_num ) ) {
+            if( ptlib_success( pid, sc_num ) && state->context_state[1]==0 ) {
                 dlog("execve: "PID_F" successfully execed a new command\n", pid );
 
                 // All memory allocations performed before the exec are now null and void
@@ -121,6 +148,10 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state, bool &trap_after_call 
                     trap_after_call=true;
                 }
 #endif
+            } else if( state->context_state[1]!=0 ) {
+                dlog("execve: "PID_F" chroot translation forced error on us: %s\n", pid, strerror(state->context_state[1]) );
+
+                ptlib_set_error( pid, state->orig_sc, state->context_state[1] );
             } else {
                 dlog("execve: "PID_F" failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)) );
             }
