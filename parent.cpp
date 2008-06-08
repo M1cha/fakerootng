@@ -155,6 +155,7 @@ static void init_handlers()
 #endif
     syscalls[SYS_link]=syscall_hook(sys_link, "link");
     syscalls[SYS_unlink]=syscall_hook(sys_unlink, "unlink");
+    syscalls[SYS_access]=syscall_hook(sys_access, "access");
 
     syscalls[SYS_chroot]=syscall_hook(sys_chroot, "chroot");
     syscalls[SYS_chdir]=syscall_hook(sys_chdir, "chdir");
