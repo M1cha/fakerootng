@@ -195,6 +195,15 @@ static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset
 bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        if( chroot_is_chrooted( state ) ) {
+            struct stat stat;
+            std::string newpath(chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1), true ));
+
+            // Copy it over the the allocated memory
+            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
+            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
+        }
+
         state->context_state[1]=ptlib_get_argument( pid, 1 ); // Store the file name
     }
 
