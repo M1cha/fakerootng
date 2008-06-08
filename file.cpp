@@ -1147,3 +1147,74 @@ bool sys_rename( int sc_num, pid_t pid, pid_state *state )
 
     return true;
 }
+
+bool sys_rmdir( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        // First thing first - translate the directory in question
+        if( chroot_is_chrooted( state ) ) {
+            struct stat stat;
+            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), false );
+
+            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
+            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
+        }
+
+        // Keep a copy of the directory name to erase
+        state->context_state[0]=0; // Internal state
+        state->context_state[1]=ptlib_get_argument( pid, 1 );
+
+        // We need to stat the directory before we erase it
+        ptlib_set_argument( pid, 2, (int_ptr)state->memory );
+        ptlib_set_syscall( pid, PREF_LSTAT );
+
+        state->state=pid_state::REDIRECT2;
+    } else if( state->state==pid_state::REDIRECT2 ) {
+        if( state->context_state[0]==0 ) {
+            // lstat returned
+            if( ptlib_success( pid, sc_num ) ) {
+                ptlib_stat stat;
+
+                ptlib_get_mem( pid, state->memory, &stat, sizeof(stat) );
+
+                struct override_key *key=reinterpret_cast<override_key *>(state->shared_mem_local.getc()+PATH_MAX);
+                key->dev=stat.dev;
+                key->inode=stat.ino;
+
+                state->context_state[0]=1;
+
+                // Run the original syscall
+                ptlib_save_state( pid, state->saved_state );
+                ptlib_generate_syscall( pid, state->orig_sc, state->shared_memory );
+                state->state=pid_state::REDIRECT1;
+            } else {
+                // Pass the lstat error as if it were the rmdir error
+                state->state=pid_state::NONE;
+            }
+        } else if( state->context_state[0]==1 ) {
+            bool success=ptlib_success( pid, sc_num );
+            int error=success?0:ptlib_get_error( pid, sc_num );
+
+            ptlib_restore_state( pid, state->saved_state );
+
+            if( success ) {
+                // Need to erase the override from our database
+                struct override_key *key=reinterpret_cast<override_key *>(state->shared_mem_local.getc()+PATH_MAX);
+                stat_override map;
+
+                if( get_map( key->dev, key->inode, &map ) ) {
+                    map.transient=true;
+                    set_map( &map );
+                    dlog("sys_rmdir: "PID_F" inode "INODE_F" in override mapping marked transient\n", pid, key->inode );
+                }
+            } else {
+                // Need to copy the error number (overwritten by the state restore)
+                ptlib_set_error( pid, sc_num, error );
+            }
+
+            state->state=pid_state::NONE;
+        }
+    }
+
+    return true;
+}
