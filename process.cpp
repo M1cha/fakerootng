@@ -32,6 +32,10 @@
 #include "process.h"
 #include "chroot.h"
 
+// XXX
+// Not implemented functions:
+// acct
+
 bool sys_getuid( int sc_num, pid_t pid, pid_state *state )
 {
     switch( state->state ) {

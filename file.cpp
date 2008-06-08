@@ -713,15 +713,15 @@ static bool real_symlink( int sc_num, pid_t pid, pid_state *state, int mode_offs
 bool sys_symlink( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE && state->memory!=NULL ) {
-        state->context_state[0]=ptlib_get_argument( pid, 2 ); // new path
-
         if( chroot_is_chrooted(state) ) {
             struct stat stat;
-            std::string translated_path=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 2 ), true );
+            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 2 ), true );
 
-            ptlib_set_string( pid, translated_path.c_str(), (char *)state->memory+sizeof(ptlib_stat) );
-            ptlib_set_argument( pid, 2, (int_ptr)state->memory+sizeof(ptlib_stat) );
+            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
+            ptlib_set_argument( pid, 2, (int_ptr)state->shared_memory );
         }
+
+        state->context_state[0]=ptlib_get_argument( pid, 2 ); // new path
     }
 
     return real_symlink( sc_num, pid, state, 1, PREF_LSTAT );
