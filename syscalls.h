@@ -22,6 +22,10 @@ DECLARE_SYSFUNC(setsid)
 DECLARE_SYSFUNC(ptrace)
 DECLARE_SYSFUNC(kill)
 
+#ifdef SYS_uselib
+DECLARE_SYSFUNC(uselib)
+#endif
+
 // File handling
 DECLARE_SYSFUNC(stat)
 #ifdef SYS_fstatat64
