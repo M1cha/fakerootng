@@ -6,7 +6,6 @@ LIMITATIONS - lists limitations either inherent to the technology, or that
 are outside the scope of coverage intended in the foreseeable future.
 
 TODO
-- Chroot jail support
 - Wider support for "old" syscalls (16 bit getuid, 32bit stat etc.)
 - Multithreaded debugger
 
