@@ -1093,6 +1093,20 @@ bool sys_generic_chroot_support_param1( int sc_num, pid_t pid, pid_state *state 
     if( state->state==pid_state::NONE ) {
         state->state=pid_state::RETURN;
 
+        chroot_translate_param( pid, state, 1, true );
+    } else if( state->state==pid_state::RETURN ) {
+        state->state=pid_state::NONE;
+    }
+
+    return true;
+}
+
+// Same as above, only when the last link is not resolved
+bool sys_generic_chroot_support_link_param1( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->state=pid_state::RETURN;
+
         chroot_translate_param( pid, state, 1, false );
     } else if( state->state==pid_state::RETURN ) {
         state->state=pid_state::NONE;

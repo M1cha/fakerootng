@@ -157,14 +157,20 @@ static void init_handlers()
     syscalls[SYS_unlink]=syscall_hook(sys_unlink, "unlink");
     syscalls[SYS_rename]=syscall_hook(sys_rename, "rename");
     syscalls[SYS_rmdir]=syscall_hook(sys_rmdir, "rmdir");
-    syscalls[SYS_readlink]=syscall_hook(sys_generic_chroot_support_param1, "readlink");
+    syscalls[SYS_readlink]=syscall_hook(sys_generic_chroot_support_link_param1, "readlink");
     syscalls[SYS_truncate]=syscall_hook(sys_generic_chroot_support_param1, "truncate");
 #ifdef SYS_truncate64
     syscalls[SYS_truncate64]=syscall_hook(sys_generic_chroot_support_param1, "truncate64");
 #endif
-    syscalls[SYS_statfs]=syscall_hook(sys_generic_chroot_support_param1, "statfs");
+    syscalls[SYS_statfs]=syscall_hook(sys_generic_chroot_support_param1, "statfs"); // XXX Should last link be resolved?
     syscalls[SYS_chdir]=syscall_hook(sys_generic_chroot_support_param1, "chdir");
     syscalls[SYS_access]=syscall_hook(sys_generic_chroot_support_param1, "access");
+#ifdef SYS_setxattr
+    syscalls[SYS_setxattr]=syscall_hook(sys_generic_chroot_support_param1, "setxattr");
+#endif
+#ifdef SYS_lsetxattr
+    syscalls[SYS_lsetxattr]=syscall_hook(sys_generic_chroot_support_link_param1, "lsetxattr");
+#endif
 #ifdef SYS_uselib
     syscalls[SYS_uselib]=syscall_hook(sys_generic_chroot_support_param1, "uselib");
 #endif
