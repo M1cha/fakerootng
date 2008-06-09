@@ -21,8 +21,6 @@
 
 #include <sys/types.h>
 #include <sys/ptrace.h>
-//#include <sys/user.h>
-#include <linux/user.h>
 #include <asm/ptrace.h>
 #include <sys/syscall.h>
 #include <errno.h>
