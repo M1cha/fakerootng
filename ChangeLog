@@ -1,3 +1,7 @@
+Version 1.11
+    * Fix compilation error
+    * Resolve uninitialized buffer reliance for fork and vfork
+
 Version 1.10
     * Implement set_string for copying a string into process space
     * Prevent the debugged process from sending a signal to the debugger
