@@ -109,14 +109,7 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state, bool &trap_after_call 
         }
 
         if( chroot_is_chrooted( state ) ) {
-            struct stat stat;
-
-            std::string newpath(chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), true ) );
-
-            if( stat.st_ino!=(ino_t)-1 ) {
-                strcpy( state->shared_mem_local.getc(), newpath.c_str() );
-                ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
-            } else {
+            if( !chroot_translate_param( pid, state, 1, true, true ) ) {
                 // We had an error translating the file name - pass the error on
                 state->context_state[1]=errno;
 
@@ -376,24 +369,3 @@ bool sys_kill( int sc_num, pid_t pid, pid_state *state )
 
     return true;
 }
-
-#ifdef SYS_uselib // Linux specific library
-bool sys_uselib( int sc_num, pid_t pid, pid_state *state )
-{
-    if( state->state==pid_state::NONE ) {
-        state->state=pid_state::RETURN;
-
-        if( chroot_is_chrooted( state ) ) {
-            struct stat stat;
-            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), false );
-
-            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
-            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
-        }
-    } else if( state->state==pid_state::RETURN ) {
-        state->state=pid_state::NONE;
-    }
-
-    return true;
-}
-#endif // SYS_uselib

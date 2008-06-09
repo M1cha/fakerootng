@@ -22,10 +22,6 @@ DECLARE_SYSFUNC(setsid)
 DECLARE_SYSFUNC(ptrace)
 DECLARE_SYSFUNC(kill)
 
-#ifdef SYS_uselib
-DECLARE_SYSFUNC(uselib)
-#endif
-
 // File handling
 DECLARE_SYSFUNC(stat)
 #ifdef SYS_fstatat64
@@ -48,13 +44,11 @@ DECLARE_SYSFUNC(symlink)
 DECLARE_SYSFUNC(symlinkat)
 DECLARE_SYSFUNC(link)
 DECLARE_SYSFUNC(unlink)
-DECLARE_SYSFUNC(access)
 DECLARE_SYSFUNC(rename)
 DECLARE_SYSFUNC(rmdir)
 DECLARE_SYSFUNC(generic_chroot_support_param1)
 
 DECLARE_SYSFUNC(chroot)
-DECLARE_SYSFUNC(chdir)
 DECLARE_SYSFUNC(getcwd)
 DECLARE_SYSFUNC(munmap)
 

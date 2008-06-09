@@ -17,7 +17,15 @@ bool chroot_is_chrooted( const pid_state *state );
 std::string chroot_parse_path( const pid_state *state, char *path, const std::string &wd, struct stat *stat, bool resolve_last_link );
 
 // Same as above, only grab the work directory and file name from the process' state
-std::string chroot_translate_param( pid_t pid, const pid_state *state, struct stat *stat, void *process_ptr, bool resolve_last_link );
+std::string chroot_translate_addr( pid_t pid, const pid_state *state, struct stat *stat, void *addr, bool resolve_last_link );
+
+// Grab the original path from the process space, translate the path (if chrooted) write the
+// new path into the shared memory and move the original param to point at the new path.
+// param_num - the param number to translate
+// abort_error - if true and an error occures, do not copy the partial string
+// offset - offset into the shared memory to write buffer to
+bool chroot_translate_param( pid_t pid, const pid_state *state, int param_num, bool resolve_last_link,
+    bool abort_error=false, int_ptr offset=0 );
 std::string chroot_translate_paramat( pid_t pid, const pid_state *state, struct stat *stat, void *process_ptr, int dirfd,
     bool resolve_last_link );
 

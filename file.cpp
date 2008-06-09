@@ -57,12 +57,8 @@ bool sys_stat( int sc_num, pid_t pid, pid_state *state )
 
         // If the process is chrooted, we need to translate the file name
         int real_sc=ptlib_get_syscall( pid );
-        if( ( real_sc==PREF_STAT || real_sc==PREF_LSTAT ) && chroot_is_chrooted(state) ) {
-            struct stat stat;
-            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), real_sc!=PREF_LSTAT );
-
-            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
-            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
+        if( ( real_sc==PREF_STAT || real_sc==PREF_LSTAT ) ) {
+            chroot_translate_param( pid, state, 1, real_sc!=PREF_LSTAT );
         }
     } else if( state->state==pid_state::RETURN ) {
         // Returning from the syscall
@@ -191,14 +187,7 @@ static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset
 bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        if( chroot_is_chrooted( state ) ) {
-            struct stat stat;
-            std::string newpath(chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1), true ));
-
-            // Copy it over the the allocated memory
-            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
-            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
-        }
+        chroot_translate_param( pid, state, 1, true );
 
         state->context_state[1]=ptlib_get_argument( pid, 1 ); // Store the file name
     }
@@ -284,13 +273,7 @@ bool sys_chown( int sc_num, pid_t pid, pid_state *state )
         state->context_state[0]=ptlib_get_argument(pid, 2);
         state->context_state[1]=ptlib_get_argument(pid, 3);
 
-        if( chroot_is_chrooted(state) ) {
-            struct stat stat;
-            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), true );
-
-            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
-            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
-        }
+        chroot_translate_param( pid, state, 1, true );
     }
     
     return real_chown( sc_num, pid, state, 1, PREF_STAT );
@@ -312,13 +295,7 @@ bool sys_lchown( int sc_num, pid_t pid, pid_state *state )
         state->context_state[0]=ptlib_get_argument(pid, 2);
         state->context_state[1]=ptlib_get_argument(pid, 3);
 
-        if( chroot_is_chrooted(state) ) {
-            struct stat stat;
-            std::string translated_path=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), false );
-
-            ptlib_set_string( pid, translated_path.c_str(), (char *)state->memory+sizeof(ptlib_stat) );
-            ptlib_set_argument( pid, 1, (int_ptr)state->memory+sizeof(ptlib_stat) );
-        }
+        chroot_translate_param( pid, state, 1, false );
     }
     
     return real_chown( sc_num, pid, state, 1, PREF_LSTAT );
@@ -421,15 +398,7 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
 bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        if( chroot_is_chrooted(state) ) {
-            struct stat stat;
-            // mknod will not follow a symlink as last element of a path
-            std::string newpath(chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), false ) );
-
-            // Copy it over the the allocated memory
-            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
-            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
-        }
+        chroot_translate_param( pid, state, 1, false );
 
         state->context_state[0]=ptlib_get_argument( pid, 2 ); // Mode
         state->context_state[1]=ptlib_get_argument( pid, 3 ); // Device ID
@@ -509,18 +478,8 @@ static bool real_open( int sc_num, pid_t pid, pid_state *state )
 bool sys_open( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        // Will need memory
-        if( state->memory==NULL )
-            return allocate_process_mem( pid, state, sc_num );
+        chroot_translate_param( pid, state, 1, true );
 
-        if( chroot_is_chrooted( state ) ) {
-            struct stat stat;
-            std::string newpath(chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), true ));
-
-            // Copy it over the the allocated memory
-            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
-            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
-        }
         state->context_state[0]=ptlib_get_argument( pid, 2 ); //flags
     }
 
@@ -602,6 +561,8 @@ static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset
 bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE && state->memory!=NULL ) {
+        chroot_translate_param( pid, state, 1, true );
+
         state->context_state[0]=ptlib_get_argument( pid, 1 ); // Directory name
 
         if( log_level>0  ) {
@@ -610,15 +571,6 @@ bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
             ptlib_get_string( pid, (void *)state->context_state[0], name, sizeof(name) );
 
             dlog("mkdir: %d creates %s\n", pid, name );
-        }
-
-        if( chroot_is_chrooted(state) ) {
-            struct stat stat;
-            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), true );
-
-            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
-            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
-            state->context_state[0]=(int_ptr)state->shared_memory; // Directory name
         }
     }
 
@@ -709,13 +661,7 @@ static bool real_symlink( int sc_num, pid_t pid, pid_state *state, int mode_offs
 bool sys_symlink( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE && state->memory!=NULL ) {
-        if( chroot_is_chrooted(state) ) {
-            struct stat stat;
-            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 2 ), true );
-
-            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
-            ptlib_set_argument( pid, 2, (int_ptr)state->shared_memory );
-        }
+        chroot_translate_param( pid, state, 2, true );
 
         state->context_state[0]=ptlib_get_argument( pid, 2 ); // new path
     }
@@ -734,30 +680,6 @@ bool sys_symlinkat( int sc_num, pid_t pid, pid_state *state )
     return real_symlink( sc_num, pid, state, 2, PREF_FSTATAT, AT_SYMLINK_NOFOLLOW );
 }
 #endif
-
-bool sys_chdir( int sc_num, pid_t pid, pid_state *state )
-{
-    if( state->state==pid_state::NONE ) {
-        // Will need memory
-        if( state->memory==NULL )
-            return allocate_process_mem( pid, state, sc_num );
-
-        state->state=pid_state::RETURN;
-
-        // If the process is chrooted, we need to translate the file name
-        if( chroot_is_chrooted(state) ) {
-            struct stat stat;
-            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), true );
-
-            ptlib_set_string( pid, newpath.c_str(), state->memory );
-            ptlib_set_argument( pid, 1, (int_ptr)state->memory );
-        }
-    } else if( state->state==pid_state::RETURN ) {
-        state->state=pid_state::NONE;
-    }
-
-    return true;
-}
 
 bool sys_getcwd( int sc_num, pid_t pid, pid_state *state )
 {
@@ -947,18 +869,11 @@ bool sys_link( int sc_num, pid_t pid, pid_state *state )
         state->state=pid_state::RETURN;
 
         if( chroot_is_chrooted( state ) ) {
-            struct stat stat;
             // Translate the "oldpath"
-            std::string newpath(chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), true ) );
-
-            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
-            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
+            chroot_translate_param( pid, state, 1, true, false, 0 );
 
             // Translate the "newpath"
-            newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 2 ), true );
-
-            strcpy( state->shared_mem_local.getc()+PATH_MAX, newpath.c_str() );
-            ptlib_set_argument( pid, 2, ((int_ptr)state->shared_memory)+PATH_MAX );
+            chroot_translate_param( pid, state, 2, true, false, PATH_MAX );
         }
     } else if( state->state==pid_state::RETURN ) {
         state->state=pid_state::NONE;
@@ -983,11 +898,8 @@ bool sys_unlink( int sc_num, pid_t pid, pid_state *state )
         state->context_state[1]=0; // No forced error
 
         if( chroot_is_chrooted( state ) ) {
-            struct stat stat;
             // Translate the filename. If the last path component is a symlink, that is what we want deleted
-            std::string newpath(chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), false ) );
-
-            if( stat.st_ino==(ino_t)-1 ) {
+            if( !chroot_translate_param( pid, state, 1, false, true ) ) {
                 // We had an error translating the file name - pass the error on
                 state->state=pid_state::REDIRECT2;
                 state->context_state[1]=errno;
@@ -995,9 +907,6 @@ bool sys_unlink( int sc_num, pid_t pid, pid_state *state )
 
                 return true;
             }
-
-            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
-            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
         }
 
         // Keep a copy of the file name
@@ -1097,26 +1006,6 @@ bool sys_unlink( int sc_num, pid_t pid, pid_state *state )
     return true;
 }
 
-bool sys_access( int sc_num, pid_t pid, pid_state *state )
-{
-    if( state->state==pid_state::NONE ) {
-        state->state=pid_state::RETURN;
-
-        if( chroot_is_chrooted( state ) ) {
-            struct stat stat;
-            std::string newpath(chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), true ));
-
-            // Copy it over the the allocated memory
-            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
-            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
-        }
-    } else if( state->state==pid_state::RETURN ) {
-        state->state=pid_state::NONE;
-    }
-
-    return true;
-}
-
 // XXX BUG Since it is possible that the file is renamed across a device boundry, we really need to make sure we properly copy
 // the override attributes with the file. We also possibly need to erase the old override entry
 bool sys_rename( int sc_num, pid_t pid, pid_state *state )
@@ -1124,19 +1013,8 @@ bool sys_rename( int sc_num, pid_t pid, pid_state *state )
     if( state->state==pid_state::NONE ) {
         state->state=pid_state::RETURN;
 
-        if( chroot_is_chrooted( state ) ) {
-            struct stat stat;
-            std::string newpath(chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), false ));
-
-            // Copy it over the the allocated memory
-            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
-            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
-
-            newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 2 ), false );
-            // Copy it over the the allocated memory
-            strcpy( state->shared_mem_local.getc()+PATH_MAX, newpath.c_str() );
-            ptlib_set_argument( pid, 2, ((int_ptr)state->shared_memory)+PATH_MAX );
-        }
+        chroot_translate_param( pid, state, 1, false, false, 0 );
+        chroot_translate_param( pid, state, 2, false, false, PATH_MAX );
     } else if( state->state==pid_state::RETURN ) {
         state->state=pid_state::NONE;
     }
@@ -1147,14 +1025,7 @@ bool sys_rename( int sc_num, pid_t pid, pid_state *state )
 bool sys_rmdir( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        // First thing first - translate the directory in question
-        if( chroot_is_chrooted( state ) ) {
-            struct stat stat;
-            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), false );
-
-            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
-            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
-        }
+        chroot_translate_param( pid, state, 1, false );
 
         // Keep a copy of the directory name to erase
         state->context_state[0]=0; // Internal state
@@ -1215,18 +1086,14 @@ bool sys_rmdir( int sc_num, pid_t pid, pid_state *state )
     return true;
 }
 
+// This function handles the generic case where the function is one that does not need fake root
+// special handling, except we need to translate the first parameter in case we are chrooted
 bool sys_generic_chroot_support_param1( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
         state->state=pid_state::RETURN;
 
-        if( chroot_is_chrooted( state ) ) {
-            struct stat stat;
-            std::string newpath=chroot_translate_param( pid, state, &stat, (void *)ptlib_get_argument( pid, 1 ), false );
-
-            strcpy( state->shared_mem_local.getc(), newpath.c_str() );
-            ptlib_set_argument( pid, 1, (int_ptr)state->shared_memory );
-        }
+        chroot_translate_param( pid, state, 1, false );
     } else if( state->state==pid_state::RETURN ) {
         state->state=pid_state::NONE;
     }

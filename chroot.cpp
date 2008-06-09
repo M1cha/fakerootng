@@ -197,15 +197,33 @@ std::string chroot_parse_path( const pid_state *state, char *path, const std::st
     }
 }
 
-std::string chroot_translate_param( pid_t pid, const pid_state *state, struct stat *stat, void *process_ptr, bool resolve_last_link )
+std::string chroot_translate_addr( pid_t pid, const pid_state *state, struct stat *stat, void *addr, bool resolve_last_link )
 {
     char filename[PATH_MAX], wd[PATH_MAX];
-    ptlib_get_string( pid, process_ptr, filename, sizeof(filename) );
+    ptlib_get_string( pid, addr, filename, sizeof(filename) );
 
     // Get the process' working dir
     ptlib_get_cwd( pid, wd, sizeof(wd) );
 
     return chroot_parse_path( state, filename, wd, stat, resolve_last_link );
+}
+
+bool chroot_translate_param( pid_t pid, const pid_state *state, int param_num, bool resolve_last_link, bool abort_error, int_ptr offset )
+{
+    // Short path if we are not chrooted
+    if( !chroot_is_chrooted(state) )
+        return true;
+
+    struct stat stat;
+
+    std::string newpath=chroot_translate_addr( pid, state, &stat, (void *)ptlib_get_argument( pid, param_num ), resolve_last_link );
+
+    if( stat.st_ino!=(ino_t)-1 || !abort_error ) {
+        strcpy( state->shared_mem_local.getc()+offset, newpath.c_str() );
+        ptlib_set_argument( pid, param_num, ((int_ptr)state->shared_memory)+offset );
+    }
+
+    return stat.st_ino!=(ino_t)-1;
 }
 
 #if HAVE_OPENAT
@@ -243,7 +261,7 @@ bool sys_chroot( int sc_num, pid_t pid, pid_state *state )
     } else if( state->state==pid_state::REDIRECT2 ) {
         // We may already be chrooted - need to translate the path
         struct stat stat;
-        std::string newroot=chroot_translate_param( pid, state, &stat, (void *)state->context_state[0], true );
+        std::string newroot=chroot_translate_addr( pid, state, &stat, (void *)state->context_state[0], true );
 
         if( (int)stat.st_ino!=-1 ) {
             // The call succeeded

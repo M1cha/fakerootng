@@ -98,9 +98,6 @@ static void init_handlers()
 #endif
     syscalls[SYS_ptrace]=syscall_hook(sys_ptrace, "ptrace");
     syscalls[SYS_kill]=syscall_hook(sys_kill, "kill");
-#ifdef SYS_uselib
-    syscalls[SYS_uselib]=syscall_hook(sys_uselib, "uselib");
-#endif
 
     syscalls[SYS_stat]=syscall_hook(sys_stat, "stat");
 #ifdef SYS_stat64
@@ -158,7 +155,6 @@ static void init_handlers()
 #endif
     syscalls[SYS_link]=syscall_hook(sys_link, "link");
     syscalls[SYS_unlink]=syscall_hook(sys_unlink, "unlink");
-    syscalls[SYS_access]=syscall_hook(sys_access, "access");
     syscalls[SYS_rename]=syscall_hook(sys_rename, "rename");
     syscalls[SYS_rmdir]=syscall_hook(sys_rmdir, "rmdir");
     syscalls[SYS_readlink]=syscall_hook(sys_generic_chroot_support_param1, "readlink");
@@ -167,9 +163,13 @@ static void init_handlers()
     syscalls[SYS_truncate64]=syscall_hook(sys_generic_chroot_support_param1, "truncate64");
 #endif
     syscalls[SYS_statfs]=syscall_hook(sys_generic_chroot_support_param1, "statfs");
+    syscalls[SYS_chdir]=syscall_hook(sys_generic_chroot_support_param1, "chdir");
+    syscalls[SYS_access]=syscall_hook(sys_generic_chroot_support_param1, "access");
+#ifdef SYS_uselib
+    syscalls[SYS_uselib]=syscall_hook(sys_generic_chroot_support_param1, "uselib");
+#endif
 
     syscalls[SYS_chroot]=syscall_hook(sys_chroot, "chroot");
-    syscalls[SYS_chdir]=syscall_hook(sys_chdir, "chdir");
     syscalls[SYS_getcwd]=syscall_hook(sys_getcwd, "getcwd");
 
     syscalls[SYS_mmap]=syscall_hook(sys_mmap, "mmap");
