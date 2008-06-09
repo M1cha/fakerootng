@@ -167,9 +167,15 @@ static void init_handlers()
     syscalls[SYS_access]=syscall_hook(sys_generic_chroot_support_param1, "access");
 #ifdef SYS_setxattr
     syscalls[SYS_setxattr]=syscall_hook(sys_generic_chroot_support_param1, "setxattr");
+    syscalls[SYS_getxattr]=syscall_hook(sys_generic_chroot_support_param1, "getxattr");
+    syscalls[SYS_listxattr]=syscall_hook(sys_generic_chroot_support_param1, "listxattr");
+    syscalls[SYS_removexattr]=syscall_hook(sys_generic_chroot_support_param1, "removexattr");
 #endif
 #ifdef SYS_lsetxattr
     syscalls[SYS_lsetxattr]=syscall_hook(sys_generic_chroot_support_link_param1, "lsetxattr");
+    syscalls[SYS_lgetxattr]=syscall_hook(sys_generic_chroot_support_link_param1, "lgetxattr");
+    syscalls[SYS_llistxattr]=syscall_hook(sys_generic_chroot_support_link_param1, "llistxattr");
+    syscalls[SYS_lremovexattr]=syscall_hook(sys_generic_chroot_support_link_param1, "lremovexattr");
 #endif
 #ifdef SYS_uselib
     syscalls[SYS_uselib]=syscall_hook(sys_generic_chroot_support_param1, "uselib");
