@@ -1114,3 +1114,17 @@ bool sys_generic_chroot_support_link_param1( int sc_num, pid_t pid, pid_state *s
 
     return true;
 }
+
+bool sys_generic_chroot_support_param2( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->state=pid_state::RETURN;
+
+        chroot_translate_param( pid, state, 2, true );
+    } else if( state->state==pid_state::RETURN ) {
+        state->state=pid_state::NONE;
+    }
+
+    return true;
+}
+

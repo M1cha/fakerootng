@@ -163,8 +163,13 @@ static void init_handlers()
     syscalls[SYS_truncate64]=syscall_hook(sys_generic_chroot_support_param1, "truncate64");
 #endif
     syscalls[SYS_statfs]=syscall_hook(sys_generic_chroot_support_param1, "statfs"); // XXX Should last link be resolved?
+#ifdef SYS_statfs64
+    syscalls[SYS_statfs64]=syscall_hook(sys_generic_chroot_support_param1, "statfs64"); // XXX Should last link be resolved?
+#endif
     syscalls[SYS_chdir]=syscall_hook(sys_generic_chroot_support_param1, "chdir");
     syscalls[SYS_access]=syscall_hook(sys_generic_chroot_support_param1, "access");
+    syscalls[SYS_utime]=syscall_hook(sys_generic_chroot_support_param1, "utime");
+    syscalls[SYS_utimes]=syscall_hook(sys_generic_chroot_support_param1, "utimes");
 #ifdef SYS_setxattr
     syscalls[SYS_setxattr]=syscall_hook(sys_generic_chroot_support_param1, "setxattr");
     syscalls[SYS_getxattr]=syscall_hook(sys_generic_chroot_support_param1, "getxattr");
@@ -179,6 +184,9 @@ static void init_handlers()
 #endif
 #ifdef SYS_uselib
     syscalls[SYS_uselib]=syscall_hook(sys_generic_chroot_support_param1, "uselib");
+#endif
+#ifdef SYS_inotify_add_watch
+    syscalls[SYS_inotify_add_watch]=syscall_hook(sys_generic_chroot_support_param1, "inotify_add_watch");
 #endif
 
     syscalls[SYS_chroot]=syscall_hook(sys_chroot, "chroot");
