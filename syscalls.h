@@ -11,6 +11,7 @@ DECLARE_SYSFUNC(getuid)
 
 // Process management
 DECLARE_SYSFUNC(fork)
+DECLARE_SYSFUNC(vfork)
 DECLARE_SYSFUNC(wait4)
 DECLARE_SYSFUNC(waitpid)
 DECLARE_SYSFUNC(vfork)

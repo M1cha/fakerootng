@@ -54,9 +54,23 @@ bool sys_getuid( int sc_num, pid_t pid, pid_state *state )
 
 bool sys_fork( int sc_num, pid_t pid, pid_state *state )
 {
-    // Dummy handling for now
     if( state->state==pid_state::NONE ) {
         state->state=pid_state::RETURN;
+
+        state->context_state[0]=0;
+    } else if( state->state==pid_state::RETURN ) {
+        state->state=pid_state::NONE;
+    }
+
+    return true;
+}
+
+bool sys_vfork( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->state=pid_state::RETURN;
+
+        state->context_state[0]=NEW_PROCESS_SAME_VM;
     } else if( state->state==pid_state::RETURN ) {
         state->state=pid_state::NONE;
     }

@@ -77,7 +77,7 @@ static void init_handlers()
 #endif
 
     syscalls[SYS_fork]=syscall_hook(sys_fork, "fork");
-    syscalls[SYS_vfork]=syscall_hook(sys_fork, "vfork");
+    syscalls[SYS_vfork]=syscall_hook(sys_vfork, "vfork");
 #if defined(SYS_clone)
     syscalls[SYS_clone]=syscall_hook(sys_clone, "clone");
 #endif
@@ -349,6 +349,8 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
 static void handle_new_process( pid_t parent, pid_t child )
 {
     // Copy the session information
+    dlog("%s: Registering "PID_F" with parent "PID_F"\n", __FUNCTION__, child, parent);
+
     int_ptr process_type=state[parent].context_state[0];
 
     if( (process_type&NEW_PROCESS_SAME_PARENT)==0 )
