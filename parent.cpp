@@ -156,6 +156,9 @@ static void init_handlers()
 #endif
     syscalls[SYS_link]=syscall_hook(sys_link, "link");
     syscalls[SYS_unlink]=syscall_hook(sys_unlink, "unlink");
+#if defined(SYS_unlinkat) && HAVE_OPENAT
+    syscalls[SYS_unlinkat]=syscall_hook(sys_unlinkat, "unlinkat");
+#endif
     syscalls[SYS_rename]=syscall_hook(sys_rename, "rename");
     syscalls[SYS_rmdir]=syscall_hook(sys_rmdir, "rmdir");
     syscalls[SYS_readlink]=syscall_hook(sys_generic_chroot_support_link_param1, "readlink");

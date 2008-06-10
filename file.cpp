@@ -973,6 +973,7 @@ bool sys_unlink( int sc_num, pid_t pid, pid_state *state )
                 } else {
                     // lstat syscall failed - pass the error along
                     state->state=pid_state::NONE;
+                    dlog("%s: "PID_F" lstat failed with error: %s\n", __FUNCTION__, pid, strerror(ptlib_get_error(pid, sc_num)));
                 }
             }
             break;
@@ -999,6 +1000,7 @@ bool sys_unlink( int sc_num, pid_t pid, pid_state *state )
                 } else {
                     // The "restore state" command overwrote the error
                     ptlib_set_error( pid, sc_num, error );
+                    dlog("%s: "PID_F" unlink failed with error: %s\n", __FUNCTION__, pid, strerror(error));
                 }
             }
             break;
@@ -1007,6 +1009,143 @@ bool sys_unlink( int sc_num, pid_t pid, pid_state *state )
 
     return true;
 }
+
+#if HAVE_OPENAT
+// In this function, context_state holds:
+// 0 - state machine for redirected syscalls
+// 1 - forced error number
+// 2 - pointer to file name
+// 
+// after the lstat stage:
+// 2 - 0: just delete. 1: need to mark for deletion from the override db as well
+// 
+// XXX Some code duplication with above function
+bool sys_unlinkat( int sc_num, pid_t pid, pid_state *state )
+{
+    // XXX lock memory
+    if( state->state==pid_state::NONE ) {
+
+        state->context_state[0]=(ptlib_get_argument(pid, 3)&AT_REMOVEDIR)==0 ? 0 : 10; // Beginning of syscall
+        state->context_state[1]=0; // No forced error
+
+        if( chroot_is_chrooted( state ) ) {
+            // Translate the filename. If the last path component is a symlink, that is what we want deleted
+            if( !chroot_translate_paramat( pid, state, ptlib_get_argument(pid, 1), 2, false, true ) ) {
+                // We had an error translating the file name - pass the error on
+                state->state=pid_state::REDIRECT2;
+                state->context_state[1]=errno;
+                ptlib_set_syscall(pid, PREF_NOP);
+
+                return true;
+            }
+        }
+
+        // Keep a copy of the file name
+        state->context_state[2]=ptlib_get_argument( pid, 1 );
+        state->context_state[3]=ptlib_get_argument( pid, 2 );
+
+        // We need to know whether the file was, indeed, deleted. One method goes like this
+        // First, open the file. Next, unlink the file. Then, fstat the file.
+        // Problem - cannot do that for symbolic links.
+        //
+        // Second method - lstat the file before, unlink. If link count before was 1, inode
+        // is no more.
+        // Problem - someone else may have linked it while between the lstat and the unlink.
+        //
+        // Third method - link the file to a temporary name, unlink the original, check link
+        // count on temporary name.
+        // Problem - not easy to translate relative name to one that can be used from another
+        // process. On Linux, we do that using "linkat"
+
+        // We now implement the second method
+        ptlib_set_syscall( pid, PREF_FSTATAT );
+        ptlib_set_argument( pid, 3, (int_ptr)state->memory );
+        ptlib_set_argument( pid, 4, AT_SYMLINK_NOFOLLOW );
+
+        state->state=pid_state::REDIRECT2;
+
+    } else if( state->state==pid_state::REDIRECT2 ) {
+        state->state=pid_state::NONE;
+
+        if( state->context_state[1]!=0 ) {
+            // We need to force an error
+            ptlib_set_error( pid, state->orig_sc, state->context_state[1] );
+            state->state=pid_state::NONE;
+
+            return true;
+        }
+
+        // Handle the actual state machine
+        switch( state->context_state[0] ) {
+        case 0:
+        case 10:
+            // lstat returned
+            {
+                if( ptlib_success( pid, sc_num ) ) {
+                    ptlib_stat stat;
+
+                    ptlib_get_mem( pid, state->memory, &stat, sizeof(stat) );
+
+                    if( stat.nlink==1 || state->context_state[0]==10 ) {
+                        // Store the relevant data in the shared memory
+                        struct override_key *key=reinterpret_cast<override_key *>(state->shared_mem_local.getc()+PATH_MAX);
+                        key->dev=stat.dev;
+                        key->inode=stat.ino;
+
+                        state->context_state[2]=1;
+                    } else {
+                        state->context_state[2]=0;
+                    }
+
+                    // Perform the actual unlink operation
+                    ptlib_save_state( pid, state->saved_state );
+                    ptlib_set_argument( pid, 1, state->context_state[2] );
+                    ptlib_set_argument( pid, 2, state->context_state[3] );
+                    ptlib_set_argument( pid, 3, state->context_state[0]==10 ? AT_REMOVEDIR : 0 );
+                    ptlib_generate_syscall( pid, state->orig_sc, state->shared_memory );
+                    state->state=pid_state::REDIRECT1;
+                    state->context_state[0]=1;
+                } else {
+                    // lstat syscall failed - pass the error along
+                    state->state=pid_state::NONE;
+                    dlog("%s: "PID_F" fstatat failed with error: %s\n", __FUNCTION__, pid, strerror(ptlib_get_error(pid, sc_num)));
+                }
+            }
+            break;
+        case 1:
+            // unlink returned
+            {
+                bool success=ptlib_success( pid, sc_num );
+                int error=success?0:ptlib_get_error( pid, sc_num );
+
+                ptlib_restore_state( pid, state->saved_state );
+
+                if( success ) {
+                    if( state->context_state[2]==1 ) {
+                        // Need to erase the override from our database
+                        struct override_key *key=reinterpret_cast<override_key *>(state->shared_mem_local.getc()+PATH_MAX);
+                        stat_override map;
+
+                        if( get_map( key->dev, key->inode, &map ) ) {
+                            map.transient=true;
+                            set_map( &map );
+                            dlog("%s: "PID_F" inode "INODE_F" in override mapping marked transient\n", __FUNCTION__,
+                                    pid, key->inode );
+                        }
+                    }
+                } else {
+                    // The "restore state" command overwrote the error
+                    ptlib_set_error( pid, sc_num, error );
+                    dlog("%s: "PID_F" unlinkat failed with error: %s\n", __FUNCTION__, pid, strerror(error));
+                }
+            }
+            break;
+        }
+    }
+
+    return true;
+}
+#endif // HAVE_OPENAT
 
 // XXX BUG Since it is possible that the file is renamed across a device boundry, we really need to make sure we properly copy
 // the override attributes with the file. We also possibly need to erase the old override entry
