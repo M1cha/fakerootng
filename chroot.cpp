@@ -197,18 +197,30 @@ std::string chroot_parse_path( const pid_state *state, char *path, const std::st
     }
 }
 
-std::string chroot_translate_addr( pid_t pid, const pid_state *state, struct stat *stat, void *addr, bool resolve_last_link )
+std::string chroot_translate_addr( pid_t pid, const pid_state *state, struct stat *stat, int dirfd, void *addr, bool resolve_last_link )
 {
     char filename[PATH_MAX], wd[PATH_MAX];
     ptlib_get_string( pid, addr, filename, sizeof(filename) );
 
+    strcpy( wd, "/" );
+
     // Get the process' working dir
-    ptlib_get_cwd( pid, wd, sizeof(wd) );
+    if( dirfd==CHROOT_PWD )
+        ptlib_get_cwd( pid, wd, sizeof(wd) );
+    else
+        ptlib_get_fd( pid, dirfd, wd, sizeof(wd) );
 
     return chroot_parse_path( state, filename, wd, stat, resolve_last_link );
 }
 
 bool chroot_translate_param( pid_t pid, const pid_state *state, int param_num, bool resolve_last_link, bool abort_error, int_ptr offset )
+{
+    return chroot_translate_paramat( pid, state, CHROOT_PWD, param_num, resolve_last_link, abort_error, offset );
+}
+
+// Same as chroot_translate_param, only for the *at family of functions
+bool chroot_translate_paramat( pid_t pid, const pid_state *state, int dirfd, int param_num, bool resolve_last_link,
+    bool abort_error, int_ptr offset )
 {
     // Short path if we are not chrooted
     if( !chroot_is_chrooted(state) )
@@ -216,7 +228,8 @@ bool chroot_translate_param( pid_t pid, const pid_state *state, int param_num, b
 
     struct stat stat;
 
-    std::string newpath=chroot_translate_addr( pid, state, &stat, (void *)ptlib_get_argument( pid, param_num ), resolve_last_link );
+    std::string newpath=chroot_translate_addr( pid, state, &stat, dirfd, (void *)ptlib_get_argument( pid, param_num ),
+        resolve_last_link );
 
     if( stat.st_ino!=(ino_t)-1 || !abort_error ) {
         strcpy( state->shared_mem_local.getc()+offset, newpath.c_str() );
@@ -225,31 +238,6 @@ bool chroot_translate_param( pid_t pid, const pid_state *state, int param_num, b
 
     return stat.st_ino!=(ino_t)-1;
 }
-
-#if HAVE_OPENAT
-// Same as chroot_translate_param, only for the *at family of functions
-std::string chroot_translate_paramat( pid_t pid, const pid_state *state, struct stat *stat, void *process_ptr, int dirfd,
-    bool resolve_last_link )
-{
-    char filename[PATH_MAX], wd[PATH_MAX];
-    ptlib_get_string( pid, process_ptr, filename, sizeof(filename) );
-
-    // Get the process' working dir
-    if( filename[0]=='/' ) {
-        // Absolute path - we don't care what the current directory is
-        wd[0]='/';
-        wd[1]='\0';
-    } else if( dirfd==AT_FDCWD ) {
-        ptlib_get_cwd( pid, wd, sizeof(wd) );
-    } else {
-        if( ptlib_get_fd( pid, dirfd, wd, sizeof(wd) )<0 ) {
-            stat->st_ino=-1;
-        }
-    }
-
-    return chroot_parse_path( state, filename, wd, stat, resolve_last_link );
-}
-#endif
 
 bool sys_chroot( int sc_num, pid_t pid, pid_state *state )
 {
@@ -261,7 +249,7 @@ bool sys_chroot( int sc_num, pid_t pid, pid_state *state )
     } else if( state->state==pid_state::REDIRECT2 ) {
         // We may already be chrooted - need to translate the path
         struct stat stat;
-        std::string newroot=chroot_translate_addr( pid, state, &stat, (void *)state->context_state[0], true );
+        std::string newroot=chroot_translate_addr( pid, state, &stat, CHROOT_PWD, (void *)state->context_state[0], true );
 
         if( (int)stat.st_ino!=-1 ) {
             // The call succeeded
