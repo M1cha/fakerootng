@@ -108,6 +108,8 @@ bool sys_fstatat64( int sc_num, pid_t pid, pid_state *state )
     if( state->state==pid_state::NONE ) {
         // Entering the syscall
         state->state=pid_state::RETURN;
+        chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, (ptlib_get_argument(pid, 4)&AT_SYMLINK_NOFOLLOW)!=0 );
+
         state->context_state[0]=ptlib_get_argument( pid, 3 ); // Store the pointer to the stat struct
         dlog("statat64: "PID_F" stored pointer at %p\n", pid, state->context_state[0] );
 
@@ -308,6 +310,8 @@ bool sys_fchownat( int sc_num, pid_t pid, pid_state *state )
         state->context_state[0]=ptlib_get_argument(pid, 3);
         state->context_state[1]=ptlib_get_argument(pid, 4);
         state->context_state[2]=ptlib_get_argument(pid, 5);
+
+        chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, (state->context_state[2]&AT_SYMLINK_NOFOLLOW)!=0 );
     }
     
     return real_chown( sc_num, pid, state, 2, PREF_FSTATAT, state->context_state[2] );
@@ -412,6 +416,8 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
 bool sys_mknodat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, false );
+
         state->context_state[0]=ptlib_get_argument( pid, 3 ); // Mode
         state->context_state[1]=ptlib_get_argument( pid, 4 ); // Device ID
         state->context_state[2]=ptlib_get_argument( pid, 1 ); // Base fd
@@ -490,9 +496,7 @@ bool sys_open( int sc_num, pid_t pid, pid_state *state )
 bool sys_openat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        // Will need memory
-        if( state->memory==NULL )
-            return allocate_process_mem( pid, state, sc_num );
+        chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, true );
 
         state->context_state[0]=ptlib_get_argument( pid, 3 ); //flags
     }
@@ -581,7 +585,9 @@ bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
 bool sys_mkdirat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        state->context_state[0]=ptlib_get_argument( pid, 1 ); // Directory name
+        chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, true );
+
+        state->context_state[0]=ptlib_get_argument( pid, 2 ); // Directory name
 
         if( log_level>0  ) {
             char name[PATH_MAX];
@@ -600,10 +606,6 @@ bool sys_mkdirat( int sc_num, pid_t pid, pid_state *state )
 static bool real_symlink( int sc_num, pid_t pid, pid_state *state, int mode_offset, int stat_function, int extra_flags=-1 )
 {
     if( state->state==pid_state::NONE ) {
-        // Will need memory
-        if( state->memory==NULL )
-            return allocate_process_mem( pid, state, sc_num );
-
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
         if( ptlib_success( pid, sc_num ) ) {
@@ -1086,3 +1088,15 @@ bool sys_rmdir( int sc_num, pid_t pid, pid_state *state )
     return true;
 }
 
+bool sys_generic_chroot_at( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->state=pid_state::RETURN;
+
+        chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, true );
+    } else if( state->state==pid_state::RETURN ) {
+        state->state=pid_state::NONE;
+    }
+
+    return true;
+}

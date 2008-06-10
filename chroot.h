@@ -31,7 +31,7 @@ std::string chroot_translate_addr( pid_t pid, const pid_state *state, struct sta
 bool chroot_translate_param( pid_t pid, const pid_state *state, int param_num, bool resolve_last_link,
     bool abort_error=false, int_ptr offset=0 );
 bool chroot_translate_paramat( pid_t pid, const pid_state *state, int dirfd, int param_num, bool resolve_last_link,
-    bool abort_error, int_ptr offset );
+    bool abort_error=false, int_ptr offset=0 );
 
 #ifdef AT_FDCWD
 #define CHROOT_PWD AT_FDCWD

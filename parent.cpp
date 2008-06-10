@@ -189,6 +189,9 @@ static void init_handlers()
 #ifdef SYS_inotify_add_watch
     syscalls[SYS_inotify_add_watch]=syscall_hook(sys_generic_chroot_support_param1, "inotify_add_watch");
 #endif
+#if defined(SYS_futimesat) && HAVE_OPENAT
+    syscalls[SYS_futimesat]=syscall_hook(sys_generic_chroot_at, "futimesat");
+#endif
 
     syscalls[SYS_chroot]=syscall_hook(sys_chroot, "chroot");
     syscalls[SYS_getcwd]=syscall_hook(sys_getcwd, "getcwd");

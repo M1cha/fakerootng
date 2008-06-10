@@ -307,4 +307,3 @@ bool sys_generic_chroot_support_param2( int sc_num, pid_t pid, pid_state *state 
 
     return true;
 }
-
