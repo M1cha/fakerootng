@@ -182,7 +182,7 @@ static void init_handlers()
     syscalls[SYS_chdir]=syscall_hook(sys_generic_chroot_support_param1, "chdir");
     syscalls[SYS_access]=syscall_hook(sys_generic_chroot_support_param1, "access");
 #if defined(SYS_faccessat) && HAVE_OPENAT
-    syscalls[SYS_faccessat]=syscall_hook(sys_faccessat, "faccessat");
+    syscalls[SYS_faccessat]=syscall_hook(sys_generic_chroot_at_link4, "faccessat");
 #endif
     syscalls[SYS_utime]=syscall_hook(sys_generic_chroot_support_param1, "utime");
     syscalls[SYS_utimes]=syscall_hook(sys_generic_chroot_support_param1, "utimes");
@@ -206,6 +206,9 @@ static void init_handlers()
 #endif
 #if defined(SYS_futimesat) && HAVE_OPENAT
     syscalls[SYS_futimesat]=syscall_hook(sys_generic_chroot_at, "futimesat");
+#endif
+#if defined(SYS_utimensat) && HAVE_OPENAT
+    syscalls[SYS_utimensat]=syscall_hook(sys_generic_chroot_at, "utimensat");
 #endif
 
     syscalls[SYS_chroot]=syscall_hook(sys_chroot, "chroot");
