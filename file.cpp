@@ -1269,6 +1269,21 @@ bool sys_rmdir( int sc_num, pid_t pid, pid_state *state )
 }
 
 #if HAVE_OPENAT
+bool sys_faccessat( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->state=pid_state::RETURN;
+
+        chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, (ptlib_get_argument( pid, 4)&AT_SYMLINK_NOFOLLOW)!=0 );
+    } else if( state->state==pid_state::RETURN ) {
+        state->state=pid_state::NONE;
+    }
+
+    return true;
+}
+#endif
+
+#if HAVE_OPENAT
 bool sys_generic_chroot_at( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
@@ -1294,4 +1309,4 @@ bool sys_generic_chroot_link_at( int sc_num, pid_t pid, pid_state *state )
 
     return true;
 }
-#endif
+#endif // HAVE_OPENAT

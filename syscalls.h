@@ -50,6 +50,8 @@ DECLARE_SYSFUNC(unlinkat)
 DECLARE_SYSFUNC(rename)
 DECLARE_SYSFUNC(renameat)
 DECLARE_SYSFUNC(rmdir)
+DECLARE_SYSFUNC(faccessat)
+
 DECLARE_SYSFUNC(generic_chroot_support_param1)
 DECLARE_SYSFUNC(generic_chroot_support_link_param1)
 DECLARE_SYSFUNC(generic_chroot_support_param2)

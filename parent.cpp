@@ -181,6 +181,9 @@ static void init_handlers()
 #endif
     syscalls[SYS_chdir]=syscall_hook(sys_generic_chroot_support_param1, "chdir");
     syscalls[SYS_access]=syscall_hook(sys_generic_chroot_support_param1, "access");
+#if defined(SYS_faccessat) && HAVE_OPENAT
+    syscalls[SYS_faccessat]=syscall_hook(sys_faccessat, "faccessat");
+#endif
     syscalls[SYS_utime]=syscall_hook(sys_generic_chroot_support_param1, "utime");
     syscalls[SYS_utimes]=syscall_hook(sys_generic_chroot_support_param1, "utimes");
 #ifdef SYS_setxattr
