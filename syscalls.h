@@ -54,6 +54,7 @@ DECLARE_SYSFUNC(generic_chroot_support_param1)
 DECLARE_SYSFUNC(generic_chroot_support_link_param1)
 DECLARE_SYSFUNC(generic_chroot_support_param2)
 DECLARE_SYSFUNC(generic_chroot_at)
+DECLARE_SYSFUNC(generic_chroot_link_at)
 
 DECLARE_SYSFUNC(chroot)
 DECLARE_SYSFUNC(getcwd)
