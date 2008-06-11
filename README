@@ -14,10 +14,10 @@ BUGS
   debuggers to run: fakeroot-ng and strace
 - Strace does not support tracing children (i.e. - the -f option)
 - Poor handling (race) of redirected syscalls with threaded programs.
+- In chroot, the actual interpreter file (ld-linux for ELF executable) is
+  searched for in the real root, rather than in the chrooted jail.
 
 LIMITATIONS
-- In chroot, the actual interpreter file (ld-linux for ELF executable) will
-  be searched for in the real root, rather than in the chrooted jail.
-- Program has free access to the fakeroot-ng controlled memory inside the
+- Program has limited access to the fakeroot-ng controlled memory inside the
   program's address space
 

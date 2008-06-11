@@ -1,8 +1,11 @@
-Version 1.11
+Version 0.12
+    * Complete the chroot support for all *at functions
+
+Version 0.11
     * Fix compilation error
     * Resolve uninitialized buffer reliance for fork and vfork
 
-Version 1.10
+Version 0.10
     * Implement set_string for copying a string into process space
     * Prevent the debugged process from sending a signal to the debugger
     * Chroot support (all but the *at functions)
