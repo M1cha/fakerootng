@@ -226,10 +226,15 @@ bool chroot_translate_paramat( pid_t pid, const pid_state *state, int dirfd, int
     if( !chroot_is_chrooted(state) )
         return true;
 
+    void *path_addr=(void *)ptlib_get_argument( pid, param_num );
+    if( path_addr==NULL ) {
+        // The process asked to work directly on the file descriptor - do not touch the path
+        return true;
+    }
+
     struct stat stat;
 
-    std::string newpath=chroot_translate_addr( pid, state, &stat, dirfd, (void *)ptlib_get_argument( pid, param_num ),
-        resolve_last_link );
+    std::string newpath=chroot_translate_addr( pid, state, &stat, dirfd, path_addr, resolve_last_link );
 
     if( stat.st_ino!=(ino_t)-1 || !abort_error ) {
         strcpy( state->shared_mem_local.getc()+offset, newpath.c_str() );
