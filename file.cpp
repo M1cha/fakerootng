@@ -1163,6 +1163,22 @@ bool sys_rename( int sc_num, pid_t pid, pid_state *state )
     return true;
 }
 
+#if HAVE_OPENAT
+bool sys_renameat( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        state->state=pid_state::RETURN;
+
+        chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1), 2, false, false, 0 );
+        chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 3), 4, false, false, PATH_MAX );
+    } else if( state->state==pid_state::RETURN ) {
+        state->state=pid_state::NONE;
+    }
+
+    return true;
+}
+#endif
+
 bool sys_rmdir( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
