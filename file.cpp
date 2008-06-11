@@ -210,6 +210,10 @@ bool sys_fchmod( int sc_num, pid_t pid, pid_state *state )
 bool sys_fchmodat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        // XXX At some potential future date, Linux may implement AT_SYMLINK_NOFOLLOW, at which point
+        // this chroot translation will need to be reconsidered
+        chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1), 2, true ); 
+
         state->context_state[1]=ptlib_get_argument( pid, 1 ); // Store the base dir fd
         state->context_state[2]=ptlib_get_argument( pid, 2 ); // Store the file name
         state->context_state[3]=ptlib_get_argument( pid, 4 ); // Store the flags
