@@ -208,7 +208,7 @@ static void init_handlers()
     syscalls[SYS_futimesat]=syscall_hook(sys_generic_chroot_at, "futimesat");
 #endif
 #if defined(SYS_utimensat) && HAVE_OPENAT
-    syscalls[SYS_utimensat]=syscall_hook(sys_generic_chroot_at, "utimensat");
+    syscalls[SYS_utimensat]=syscall_hook(sys_generic_chroot_at_link4, "utimensat");
 #endif
 
     syscalls[SYS_chroot]=syscall_hook(sys_chroot, "chroot");

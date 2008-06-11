@@ -1301,7 +1301,7 @@ bool sys_generic_chroot_at_link4( int sc_num, pid_t pid, pid_state *state )
     if( state->state==pid_state::NONE ) {
         state->state=pid_state::RETURN;
 
-        chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, (ptlib_get_argument( pid, 4)&AT_SYMLINK_NOFOLLOW)!=0 );
+        chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, (ptlib_get_argument( pid, 4)&AT_SYMLINK_NOFOLLOW)==0 );
     } else if( state->state==pid_state::RETURN ) {
         state->state=pid_state::NONE;
     }
