@@ -663,7 +663,7 @@ static bool real_symlink( int sc_num, pid_t pid, pid_state *state, int mode_offs
 bool sys_symlink( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE && state->memory!=NULL ) {
-        chroot_translate_param( pid, state, 2, true );
+        chroot_translate_param( pid, state, 2, false );
 
         state->context_state[0]=ptlib_get_argument( pid, 2 ); // new path
     }
@@ -675,6 +675,8 @@ bool sys_symlink( int sc_num, pid_t pid, pid_state *state )
 bool sys_symlinkat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 2 ), 3, false );
+
         state->context_state[0]=ptlib_get_argument( pid, 2 ); // dirfd
         state->context_state[1]=ptlib_get_argument( pid, 3 ); // new path
     }
