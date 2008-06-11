@@ -870,19 +870,38 @@ bool sys_link( int sc_num, pid_t pid, pid_state *state )
     if( state->state==pid_state::NONE ) {
         state->state=pid_state::RETURN;
 
-        if( chroot_is_chrooted( state ) ) {
-            // Translate the "oldpath"
-            chroot_translate_param( pid, state, 1, true, false, 0 );
+        // Translate the "oldpath"
+        chroot_translate_param( pid, state, 1, false, false, 0 );
 
-            // Translate the "newpath"
-            chroot_translate_param( pid, state, 2, true, false, PATH_MAX );
-        }
+        // Translate the "newpath"
+        chroot_translate_param( pid, state, 2, false, false, PATH_MAX );
     } else if( state->state==pid_state::RETURN ) {
         state->state=pid_state::NONE;
     }
 
     return true;
 }
+
+#if HAVE_OPENAT
+bool sys_linkat( int sc_num, pid_t pid, pid_state *state )
+{
+    // XXX lock memory
+    if( state->state==pid_state::NONE ) {
+        state->state=pid_state::RETURN;
+
+        // Translate the "oldpath"
+        chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1), 2,
+            (ptlib_get_argument( pid, 5)&AT_SYMLINK_FOLLOW)==0, false, 0 );
+
+        // Translate the "newpath"
+        chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 3), 4, false, false, PATH_MAX );
+    } else if( state->state==pid_state::RETURN ) {
+        state->state=pid_state::NONE;
+    }
+
+    return true;
+}
+#endif
 
 // In this function, context_state holds:
 // 0 - state machine for redirected syscalls

@@ -155,6 +155,9 @@ static void init_handlers()
     syscalls[SYS_symlinkat]=syscall_hook(sys_symlinkat, "symlinkat");
 #endif
     syscalls[SYS_link]=syscall_hook(sys_link, "link");
+#if defined(SYS_linkat) && HAVE_OPENAT
+    syscalls[SYS_linkat]=syscall_hook(sys_linkat, "linkat");
+#endif
     syscalls[SYS_unlink]=syscall_hook(sys_unlink, "unlink");
 #if defined(SYS_unlinkat) && HAVE_OPENAT
     syscalls[SYS_unlinkat]=syscall_hook(sys_unlinkat, "unlinkat");
