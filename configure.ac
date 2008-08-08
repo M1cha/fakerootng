@@ -4,7 +4,7 @@
 AC_PREREQ(2.61)
 AC_INIT([fakeroot-ng], [0.12], [shachar@debian.org])
 AC_CANONICAL_TARGET()
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([no-dist])
 AC_CONFIG_SRCDIR([parent.h])
 AC_CONFIG_HEADER([config.h])
 
@@ -174,5 +174,5 @@ fi
 ]
 
 dnl We generate all Makefiles for all platforms, and then only invoke those for the platforms we need
-AC_CONFIG_FILES([Makefile tests/Makefile arch/$target_os/Makefile.template arch/$target_os/$target_cpu/Makefile])
+AC_CONFIG_FILES([Makefile tests/Makefile arch/Makefile arch/$target_os/Makefile.template arch/$target_os/$target_cpu/Makefile])
 AC_OUTPUT
