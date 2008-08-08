@@ -80,7 +80,7 @@ const void *ptlib_prepare_memory( ); /* Returns pointer to static buffer with th
 size_t ptlib_prepare_memory_len(); /* How much memory does the platform need beyond how much the process needs */
 
 /* This is a function that must be provided by the user of the library */
-void __dlog_( const char *format, ... );
+void __dlog_( const char *format, ... ) COMPHINT_PRINTF( 1, 2);
 extern int log_level;
 #define dlog if( log_level>0 ) __dlog_
 

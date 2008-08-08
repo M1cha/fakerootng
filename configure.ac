@@ -105,6 +105,26 @@ AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
     ])])]
 )
 
+dnl gcc supports indicating that a function is a printf style function. It then has protections against format string
+dnl mismatches
+AC_ARG_ENABLE([strict-logging-warnings],
+[AC_HELP_STRING([--enable-strict-logging-warnings], [Enable compiler warnings for inconsistent format strings on the logging function])],[
+AC_MSG_CHECKING([whether compiler supports custom printf style protection])
+AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([int dummy( const char *format, ... ) __attribute__ ((format(printf, 1, 2)));],[] )],
+        [
+                AC_MSG_RESULT([__attribute__ ((format(...)))])
+                AC_DEFINE([COMPHINT_PRINTF( f, c )], [__attribute__ (( format ( printf, f, c )))],
+                        [How to tell the compiler that this is a printf style function])
+        ],
+        [
+                AC_MSG_RESULT([no])
+                AC_MSG_ERROR([Compiler does not support format string checking on custom functions])
+        ]
+)],
+[
+        AC_DEFINE([COMPHINT_PRINTF( f, c )], [])
+])
+
 AC_LANG_POP
 
 # Checks for library functions.

@@ -355,7 +355,7 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
     // Is any process a child of this process?
     for( MAP_CLASS<pid_t, pid_state>::iterator i=state.begin(); i!=state.end(); ++i ) {
         if( i->second.parent==pid ) {
-            dlog("Reparenting process %d to init from %d\n", i->first);
+            dlog("Reparenting process %d to init from %d\n", i->first, pid);
             i->second.parent=1;
         }
 
@@ -443,7 +443,7 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
                 if( proc_state->state!=pid_state::ALLOCATE ) {
                     // Sanity check - returning from same syscall that got us in
                     if( proc_state->state==pid_state::RETURN && ret!=proc_state->orig_sc ) {
-                        dlog("process "PID_F" orig_sc=%d actual sc=%d state=%d\n", pid, proc_state->orig_sc, ret,
+                        dlog("process "PID_F" orig_sc=%d actual sc=%d state=%s\n", pid, proc_state->orig_sc, ret,
                                 state2str(proc_state->state));
                         dlog(NULL);
                         assert( proc_state->state!=pid_state::RETURN || ret==proc_state->orig_sc );

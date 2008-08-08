@@ -87,7 +87,8 @@ bool sys_stat( int sc_num, pid_t pid, pid_state *state )
                 ret.mode=(ret.mode&(~(07000|S_IFMT))) | (override.mode&(07000|S_IFMT));
 
                 if( ok ) {
-                    dlog("stat64: "PID_F" override dev="DEV_F" inode="INODE_F" mode=%o uid=%d gid=%d\n", pid, ret.dev, ret.ino, ret.mode, ret.uid, ret.gid );
+                    dlog("stat64: "PID_F" override dev="DEV_F" inode="INODE_F" mode=%o uid=%d gid=%d\n",
+                        pid, ret.dev, ret.ino, ret.mode, ret.uid, ret.gid );
                     ptlib_set_mem( pid, &ret, (void *)state->context_state[0], sizeof(struct stat) );
                 } else {
                     dlog("stat64: "PID_F" dev="DEV_F" inode="INODE_F" override entry corrupt - removed\n", pid, ret.dev, ret.ino );
