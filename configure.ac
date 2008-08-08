@@ -17,7 +17,7 @@ AC_PROG_INSTALL
 AC_PROG_LN_S
 AC_PROG_MAKE_SET
 AC_PROG_MKDIR_P
-AC_PROG_LIBTOOL
+AC_PROG_RANLIB
 
 AC_LANG(C)
 
@@ -174,5 +174,5 @@ fi
 ]
 
 dnl We generate all Makefiles for all platforms, and then only invoke those for the platforms we need
-AC_CONFIG_FILES([Makefile tests/Makefile arch/$target_os/$target_cpu/Makefile])
+AC_CONFIG_FILES([Makefile tests/Makefile arch/$target_os/Makefile.template arch/$target_os/$target_cpu/Makefile])
 AC_OUTPUT
