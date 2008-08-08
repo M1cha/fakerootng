@@ -29,12 +29,13 @@ LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 
-%.lo: %.c $(DEPDIR)
+%.lo: %.c $(DEPDIR)/stamp
 	$(LTCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$(notdir $*.Tpo) -c -o $@ $<
 	mv -f $(DEPDIR)/$(notdir $*.Tpo) $(DEPDIR)/$(notdir $*.Plo)
 
-$(DEPDIR):
+$(DEPDIR)/stamp:
 	mkdir -p $(DEPDIR)
+	touch $(DEPDIR)/stamp
 
 include $(wildcard $(DEPDIR)/*.Plo)
 

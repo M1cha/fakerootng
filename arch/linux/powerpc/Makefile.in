@@ -12,6 +12,8 @@ VPATH=$(top_srcdir)/arch/$(target_os)/$(target_cpu)
 CC = @CC@
 CCLD = $(CC)
 DEFS = @DEFS@
+CFLAGS = @CFLAGS@
+CPPFLAGS = @CPPFLAGS@
 DEFAULT_INCLUDES = -I$(top_builddir) -I$(top_srcdir)/arch -I$(top_srcdir)/arch/$(target_os)/$(target_cpu)
 DEPDIR = @DEPDIR@
 LIBTOOL = @LIBTOOL@
@@ -27,12 +29,13 @@ LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 
-%.lo: %.c $(DEPDIR)
+%.lo: %.c $(DEPDIR)/stamp
 	$(LTCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$(notdir $*.Tpo) -c -o $@ $<
 	mv -f $(DEPDIR)/$(notdir $*.Tpo) $(DEPDIR)/$(notdir $*.Plo)
 
-$(DEPDIR):
+$(DEPDIR)/stamp:
 	mkdir -p $(DEPDIR)
+	touch $(DEPDIR)/stamp
 
 include $(wildcard $(DEPDIR)/*.Plo)
 
