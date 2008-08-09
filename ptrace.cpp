@@ -245,12 +245,16 @@ bool sys_ptrace( int sc_num, pid_t pid, pid_state *state )
             break;
         case PTRACE_PEEKTEXT:
         case PTRACE_PEEKDATA:
+#if HAVE_PTRACE_PEEKUSER
         case PTRACE_PEEKUSER:
+#endif
             handle_peek_data( pid, state );
             break;
         case PTRACE_POKETEXT:
         case PTRACE_POKEDATA:
+#if HAVE_PTRACE_PEEKUSER
         case PTRACE_POKEUSER:
+#endif
             handle_poke_data( pid, state );
             break;
 #if 0

@@ -49,6 +49,18 @@ AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
     ],
     [AC_MSG_RESULT([no])])
 
+dnl Check whether we have PTRACE_PEEKUSER
+AC_MSG_CHECKING([for PTRACE_PEEKUSER])
+AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
+        #include <sys/ptrace.h>
+        ],
+        [ptrace(PTRACE_PEEKUSER, 0, 0, 0);])],
+    [
+        AC_MSG_RESULT([yes])
+        AC_DEFINE([HAVE_PTRACE_PEEKUSER], [1], [Ptrace defines a syscall for getting a single register])
+    ],
+    [AC_MSG_RESULT([no])])
+
 dnl Check which std::map variant to use
 AC_LANG_PUSH(C++)
 AC_LANG_WERROR
