@@ -203,14 +203,16 @@ int main()
                 buffer[i]=0;
 
             /* Transfer registers */
-            ptrace(PTRACE_GETREGS, child, 0, buffer);
+            ptrace(PTRACE_GETREGS, child, buffer, buffer);
+            /* The manual page says that only data (arg 4) is needed, but on some
+             * platforms addr (arg 3) is used instead */
 
             /* Find out at least how high the buffer was filled */
             for( max1=4095; max1>=0 && buffer[max1]==0; --max1)
                 buffer[max1]=(void*)1;
 
             /* Transfer registers, again */
-            ptrace(PTRACE_GETREGS, child, 0, buffer);
+            ptrace(PTRACE_GETREGS, child, buffer, buffer);
 
             /* Find out at how high the buffer was filled when initialized to a differnet value */
             for( max2=4095; max2>max1 && buffer[max2]==(void *)1; --max2)
