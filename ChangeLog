@@ -1,3 +1,4 @@
+Version 0.13
     * Remove libtool from the ptlib build system. Make the actual build
       faster. Suggested by Bernhard R. Link
     * Add checks to make sure that fakeroot-ng will warn of a temporary
