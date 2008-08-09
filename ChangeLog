@@ -1,5 +1,9 @@
     * Remove libtool from the ptlib build system. Make the actual build
       faster. Suggested by Bernhard R. Link
+    * Add checks to make sure that fakeroot-ng will warn of a temporary
+      directory that is mounted with "noexec"
+    * Running "fakeroot-ng" with no arguments will run the current shell as
+      "root"
 
 Version 0.12
     * Complete the chroot support for all *at functions

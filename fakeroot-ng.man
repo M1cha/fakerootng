@@ -1,4 +1,4 @@
-.TH FAKEROOT\-NG 1 "December 12, 2007" "Shachar Shemesh" "Fakeroot Next Gen User Manual"
+.TH FAKEROOT\-NG 1 "August 9, 2008" "Shachar Shemesh" "Fakeroot Next Gen User Manual"
 .\" Please adjust this date whenever revising the manpage.
 .SH NAME
 fakeroot\-ng \- run a command while making it believe it is running as root
@@ -7,23 +7,23 @@ fakeroot\-ng \- run a command while making it believe it is running as root
 .SH DESCRIPTION
 This manual page documents the \fBfakeroot\-ng\fP command.
 .PP
-Fakeroot-ng allows running a process without any change to the permissions, but fooling the
+Fakeroot\-ng allows running a process without any change to the permissions, but fooling the
 process into thinking that it is running with root permissions. This typically involves
 intercepting certain system calls the process performs and manipulating their results. In order
 for the effect to be complete enough, previous manipulations have to be remembered, and
 consistent results returned.
 .PP
-The idea behind fakroot-ng was first implemented by a tool called fakeroot(1). This tool used
+The idea behind fakroot\-ng was first implemented by a tool called fakeroot(1). This tool used
 LD_PRELOAD of the dynamic linking to glibc in order to intercept the system calls. While this
 approach is very rebust and very platform independent, it does suffer in scope. In particular,
 certain operations (mostly the open(2) system call) could not be intercepted, which caused
 emulating other operations (mainly the chroot(2) system call) to not be supported.
 .PP
-Fakeroot-ng strives to fill those gaps by using a totally different technology for system call
+Fakeroot\-ng strives to fill those gaps by using a totally different technology for system call
 interception. Instead of using LD_PRELOAD, ptrace(2) is being used.
 .SH PARAMETERS
 .TP
-\fB-p\fIstate_file\fP
+\fB\-p\fIstate_file\fP
 Before the first process is being run, loads from \fIstate_file\fP the
 information needed in order to maintain a consistent view of file permissions and owners across
 fakeroot\-ng runs. This image is also automatically saved when the last process exists. If more then
@@ -39,8 +39,11 @@ mostly useful for cases where fakeroot\-ng fails to act as expected.
 Tells fakeroot\-ng not to completely daemonize itself. This is mostly useful in case of crashes that
 cause a core dump, as the debugger would normally change directory to root, which would prevent a
 core file from being created.
+.TP
+\fB\-v\fP
+Print out the version number and copyright info and exit without doing anything.
 .SH SECURITY CONSIDERATIONS
-Fakeroot-ng is a non-SUID executable, and does not modify any sensitive data. It, therefor,
+Fakeroot\-ng is a non-SUID executable, and does not modify any sensitive data. It, therefor,
 does not affect the overall security of the system. One may be tempted, however, to use
 fakeroot\-ng as a security tool, for running processes with reduced privileges or inside
 a chroot jail. In addition to all the warnings that usually apply to using chroot jails as a security
@@ -53,7 +56,7 @@ that can be trivially used to bypass LD_PRELOAD based control over a process, an
 to fakeroot\-ng. It is, theoretically, possible to mold fakeroot\-ng in such a way as to have total
 control over the traced process.
 .PP
-While it is theoretically possible, it has not been done. Fakeroot-ng does assume certain "nicely
+While it is theoretically possible, it has not been done. Fakeroot\-ng does assume certain "nicely
 behaved" assumptions about the process being traced, and a process that break those assumptions
 may be able to, if not totally escape then at least circumvent some of the "fake" environment
 imposed on it by fakeroot\-ng. As such, you are strongly warned against using fakeroot\-ng as
@@ -67,14 +70,14 @@ Plenty of those. See the "README" file for a list of known ones.
 .SH SEE ALSO
 .BR fakeroot "(1), " fakechroot "(1), " ptrace "(2), " ld.so "(8), " chroot (1)
 .SH AUTHOR
-Fakeroot-ng was written by Shachar Shemesh.
+Fakeroot\-ng was written by Shachar Shemesh.
 .PP
 This manual page was written by Shachar Shemesh <shachar@debian.org>
 .SH PROJECT HOMEPAGE AND SUPPORT
 http://sourceforge.net/projects/fakerootng
 .PP
 Community support is available through the project's
-mailing list, at https://lists.sourceforge.net/lists/listinfo/fakerootng-devel.
+mailing list, at https://lists.sourceforge.net/lists/listinfo/fakerootng\-devel.
 .PP
 Commercial support is available through Shachar's company,
 Lingnu Open Source Consulting Ltd., at http://www.lingnu.com

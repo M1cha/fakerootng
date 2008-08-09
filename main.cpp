@@ -22,6 +22,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/ptrace.h>
+#include <sys/mman.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -31,6 +32,8 @@
 
 #include <limits.h>
 #include <string.h>
+
+#include <memory>
 
 #include "arch/platform.h"
 #include "parent.h"
@@ -68,7 +71,7 @@ int parse_options( int argc, char *argv[] )
 {
     int opt;
 
-    while( (opt=getopt(argc, argv, "+p:l:d" ))!=-1 ) {
+    while( (opt=getopt(argc, argv, "+p:l:dv" ))!=-1 ) {
         switch( opt ) {
         case 'p': // Persist file
             if( optarg[0]!='/' ) {
@@ -106,17 +109,77 @@ int parse_options( int argc, char *argv[] )
         case 'd':
             nodetach=true;
             break;
+        case 'v':
+            print_version();
+            return -2;
         case '?':
             /* Error in parsing */
             return -1;
             break;
         default:
-            fprintf(stderr, "%s: internal error: unrecognized option %c\n", argv[0], optopt);
+            fprintf(stderr, "%s: internal error: unrecognized option '-%c'\n", argv[0], opt);
             return -1;
             break;
         }
     }
     return optind;
+}
+
+// Make sure we are running in a sane environment
+static bool sanity_check()
+{
+    // Make sure that /tmp (or $TMPDIR) allow us to map executable files
+    const char *tmp=getenv("TMPDIR");
+    std::string tmppath;
+
+    if( tmp!=NULL ) {
+        tmppath=tmp;
+    } else {
+        tmppath="/tmp";
+    }
+
+    std::auto_ptr<char> templt(new char[tmppath.length()+20]);
+    sprintf( templt.get(), "%s/fakeroot-ng.XXXXXX", tmppath.c_str() );
+
+    int file=mkstemp( templt.get() );
+
+    if( file==-1 ) {
+        perror("Couldn't create temporary file");
+
+        return false;
+    }
+
+    // First - make sure we don't leave any junk behind
+    unlink( templt.get() );
+
+    // Write some data into the file so it's not empty
+    if( write( file, templt.get(), tmppath.length() )<0 ) {
+        perror("Couldn't write into temporary file");
+
+        return false;
+    }
+
+    // Map the file into memory
+    void *map=mmap( NULL, 1, PROT_EXEC|PROT_READ, MAP_SHARED, file, 0 );
+    int error=errno;
+
+    close( file );
+
+    if( map==MAP_FAILED ) {
+        if( error==EPERM ) {
+            fprintf( stderr, "Temporary area points to %s, but it is mounted with \"noexec\".\n"
+                    "Set the TMPDIR environment variable to point to a directory from which executables can be run.\n",
+                    tmppath.c_str() );
+        } else {
+            perror("Couldn't mmap temporary file");
+        }
+
+        return false;
+    }
+
+    munmap( map, 1 );
+
+    return true;
 }
 
 static void perform_debugger( int child_socket, int parent_socket, pid_t child )
@@ -260,6 +323,21 @@ int main(int argc, char *argv[])
     int opt_offset=parse_options( argc, argv );
     if( opt_offset==-1 )
         return 1;
+    if( opt_offset==-2 )
+        return 0;
+
+    if( opt_offset==argc ) {
+        // Fakeroot-ng called with no arguments - assume it wanted to run the current shell
+ 
+        // We have at least one spare argv to work with (argv[0]) - use that
+        argv[argc-1]=getenv("SHELL");
+        opt_offset--;
+    }
+
+    // Check the environment to make sure it allows us to run
+    if( !sanity_check() ) {
+        return 1;
+    }
 
     // We create an extra child to do the actual debugging, while the parent waits for the running child to exit.
     int child2child[2];
@@ -267,11 +345,6 @@ int main(int argc, char *argv[])
         perror("child pipe failed");
 
         return 2;
-    }
-
-    if( opt_offset==argc ) {
-        print_version();
-        exit(0);
     }
 
 #if PTLIB_PARENT_CAN_WAIT
