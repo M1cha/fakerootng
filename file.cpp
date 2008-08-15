@@ -1110,6 +1110,14 @@ bool sys_unlinkat( int sc_num, pid_t pid, pid_state *state )
                 if( ptlib_success( pid, sc_num ) ) {
                     ptlib_stat stat;
 
+                    // We are tight on context memory - first set up the args for the continuation syscall,
+                    // only then handle the current call return
+                    ptlib_save_state( pid, state->saved_state );
+                    ptlib_set_argument( pid, 1, state->context_state[2] );
+                    ptlib_set_argument( pid, 2, state->context_state[3] );
+                    ptlib_set_argument( pid, 3, state->context_state[0]==10 ? AT_REMOVEDIR : 0 );
+
+                    // Will the file be actually deleted?
                     ptlib_get_mem( pid, state->memory, &stat, sizeof(stat) );
 
                     if( stat.nlink==1 || state->context_state[0]==10 ) {
@@ -1123,11 +1131,7 @@ bool sys_unlinkat( int sc_num, pid_t pid, pid_state *state )
                         state->context_state[2]=0;
                     }
 
-                    // Perform the actual unlink operation
-                    ptlib_save_state( pid, state->saved_state );
-                    ptlib_set_argument( pid, 1, state->context_state[2] );
-                    ptlib_set_argument( pid, 2, state->context_state[3] );
-                    ptlib_set_argument( pid, 3, state->context_state[0]==10 ? AT_REMOVEDIR : 0 );
+                    // Complete the continuation call
                     ptlib_generate_syscall( pid, state->orig_sc, state->shared_memory );
                     state->state=pid_state::REDIRECT1;
                     state->context_state[0]=1;
