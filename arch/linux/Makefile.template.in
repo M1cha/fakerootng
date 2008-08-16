@@ -39,6 +39,7 @@ include $(wildcard $(DEPDIR)/*.Pdep)
 
 distclean: clean
 	$(RM) Makefile
+	$(RM) ../Makefile.template
 
 clean:
 	$(RM) -r .deps .libs *.o *.lo ../*.o ../*.lo core libarch.a

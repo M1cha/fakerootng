@@ -172,7 +172,7 @@ static void handle_peek_data( pid_t pid, pid_state *state )
         errno=0;
         long data=ptrace( (__ptrace_request)state->context_state[0], child, state->context_state[2], 0 );
         if( data!=-1 || errno==0 ) {
-            dlog("handle_peek_data: %d is peeking data from "PID_F" at address %p\n", pid, child, state->context_state[2] );
+            dlog("handle_peek_data: %d is peeking data from "PID_F" at address %p\n", pid, child, (void*)state->context_state[2] );
 
             // Write the result where applicable
             // XXX This may be a Linux only semantics - pass addres to write result to as "data" argument
@@ -197,7 +197,7 @@ static void handle_poke_data( pid_t pid, pid_state *state )
     if( verify_permission( pid, state ) &&
         ptrace( (__ptrace_request)state->context_state[0], child, state->context_state[2], state->context_state[3] )==0 )
     {
-        dlog("handle_poke_data: %d is pokeing data in "PID_F" at address %p\n", pid, child, state->context_state[2] );
+        dlog("handle_poke_data: %d is pokeing data in "PID_F" at address %p\n", pid, child, (void*)state->context_state[2] );
         ptlib_set_retval( pid, 0 );
     } else {
         ptlib_set_error( pid, state->orig_sc, errno );
@@ -215,8 +215,8 @@ bool sys_ptrace( int sc_num, pid_t pid, pid_state *state )
         state->context_state[2]=ptlib_get_argument( pid, 3 ); // addr
         state->context_state[3]=ptlib_get_argument( pid, 4 ); // data
 
-        dlog("ptrace: %d ptrace( %d, "PID_F", %p, %p )\n", pid, state->context_state[0], state->context_state[1], state->context_state[2],
-            state->context_state[3] );
+        dlog("ptrace: "PID_F" ptrace( %d, "PID_F", %p, %p )\n", pid, (int)state->context_state[0], (pid_t)state->context_state[1],
+            (void*)state->context_state[2], (void*)state->context_state[3] );
 
         ptlib_set_syscall( pid, PREF_NOP );
         state->state=pid_state::REDIRECT2;

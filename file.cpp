@@ -53,7 +53,7 @@ bool sys_stat( int sc_num, pid_t pid, pid_state *state )
         // Entering the syscall
         state->state=pid_state::RETURN;
         state->context_state[0]=ptlib_get_argument( pid, 2 ); // Store the pointer to the stat struct
-        dlog("stat64: "PID_F" stored pointer at %p\n", pid, state->context_state[0] );
+        dlog("stat64: "PID_F" stored pointer at %p\n", pid, (void*)state->context_state[0] );
 
         // If the process is chrooted, we need to translate the file name
         int real_sc=ptlib_get_syscall( pid );
@@ -87,7 +87,7 @@ bool sys_stat( int sc_num, pid_t pid, pid_state *state )
                 ret.mode=(ret.mode&(~(07000|S_IFMT))) | (override.mode&(07000|S_IFMT));
 
                 if( ok ) {
-                    dlog("stat64: "PID_F" override dev="DEV_F" inode="INODE_F" mode=%o uid=%d gid=%d\n",
+                    dlog("stat64: "PID_F" override dev="DEV_F" inode="INODE_F" mode=%o uid="UID_F" gid="GID_F"\n",
                         pid, ret.dev, ret.ino, ret.mode, ret.uid, ret.gid );
                     ptlib_set_mem( pid, &ret, (void *)state->context_state[0], sizeof(struct stat) );
                 } else {
@@ -112,7 +112,7 @@ bool sys_fstatat64( int sc_num, pid_t pid, pid_state *state )
         chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, (ptlib_get_argument(pid, 4)&AT_SYMLINK_NOFOLLOW)!=0 );
 
         state->context_state[0]=ptlib_get_argument( pid, 3 ); // Store the pointer to the stat struct
-        dlog("statat64: "PID_F" stored pointer at %p\n", pid, state->context_state[0] );
+        dlog("statat64: "PID_F" stored pointer at %p\n", pid, (void*)state->context_state[0] );
 
         return true;
     } else {
@@ -134,7 +134,7 @@ static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset
         mode=mode&~07000;
         ptlib_set_argument( pid, mode_offset+1, mode ); // Zero out the S* field
 
-        dlog("chmod: "PID_F" mode %o changed to %o\n", pid, state->context_state[1], mode );
+        dlog("chmod: "PID_F" mode %o changed to %o\n", pid, (unsigned int)state->context_state[1], mode );
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
         if( ptlib_success( pid, sc_num ) ) {
@@ -343,7 +343,7 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
         }
         ptlib_set_argument( pid, mode_offset+1, mode );
 
-        dlog("mknod: %d mode %o\n", pid, state->context_state[1] );
+        dlog("mknod: %d mode %o\n", pid, (unsigned int)state->context_state[1] );
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
         if( ptlib_success( pid, sc_num ) ) {
@@ -795,7 +795,7 @@ bool sys_munmap( int sc_num, pid_t pid, pid_state *state )
         if( start<addr1 && end>addr1 ) {
             // The unmap range covers the lower range
             dlog("sys_munmap: "PID_F" tried to unmap range %p-%p, which conflicts with our %s range %p-%p\n",
-                pid, start, end, name1, addr1, addr1+len1 );
+                pid, (void*)start, (void*)end, name1, (void*)addr1, (void*)(addr1+len1) );
 
             if( end>addr1+len1 ) {
                 // There is an area to unmap above the lower range - mark it for a second syscall
@@ -807,13 +807,13 @@ bool sys_munmap( int sc_num, pid_t pid, pid_state *state )
         } else if( start>=addr1 && start<addr1+len1 ) {
             // The start pointer is inside the lower memory range
             dlog("sys_munmap: "PID_F" tried to unmap range %p-%p, which conflicts with our %s range %p-%p\n",
-                pid, start, end, name1, addr1, addr1+len1 );
+                pid, (void*)start, (void*)end, name1, (void*)addr1, (void*)(addr1+len1) );
 
             start=addr1+len1;
         } else if( start<addr2 && end>addr2 ) {
             // The unmap area covers the upper memory range
             dlog("sys_munmap: "PID_F" tried to unmap range %p-%p, which conflicts with our %s range %p-%p\n",
-                pid, start, end, name2, addr2, addr2+len2 );
+                pid, (void*)start, (void*)end, name2, (void*)addr2, (void*)(addr2+len2) );
 
             if( end>addr2+len2 ) {
                 // There is an area to unmap above the upper range - mark it for a second (third?) syscall
@@ -825,7 +825,7 @@ bool sys_munmap( int sc_num, pid_t pid, pid_state *state )
         } else if( start>=addr2 && start<addr2+len2 ) {
             // The start pointer is inside the upper memory range
             dlog("sys_munmap: "PID_F" tried to unmap range %p-%p, which conflicts with our %s range %p-%p\n",
-                pid, start, end, name2, addr2, addr2+len2 );
+                pid, (void*)start, (void*)end, name2, (void*)addr2, (void*)(addr2+len2) );
 
             start=addr2+len2;
         } else {
