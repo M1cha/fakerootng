@@ -6,17 +6,29 @@
 
 int main( int argc, char *argv[] )
 {
-    pid_t child=fork();
+    int numchildren=1;
 
-    if( child==0 ) {
-        // We are the child
-        int exitcode=getpid()%253;
-        printf("Child %d exit with code 0x%x\n", getpid(), exitcode );
+    if( argc==2 ) {
+        numchildren=strtoul( argv[1], 0, NULL );
+    }
 
-        exit(exitcode);
-    } else if( child==-1 ) {
-        perror("Failed to fork");
-    } else {
+    for( int i=0; i<numchildren; ++i ) {
+        pid_t child=fork();
+
+        if( child==0 ) {
+            // We are the child
+            int exitcode=getpid()%253;
+            printf("Child %d(%d) exit with code 0x%x\n", i+1, getpid(), exitcode );
+
+            exit(exitcode);
+        } else if( child==-1 ) {
+            perror("Failed to fork");
+        }
+    }
+
+    sleep(1);
+
+    for( int i=0; i<numchildren; ++i ) {
         int status;
 
         pid_t process=wait(&status);
@@ -26,14 +38,15 @@ int main( int argc, char *argv[] )
         } else {
             printf("PID %d returned 0x%x\n", process, status);
         }
+    }
 
-        process=wait(&status);
+    int status;
+    pid_t process=wait(&status);
 
-        if( process<0 ) {
-            perror("Second wait failed");
-        } else {
-            printf("PID %d returned 0x%x\n", process, status);
-        }
+    if( process<0 ) {
+        perror("Second wait failed");
+    } else {
+        printf("PID %d returned 0x%x\n", process, status);
     }
 
     return 0;
