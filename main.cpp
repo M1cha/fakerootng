@@ -296,7 +296,7 @@ static int real_perform_child( int child_socket, char *argv[] )
 #if PTLIB_PARENT_CAN_WAIT
 static int perform_child( int child_socket, char *argv[] )
 {
-    return perform_child( child_socket, argv );
+    return real_perform_child( child_socket, argv );
 }
 #else
 // Parent cannot wait on debugged child
