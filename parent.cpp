@@ -397,8 +397,8 @@ static void handle_new_process( pid_t parent, pid_t child )
     }
 }
 
-static pid_t first_child; // PID of first child
-static int comm_fd; // FD for communicating with the process "waiting" for the first child to exit
+static MAP_CLASS<pid_t, int> root_children; // Map of all root children
+
 static int num_processes; // Number of running processes
 
 int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long ret )
@@ -574,23 +574,82 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
     return sig;
 }
 
+bool attach_debugger( pid_t child, int socket )
+{
+    // Attach a debugger to the child
+    if( ptrace(PTRACE_ATTACH, child, 0, 0)!=0 ) {
+        perror("Could not start trace");
+
+        return false;
+    }
+    dlog("Debugger successfully attached to process "PID_F"\n", child );
+
+    // Let's free the process to do the exec
+    if( write( child_socket, "a", 1 )==1 ) {
+#if PTLIB_PARENT_CAN_WAIT
+        close( child_socket );
+        child_socket=-1;
+#endif
+
+        // If we start the processing loop too early, we might accidentally cath the "wait" where the master process (our grandparent)
+        // is waiting for our parent to terminate.
+        // In order to avoid that race, we wait until we notice that the process is sending itself a "USR1" signal to indicate it
+        // is ready.
+
+        bool sync=false;
+        while( !sync ) {
+            int status;
+
+            waitpid( child, &status, 0 );
+
+            if( WIFSTOPPED(status) ) {
+                switch( WSTOPSIG(status) ) {
+                case SIGUSR1:
+                    // SIGUSR1 - that's our signal
+                    dlog("Caught SIGUSR1 by child - start special handling\n");
+                    ptrace( PTRACE_SYSCALL, child, 0, 0 );
+                    sync=true;
+                    break;
+                case SIGSTOP:
+                    dlog("Caught SIGSTOP\n");
+                    ptrace( PTRACE_CONT, child, 0, 0 ); // Continue the child in systrace mode
+                    break;
+                case SIGTRAP:
+                    dlog("Caught SIGTRAP\n");
+                    ptrace( PTRACE_CONT, child, 0, 0 ); // Continue the child in systrace mode
+                    break;
+                default:
+                    dlog("Caught signal %d\n", WSTOPSIG(status) );
+                    ptrace( PTRACE_CONT, child, 0, WSTOPSIG(status) );
+                    break;
+                }
+            } else {
+                // Stopped for whatever other reason - just continue it
+                dlog("Another stop %x\n", status );
+                ptrace( PTRACE_CONT, child, 0, 0 );
+            }
+        }
+
+        // Child has started, and is debugged
+        root_children[child]=child_socket; // Mark this as a root child
+        num_processes++;
+
+        state[child]=pid_state();
+        state[child].session_id=getsid(child); // The initial session ID
+    }
+}
+
 int process_children(pid_t _first_child, int _comm_fd, pid_t session_id )
 {
     // Create a state for the first child
-    first_child=_first_child;
-    comm_fd=_comm_fd;
 
     // Initialize the ptlib library
     ptlib_init();
 
-    state[first_child]=pid_state();
-    state[first_child].session_id=session_id; // The initial session ID
     init_handlers();
     init_globals();
 
     dlog( "Begin the process loop\n" );
-
-    num_processes=1;
 
     while(num_processes>0) {
         int status;
