@@ -233,62 +233,13 @@ static void perform_debugger( int child_socket, int master_socket )
     pid_t child;
     if( read( child_socket, &child, sizeof(child) )==sizeof(child) ) {
         attach_debugger( child, child_socket );
-        debugger_loop( master_socket );
+        process_children( master_socket );
     } else {
         // Oops - no data?
         dlog("Process ID not sent correctly - debugger received error on read: %s\n", strerror(errno) );
 
         exit(2);
     }
-
-    // XXX mark
-#if 0
-    // Let's free the process to do the exec
-    if( write( child_socket, "a", 1 )==1 ) {
-        close( child_socket );
-
-        // If we start the processing loop too early, we might accidentally cath the "wait" where the master process (our grandparent)
-        // is waiting for our parent to terminate.
-        // In order to avoid that race, we wait until we notice that the process is sending itself a "USR1" signal to indicate it
-        // is ready.
-
-        bool sync=false;
-        while( !sync ) {
-            int status;
-
-            waitpid( child, &status, 0 );
-
-            if( WIFSTOPPED(status) ) {
-                switch( WSTOPSIG(status) ) {
-                case SIGUSR1:
-                    // SIGUSR1 - that's our signal
-                    dlog("Caught SIGUSR1 by child - start special handling\n");
-                    ptrace( PTRACE_SYSCALL, child, 0, 0 );
-                    sync=true;
-                    break;
-                case SIGSTOP:
-                    dlog("Caught SIGSTOP\n");
-                    ptrace( PTRACE_CONT, child, 0, 0 ); // Continue the child in systrace mode
-                    break;
-                case SIGTRAP:
-                    dlog("Caught SIGTRAP\n");
-                    ptrace( PTRACE_CONT, child, 0, 0 ); // Continue the child in systrace mode
-                    break;
-                default:
-                    dlog("Caught signal %d\n", WSTOPSIG(status) );
-                    ptrace( PTRACE_CONT, child, 0, WSTOPSIG(status) );
-                    break;
-                }
-            } else {
-                // Stopped for whatever other reason - just continue it
-                dlog("Another stop %x\n", status );
-                ptrace( PTRACE_CONT, child, 0, 0 );
-            }
-        }
-
-        process_children(child, parent_socket, sessid );
-    }
-#endif
 
     if( persistent_file[0]!='\0' ) {
         FILE *file=fopen(persistent_file, "w");
