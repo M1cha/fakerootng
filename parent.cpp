@@ -692,7 +692,8 @@ int process_children( int master_socket )
     fd_set file_set;
 
     FD_ZERO(&file_set);
-    FD_SET(master_socket, &file_set);
+    if( master_socket>0 )
+        FD_SET(master_socket, &file_set);
 
     while(num_processes>0) {
         int status;
