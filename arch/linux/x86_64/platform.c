@@ -430,9 +430,9 @@ void ptlib_prepare( pid_t pid )
     ptlib_linux_prepare(pid);
 }
 
-int ptlib_wait( pid_t *pid, int *status, ptlib_extra_data *data )
+int ptlib_wait( pid_t *pid, int *status, ptlib_extra_data *data, int async )
 {
-    return ptlib_linux_wait( pid, status, data );
+    return ptlib_linux_wait( pid, status, data, async );
 }
 
 long ptlib_parse_wait( pid_t pid, int status, enum PTLIB_WAIT_RET *type )

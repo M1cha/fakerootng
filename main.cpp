@@ -23,6 +23,8 @@
 #include <sys/wait.h>
 #include <sys/ptrace.h>
 #include <sys/mman.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -182,10 +184,8 @@ static bool sanity_check()
     return true;
 }
 
-static void perform_debugger( int child_socket, int parent_socket, pid_t child )
+static void perform_debugger( int child_socket, int master_socket )
 {
-    pid_t sessid=getsid(0);
-
     // Daemonize ourselves
     setsid();
     dlog("Debugger started\n");
@@ -214,7 +214,7 @@ static void perform_debugger( int child_socket, int parent_socket, pid_t child )
             fd=fileno(debug_log);
 
         for( int i=0; i<getdtablesize(); ++i ) {
-            if( i!=child_socket && i!=parent_socket && i!=fd )
+            if( i!=child_socket && i!=master_socket && i!=fd )
                 close(i);
         }
 
@@ -229,58 +229,16 @@ static void perform_debugger( int child_socket, int parent_socket, pid_t child )
         chdir("/");
     }
 
-    // Attach a debugger to the child
-    if( ptrace(PTRACE_ATTACH, child, 0, 0)!=0 ) {
-        perror("Could not start trace");
+    errno=0;
+    pid_t child;
+    if( read( child_socket, &child, sizeof(child) )==sizeof(child) ) {
+        attach_debugger( child, child_socket );
+        process_children( master_socket );
+    } else {
+        // Oops - no data?
+        dlog("Process ID not sent correctly - debugger received error on read: %s\n", strerror(errno) );
 
         exit(2);
-    }
-    dlog("Debugger successfully attached to process "PID_F"\n", child );
-
-    // Let's free the process to do the exec
-    if( write( child_socket, "a", 1 )==1 ) {
-        close( child_socket );
-
-        // If we start the processing loop too early, we might accidentally cath the "wait" where the master process (our grandparent)
-        // is waiting for our parent to terminate.
-        // In order to avoid that race, we wait until we notice that the process is sending itself a "USR1" signal to indicate it
-        // is ready.
-
-        bool sync=false;
-        while( !sync ) {
-            int status;
-
-            waitpid( child, &status, 0 );
-
-            if( WIFSTOPPED(status) ) {
-                switch( WSTOPSIG(status) ) {
-                case SIGUSR1:
-                    // SIGUSR1 - that's our signal
-                    dlog("Caught SIGUSR1 by child - start special handling\n");
-                    ptrace( PTRACE_SYSCALL, child, 0, 0 );
-                    sync=true;
-                    break;
-                case SIGSTOP:
-                    dlog("Caught SIGSTOP\n");
-                    ptrace( PTRACE_CONT, child, 0, 0 ); // Continue the child in systrace mode
-                    break;
-                case SIGTRAP:
-                    dlog("Caught SIGTRAP\n");
-                    ptrace( PTRACE_CONT, child, 0, 0 ); // Continue the child in systrace mode
-                    break;
-                default:
-                    dlog("Caught signal %d\n", WSTOPSIG(status) );
-                    ptrace( PTRACE_CONT, child, 0, WSTOPSIG(status) );
-                    break;
-                }
-            } else {
-                // Stopped for whatever other reason - just continue it
-                dlog("Another stop %x\n", status );
-                ptrace( PTRACE_CONT, child, 0, 0 );
-            }
-        }
-
-        process_children(child, parent_socket, sessid );
     }
 
     if( persistent_file[0]!='\0' ) {
@@ -294,20 +252,42 @@ static void perform_debugger( int child_socket, int parent_socket, pid_t child )
         } else {
             dlog("Failed to open persistent file %s for saving - %s\n", persistent_file, strerror(errno) );
         }
+
+        // Remove the unix socket
+        struct sockaddr_un sa;
+
+        snprintf( sa.sun_path, sizeof(sa.sun_path), "%s.run", persistent_file );
+        unlink( sa.sun_path );
     }
 
     exit(0);
 }
 
-void perform_child( int child_socket, char *argv[] )
+static int real_perform_child( int child_socket, char *argv[], int internal_pipe )
 {
-    // We are the child to be debugged. Halt until the pipe tells us we can perform the exec
+    // Don't leave the log file open for the program to come
     if( debug_log!=NULL )
         fclose(debug_log);
 
+    // Send the debugger who we are
+    pid_t us=getpid();
+    if( write( child_socket, &us, sizeof(us) )<0 ) {
+        perror("Couldn't send the process ID to the debugger");
+
+        return 2;
+    }
+
+    // Halt until the pipe tells us we can perform the exec
     char buffer;
     if( read( child_socket, &buffer, 1 )==1 ) {
-        // Mark the fact that we are read to the debugger
+        close( child_socket );
+
+        // We may have a parent that also needs the socket. Mark to it that it is now ok to read from it
+        if( internal_pipe>=0 ) {
+            close( internal_pipe );
+        }
+
+        // Mark the fact that we are ready to the debugger
         kill( getpid(), SIGUSR1 );
 
         execvp(argv[0], argv);
@@ -315,8 +295,74 @@ void perform_child( int child_socket, char *argv[] )
         perror("Exec failed");
     }
 
-    exit(2);
+    return 2;
 }
+
+#if PTLIB_PARENT_CAN_WAIT
+static int perform_child( int child_socket, char *argv[] )
+{
+    return real_perform_child( child_socket, argv, -1 );
+}
+#else
+// Parent cannot wait on debugged child
+static int perform_child( int child_socket, char *argv[] )
+{
+    int pipes[2];
+    pipe(pipes);
+
+    pid_t child=fork();
+
+    if( child<0 ) {
+        perror("Failed to create child process");
+
+        return 2;
+    } else if( child==0 ) {
+        // We are the child
+        close( pipes[0] );
+        return real_perform_child( child_socket, argv, pipes[1] );
+    }
+
+    // We are the parent.
+
+    close( pipes[1] );
+
+    if( debug_log!=NULL ) {
+        fclose( debug_log );
+        debug_log=NULL;
+    }
+
+    int buffer;
+    int numret;
+    // Read from pipe to know when child finished talking to the debugger
+    read( pipes[0], &buffer, sizeof(buffer) );
+
+    close( pipes[0] );
+
+    // Cannot "wait" for child - instead listen on socket
+    if( (numret=read( child_socket, &buffer, sizeof(int) ))<(int)sizeof(int) ) {
+        if( numret>=0 ) {
+            fprintf(stderr, "Debugger terminated early\n");
+        } else {
+            perror("Parent: read failed");
+        }
+        exit(1);
+    }
+
+    // Why did "child" exit?
+    if( WIFEXITED(buffer) ) {
+        // Child has terminated. Terminate with same return code
+        return WEXITSTATUS(buffer);
+    }
+    if( WIFSIGNALED(buffer) ) {
+        // Child has terminated with a signal.
+        return WTERMSIG(buffer);
+    }
+
+    fprintf(stderr, "Child "PID_F" terminated with unknown termination status %x\n", child, buffer );
+
+    return 3;
+}
+#endif
 
 int main(int argc, char *argv[])
 {
@@ -339,134 +385,98 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    int master_socket=-1; // Socket fd needs to persist outside the creation location
+    bool launch_debugger=true; // Whether to start a debugger process
+    sockaddr_un sa;
+
+    if( persistent_file[0]!='\0' ) {
+        // We have a state to keep
+        // Another thing we do if a persistent file was specified is to create a communication socket
+        master_socket=socket(PF_UNIX, SOCK_SEQPACKET, 0);
+        if( master_socket==-1 ) {
+            // Couldn't create a socket
+            perror("Unix socket creation error");
+            exit(1);
+        }
+
+        sa.sun_family=AF_UNIX;
+        snprintf( sa.sun_path, sizeof(sa.sun_path), "%s.run", persistent_file );
+
+        // For all we know, the socket may already exist, which means we need not be the debugger
+        if( connect(master_socket, (const struct sockaddr *) &sa, sizeof(sa) )<0 ) {
+            // The socket doesn't exist - create it
+            unlink( sa.sun_path ); // Erase it if it already existed
+            if( bind( master_socket, (const struct sockaddr *) &sa, sizeof(sa) )<0 ) {
+                // Binding failed
+                perror("Couldn't bind state socket");
+                exit(1);
+            }
+
+            listen( master_socket, 10 );
+        } else {
+            // The socket already exist - another process is the debugger
+            launch_debugger=false;
+        }
+    }
+
     // We create an extra child to do the actual debugging, while the parent waits for the running child to exit.
-    int child2child[2];
-    if( pipe(child2child)<0 ) {
-        perror("child pipe failed");
+    // No state to keep
+    int sockets[2]={-1, -1}; 
 
-        return 2;
-    }
+    if( launch_debugger ) {
+        if( socketpair( PF_UNIX, SOCK_SEQPACKET, 0, sockets )<0 ) {
+            perror("Child socket creation error");
 
-#if PTLIB_PARENT_CAN_WAIT
-    // A parent process can perform "wait" over its debugged child
-    // Don't fork for the child - run it in our process
-    pid_t child=getpid();
+            return 2;
+        }
 
-    pid_t debugger=fork();
-
-    if( debugger<0 ) {
-        perror("Failed to create debugger process");
-
-        exit(1);
-    }
-
-    if( debugger==0 ) {
-        close(child2child[0]);
-
-        // We are the child, but we want to be the grandchild
-        debugger=fork();
+        pid_t debugger=fork();
 
         if( debugger<0 ) {
-            perror("Failed to create debugger sub-process");
+            perror("Failed to create debugger process");
 
             exit(1);
         }
 
         if( debugger==0 ) {
-            perform_debugger( child2child[1], -1, child );
+            close(sockets[0]);
+
+            // We are the child, but we want to be the grandchild
+            debugger=fork();
+
+            if( debugger<0 ) {
+                perror("Failed to create debugger sub-process");
+
+                exit(1);
+            }
+
+            if( debugger==0 ) {
+                perform_debugger( sockets[1], master_socket );
+            }
+
+            exit(0);
         }
 
-        exit(0);
-    }
+        // Wait for our child to exit
+        int status;
 
-    // We are the parent. Wait for our child to exit
-    int status;
+        wait(&status);
 
-    wait(&status);
+        if( !WIFEXITED(status) || WEXITSTATUS(status)!=0 ) {
+            fprintf(stderr, "Exiting without running process\n");
 
-    if( !WIFEXITED(status) || WEXITSTATUS(status)!=0 ) {
-        fprintf(stderr, "Exiting without running process\n");
-
-        exit(1);
-    }
-
-    close( child2child[1] );
-
-    perform_child( child2child[0], argv+opt_offset );
-
-    return 1;
-#else // PTLIB_PARENT_CAN_WAIT
-    // Platform cannot "wait" on child that is being debugged.
-    // We will have to span a child process, and then use tricks to find out whether it finished and with what status code
-
-    pid_t child=fork();
-
-    if( child<0 ) {
-        perror("Failed to create child process");
-
-        return 2;
-    }
-
-    if( child==0 ) {
-        close( child2child[1] );
-
-        perform_child( child2child[0], argv+opt_offset );
-    }
-
-    // Close the reading end of the pipe
-    close( child2child[0] );
-
-    int child2parent[2];
-    // Create the "other" pipe
-    pipe(child2parent);
-
-    pid_t debugger=fork();
-    if( debugger<0 ) {
-        perror("Failed to create debugger process");
-
-        return 2;
-    }
-
-    if( debugger==0 ) {
-        perform_debugger( child2child[1], child2parent[1], child );
-    }
-
-    // We are the actual parent. We only need to stick around until the debugger tells us that the child has exited. We won't know
-    // that ourselves, because the child is effectively the child of the debugger, not us.
-
-    close( child2parent[1] );
-    close( child2child[1] );
-    if( debug_log!=NULL ) {
-        fclose( debug_log );
-        debug_log=NULL;
-    }
-
-    int buffer;
-
-    int numret;
-    if( (numret=read( child2parent[0], &buffer, sizeof(int) ))<(int)sizeof(int) ) {
-        if( numret==0 ) {
-            waitpid( debugger, &buffer, 0 );
-
-            fprintf(stderr, "Debugger terminated early with status %x\n", buffer);
-        } else {
-            perror("Parent: read failed");
+            exit(1);
         }
-        exit(1);
+
+        close( sockets[1] );
+    } else {
+        // We are not launching the debugger. master_socket contains our connected socket to the real debugger
+        sockets[0]=dup(master_socket);
     }
 
-    // Why did "child" exit?
-    if( WIFEXITED(buffer) ) {
-        // Child has terminated. Terminate with same return code
-        return WEXITSTATUS(buffer);
-    }
-    if( WIFSIGNALED(buffer) ) {
-        // Child has terminated with a signal.
-        return WTERMSIG(buffer);
-    }
+    // We are the parent. We no longer need the listening socket
+    close(master_socket);
+    master_socket=-1;
 
-    fprintf(stderr, "Child "PID_F" terminated with unknown termination status %x\n", child, buffer );
-
-    return 3;
-#endif // PTLIB_PARENT_CAN_WAIT
+    return perform_child( sockets[0], argv+opt_offset );
 }

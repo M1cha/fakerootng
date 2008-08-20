@@ -22,6 +22,7 @@ void ptlib_prepare( pid_t pid );
 /* Wait for next event. Returns some data about the event
  * "status" is the status returned by "wait"
  * "data" is extra data returned by wait (such as rusage)
+ * "async" is a boolean telling whether to block if we have nothing to report
  * ptlib_parse_wait parses the info
  * Reports whether it was a signal delivered at the process (ret gets the signal number)
  * A process stopped due to signal (ret is the signal number)
@@ -30,7 +31,7 @@ void ptlib_prepare( pid_t pid );
  * A SYSCALL took place (ret is the syscall number)
  * A new process being created (only if PTLIB_SUPPORTS_{FORK,VFORK,CLONE} is defined for the platform) - ret is the new PID */
 enum PTLIB_WAIT_RET { SIGNAL, EXIT, SIGEXIT, SYSCALL, NEWPROCESS };
-int ptlib_wait( pid_t *pid, int *status, ptlib_extra_data *data );
+int ptlib_wait( pid_t *pid, int *status, ptlib_extra_data *data, int async );
 long ptlib_parse_wait( pid_t pid, int status, enum PTLIB_WAIT_RET *type );
 
 /* If we get a trace before we run ptlib_prepare, we might mis-interpret the signals */

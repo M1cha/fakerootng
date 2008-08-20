@@ -3,7 +3,7 @@
 
 int ptlib_linux_continue( int request, pid_t pid, int signal );
 void ptlib_linux_prepare( pid_t pid );
-int ptlib_linux_wait( pid_t *pid, int *status, ptlib_extra_data *data );
+int ptlib_linux_wait( pid_t *pid, int *status, ptlib_extra_data *data, int async );
 long ptlib_linux_parse_wait( pid_t pid, int status, enum PTLIB_WAIT_RET *type );
 int ptlib_linux_reinterpret( enum PTLIB_WAIT_RET prevstate, pid_t pid, int status, long *ret );
 int ptlib_linux_get_mem( pid_t pid, void *process_ptr, void *local_ptr, size_t len );

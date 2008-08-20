@@ -4,6 +4,7 @@
     * Solve all dlog format string warnings
     * Fix bug in distclean - would not remomve generated template makfile from
       arch/linux directory
+    * The -p option will now connect to an existing debugger, if one exists.
 
 Version 0.13
     * Remove libtool from the ptlib build system. Make the actual build

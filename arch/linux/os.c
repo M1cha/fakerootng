@@ -45,9 +45,14 @@ void ptlib_linux_prepare( pid_t pid )
         perror("PTRACE_SETOPTIONS failed");
 }
 
-int ptlib_linux_wait( pid_t *pid, int *status, ptlib_extra_data *data )
+int ptlib_linux_wait( pid_t *pid, int *status, ptlib_extra_data *data, int async )
 {
-    *pid=wait4(-1, status, 0, data );
+    *pid=wait4(-1, status, async?WNOHANG:0, data );
+
+    if( async && *pid==0 ) {
+        errno=EAGAIN;
+        *pid=-1;
+    }
 
     return *pid!=-1;
 }

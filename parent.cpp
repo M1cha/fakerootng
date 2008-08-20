@@ -27,6 +27,7 @@
 #include <sys/syscall.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
 
 #include MAP_INCLUDE
 
@@ -397,8 +398,8 @@ static void handle_new_process( pid_t parent, pid_t child )
     }
 }
 
-static pid_t first_child; // PID of first child
-static int comm_fd; // FD for communicating with the process "waiting" for the first child to exit
+static MAP_CLASS<pid_t, int> root_children; // Map of all root children
+
 static int num_processes; // Number of running processes
 
 int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long ret )
@@ -554,10 +555,16 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
             struct rusage rusage;
             getrusage( RUSAGE_CHILDREN, &rusage );
             handle_exit(pid, status, rusage );
-            if( pid==first_child && comm_fd!=-1 ) {
-                write( comm_fd, &status, sizeof(status) );
-                close( comm_fd );
-                comm_fd=-1;
+            
+            // If this was a root child, we may need to perform notification of exit status
+            MAP_CLASS<pid_t, int>::iterator root_child=root_children.find(pid);
+            if( root_child!=root_children.end() ) {
+                if( root_child->second!=-1 ) {
+                    write( root_child->second, &status, sizeof(status) );
+                    close( root_child->second );
+                }
+
+                root_children.erase(root_child);
             }
 
             num_processes--;
@@ -574,33 +581,149 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
     return sig;
 }
 
-int process_children(pid_t _first_child, int _comm_fd, pid_t session_id )
+bool attach_debugger( pid_t child, int socket )
 {
-    // Create a state for the first child
-    first_child=_first_child;
-    comm_fd=_comm_fd;
+    dlog(NULL);
 
+    // Attach a debugger to the child
+    if( ptrace(PTRACE_ATTACH, child, 0, 0)!=0 ) {
+        dlog("Could not start trace of process "PID_F": %s\n", child, strerror(errno) );
+
+        return false;
+    }
+    dlog("Debugger successfully attached to process "PID_F"\n", child );
+
+    // Let's free the process to do the exec
+    errno=0;
+    if( write( socket, "a", 1 )!=1 ) {
+        dlog("Couldn't free child process - write failed: %s\n", strerror(errno) );
+
+        return false;
+    }
+
+#if PTLIB_PARENT_CAN_WAIT
+    close( socket );
+    socket=-1;
+#endif
+
+    // If we start the processing loop too early, we might accidentally cath the "wait" where the master process (our grandparent)
+    // is waiting for our parent to terminate.
+    // In order to avoid that race, we wait until we notice that the process is sending itself a "USR1" signal to indicate it
+    // is ready.
+
+    bool sync=false;
+    while( !sync ) {
+        int status;
+
+        waitpid( child, &status, 0 );
+
+        if( WIFSTOPPED(status) ) {
+            switch( WSTOPSIG(status) ) {
+            case SIGUSR1:
+                // SIGUSR1 - that's our signal
+                dlog("Caught SIGUSR1 by child - start special handling\n");
+                ptrace( PTRACE_SYSCALL, child, 0, 0 );
+                sync=true;
+                break;
+            case SIGSTOP:
+                dlog("Caught SIGSTOP\n");
+                ptrace( PTRACE_CONT, child, 0, 0 ); // Continue the child in systrace mode
+                break;
+            case SIGTRAP:
+                dlog("Caught SIGTRAP\n");
+                ptrace( PTRACE_CONT, child, 0, 0 ); // Continue the child in systrace mode
+                break;
+            default:
+                dlog("Caught signal %d\n", WSTOPSIG(status) );
+                ptrace( PTRACE_CONT, child, 0, WSTOPSIG(status) );
+                break;
+            }
+        } else {
+            // Stopped for whatever other reason - just continue it
+            dlog("Another stop %x\n", status );
+            ptrace( PTRACE_CONT, child, 0, 0 );
+        }
+    }
+
+    // Child has started, and is debugged
+    root_children[child]=socket; // Mark this as a root child
+    num_processes++;
+
+    state[child]=pid_state();
+    state[child].session_id=getsid(child); // The initial session ID
+
+    return true;
+}
+
+// Do nothing signal handler for sigchld
+static void sigchld_handler(int signum)
+{
+}
+
+int process_children( int master_socket )
+{
     // Initialize the ptlib library
     ptlib_init();
 
-    state[first_child]=pid_state();
-    state[first_child].session_id=session_id; // The initial session ID
     init_handlers();
     init_globals();
 
     dlog( "Begin the process loop\n" );
 
-    num_processes=1;
+    // Prepare the signal masks so we do not lose SIGCHLD while we wait
+
+    struct sigaction action;
+    memset( &action, 0, sizeof( action ) );
+    action.sa_handler=sigchld_handler;
+    sigfillset( &action.sa_mask );
+    action.sa_flags=0;
+
+    sigaction( SIGCHLD, &action, NULL );
+
+    sigset_t orig_signals, child_signals;
+
+    sigemptyset( &child_signals );
+    sigaddset( &child_signals, SIGCHLD );
+    sigprocmask( SIG_BLOCK, &child_signals, &orig_signals );
+
+    sigdelset( &orig_signals, SIGCHLD );
+
+    // Prepare the file descriptors
+    fd_set file_set;
+
+    FD_ZERO(&file_set);
+    FD_SET(master_socket, &file_set);
 
     while(num_processes>0) {
         int status;
         pid_t pid;
         long ret;
         ptlib_extra_data data;
-        
+
         enum PTLIB_WAIT_RET wait_state;
-        if( !ptlib_wait( &pid, &status, &data ) ) {
-            dlog("ptlib_wait failed\n");
+        if( !ptlib_wait( &pid, &status, &data, true ) ) {
+            if( errno==EAGAIN ) {
+                // No process is waiting - halt until one exists or until the socket has something to say
+                fd_set read_set=file_set;
+                fd_set except_set=file_set;
+
+                if( pselect( master_socket+1, &read_set, NULL, &except_set, NULL, &orig_signals )>=0 ) {
+                    // Something happened on the socket - new root process?
+                    int session_socket=accept( master_socket, NULL, 0 );
+                    if( session_socket>=0 ) {
+                        pid_t child=-1;
+
+                        if( read( session_socket, &child, sizeof(child))>0 && child>0 ) {
+                            dlog("Got asynchronous request to attach to process "PID_F"\n", child);
+
+                            attach_debugger(child, session_socket);
+                        }
+                    }
+                }
+            } else {
+                dlog("ptlib_wait failed %d: %s\n", errno, strerror(errno) );
+            }
+
             continue;
         }
 
