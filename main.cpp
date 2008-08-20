@@ -404,13 +404,14 @@ int main(int argc, char *argv[])
     // We create an extra child to do the actual debugging, while the parent waits for the running child to exit.
     // No state to keep
     int sockets[2]={-1, -1}; 
-    if( socketpair( PF_UNIX, SOCK_SEQPACKET, 0, sockets )<0 ) {
-        perror("Child socket creation error");
-
-        return 2;
-    }
 
     if( launch_debugger ) {
+        if( socketpair( PF_UNIX, SOCK_SEQPACKET, 0, sockets )<0 ) {
+            perror("Child socket creation error");
+
+            return 2;
+        }
+
         pid_t debugger=fork();
 
         if( debugger<0 ) {
@@ -437,24 +438,27 @@ int main(int argc, char *argv[])
 
             exit(0);
         }
+
+        // Wait for our child to exit
+        int status;
+
+        wait(&status);
+
+        if( !WIFEXITED(status) || WEXITSTATUS(status)!=0 ) {
+            fprintf(stderr, "Exiting without running process\n");
+
+            exit(1);
+        }
+
+        close( sockets[1] );
+    } else {
+        // We are not launching the debugger. master_socket contains our connected socket to the real debugger
+        sockets[0]=dup(master_socket);
     }
 
     // We are the parent. We no longer need the listening socket
     close(master_socket);
     master_socket=-1;
-
-    // Wait for our child to exit
-    int status;
-
-    wait(&status);
-
-    if( !WIFEXITED(status) || WEXITSTATUS(status)!=0 ) {
-        fprintf(stderr, "Exiting without running process\n");
-
-        exit(1);
-    }
-
-    close( sockets[1] );
 
     return perform_child( sockets[0], argv+opt_offset );
 }

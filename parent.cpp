@@ -27,6 +27,7 @@
 #include <sys/syscall.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
 
 #include MAP_INCLUDE
 
@@ -706,7 +707,16 @@ int process_children( int master_socket )
 
                 if( pselect( master_socket+1, &read_set, NULL, &except_set, NULL, &orig_signals )>=0 ) {
                     // Something happened on the socket - new root process?
-                    dlog("something\n");
+                    int session_socket=accept( master_socket, NULL, 0 );
+                    if( session_socket>=0 ) {
+                        pid_t child=-1;
+
+                        if( read( session_socket, &child, sizeof(child))>0 && child>0 ) {
+                            dlog("Got asynchronous request to attach to process "PID_F"\n", child);
+
+                            attach_debugger(child, session_socket);
+                        }
+                    }
                 }
             } else {
                 dlog("ptlib_wait failed %d: %s\n", errno, strerror(errno) );

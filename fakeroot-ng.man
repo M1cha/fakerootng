@@ -1,4 +1,4 @@
-.TH FAKEROOT\-NG 1 "August 9, 2008" "Shachar Shemesh" "Fakeroot Next Gen User Manual"
+.TH FAKEROOT\-NG 1 "August 20, 2008" "Shachar Shemesh" "Fakeroot Next Gen User Manual"
 .\" Please adjust this date whenever revising the manpage.
 .SH NAME
 fakeroot\-ng \- run a command while making it believe it is running as root
@@ -28,8 +28,7 @@ Before the first process is being run, loads from \fIstate_file\fP the
 information needed in order to maintain a consistent view of file permissions and owners across
 fakeroot\-ng runs. This image is also automatically saved when the last process exists. If more then
 one instance of fakeroot\-ng is loaded simultaneously, both with the same \fIstate_file\fP, then
-the two instances will share state and their processes will see the same picture. \fBThe second part
-of this functionality is not yet implemented\fP.
+the two instances will share state and their processes will see the same picture at runtime.
 .TP
 \fB\-l\fIlog_file\fP
 Causes fakeroot\-ng to dump to \fIlog_file\fP internal state and processing information. This is
