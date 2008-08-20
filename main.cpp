@@ -263,7 +263,7 @@ static void perform_debugger( int child_socket, int master_socket )
     exit(0);
 }
 
-static int real_perform_child( int child_socket, char *argv[] )
+static int real_perform_child( int child_socket, char *argv[], int internal_pipe )
 {
     // Don't leave the log file open for the program to come
     if( debug_log!=NULL )
@@ -282,6 +282,11 @@ static int real_perform_child( int child_socket, char *argv[] )
     if( read( child_socket, &buffer, 1 )==1 ) {
         close( child_socket );
 
+        // We may have a parent that also needs the socket. Mark to it that it is now ok to read from it
+        if( internal_pipe>=0 ) {
+            close( internal_pipe );
+        }
+
         // Mark the fact that we are ready to the debugger
         kill( getpid(), SIGUSR1 );
 
@@ -296,12 +301,15 @@ static int real_perform_child( int child_socket, char *argv[] )
 #if PTLIB_PARENT_CAN_WAIT
 static int perform_child( int child_socket, char *argv[] )
 {
-    return real_perform_child( child_socket, argv );
+    return real_perform_child( child_socket, argv, -1 );
 }
 #else
 // Parent cannot wait on debugged child
 static int perform_child( int child_socket, char *argv[] )
 {
+    int pipes[2];
+    pipe(pipes);
+
     pid_t child=fork();
 
     if( child<0 ) {
@@ -310,10 +318,14 @@ static int perform_child( int child_socket, char *argv[] )
         return 2;
     } else if( child==0 ) {
         // We are the child
-        return real_perform_child( child_socket, argv );
+        close( pipes[0] );
+        return real_perform_child( child_socket, argv, pipes[1] );
     }
 
-    // We are the parent. Cannot "wait" for child - instead listen on socket
+    // We are the parent.
+
+    close( pipes[1] );
+
     if( debug_log!=NULL ) {
         fclose( debug_log );
         debug_log=NULL;
@@ -321,8 +333,14 @@ static int perform_child( int child_socket, char *argv[] )
 
     int buffer;
     int numret;
+    // Read from pipe to know when child finished talking to the debugger
+    read( pipes[0], &buffer, sizeof(buffer) );
+
+    close( pipes[0] );
+
+    // Cannot "wait" for child - instead listen on socket
     if( (numret=read( child_socket, &buffer, sizeof(int) ))<(int)sizeof(int) ) {
-        if( numret==0 ) {
+        if( numret>=0 ) {
             fprintf(stderr, "Debugger terminated early\n");
         } else {
             perror("Parent: read failed");

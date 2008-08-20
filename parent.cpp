@@ -583,9 +583,11 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
 
 bool attach_debugger( pid_t child, int socket )
 {
+    dlog(NULL);
+
     // Attach a debugger to the child
     if( ptrace(PTRACE_ATTACH, child, 0, 0)!=0 ) {
-        perror("Could not start trace");
+        dlog("Could not start trace of process "PID_F": %s\n", child, strerror(errno) );
 
         return false;
     }
