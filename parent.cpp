@@ -652,6 +652,11 @@ bool attach_debugger( pid_t child, int socket )
     return true;
 }
 
+// Do nothing signal handler for sigchld
+static void sigchld_handler(int signum)
+{
+}
+
 int process_children( int master_socket )
 {
     // Initialize the ptlib library
@@ -662,15 +667,51 @@ int process_children( int master_socket )
 
     dlog( "Begin the process loop\n" );
 
+    // Prepare the signal masks so we do not lose SIGCHLD while we wait
+
+    struct sigaction action;
+    memset( &action, 0, sizeof( action ) );
+    action.sa_handler=sigchld_handler;
+    sigfillset( &action.sa_mask );
+    action.sa_flags=0;
+
+    sigaction( SIGCHLD, &action, NULL );
+
+    sigset_t orig_signals, child_signals;
+
+    sigemptyset( &child_signals );
+    sigaddset( &child_signals, SIGCHLD );
+    sigprocmask( SIG_BLOCK, &child_signals, &orig_signals );
+
+    sigdelset( &orig_signals, SIGCHLD );
+
+    // Prepare the file descriptors
+    fd_set file_set;
+
+    FD_ZERO(&file_set);
+    FD_SET(master_socket, &file_set);
+
     while(num_processes>0) {
         int status;
         pid_t pid;
         long ret;
         ptlib_extra_data data;
-        
+
         enum PTLIB_WAIT_RET wait_state;
-        if( !ptlib_wait( &pid, &status, &data ) ) {
-            dlog("ptlib_wait failed\n");
+        if( !ptlib_wait( &pid, &status, &data, true ) ) {
+            if( errno==EAGAIN ) {
+                // No process is waiting - halt until one exists or until the socket has something to say
+                fd_set read_set=file_set;
+                fd_set except_set=file_set;
+
+                if( pselect( master_socket+1, &read_set, NULL, &except_set, NULL, &orig_signals )>=0 ) {
+                    // Something happened on the socket - new root process?
+                    dlog("something\n");
+                }
+            } else {
+                dlog("ptlib_wait failed %d: %s\n", errno, strerror(errno) );
+            }
+
             continue;
         }
 

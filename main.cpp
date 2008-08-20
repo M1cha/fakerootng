@@ -387,6 +387,7 @@ int main(int argc, char *argv[])
         // For all we know, the socket may already exist, which means we need not be the debugger
         if( connect(master_socket, (const struct sockaddr *) &sa, sizeof(sa) )<0 ) {
             // The socket doesn't exist - create it
+            unlink( sa.sun_path ); // Erase it if it already existed
             if( bind( master_socket, (const struct sockaddr *) &sa, sizeof(sa) )<0 ) {
                 // Binding failed
                 perror("Couldn't bind state socket");
@@ -438,7 +439,11 @@ int main(int argc, char *argv[])
         }
     }
 
-    // We are the parent. Wait for our child to exit
+    // We are the parent. We no longer need the listening socket
+    close(master_socket);
+    master_socket=-1;
+
+    // Wait for our child to exit
     int status;
 
     wait(&status);
