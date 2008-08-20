@@ -5,6 +5,8 @@
     * Fix bug in distclean - would not remomve generated template makfile from
       arch/linux directory
     * The -p option will now connect to an existing debugger, if one exists.
+    * Allow use of FAKEROOT_TMPDIR as well as TMPDIR for setting the location
+      of the temporary files
 
 Version 0.13
     * Remove libtool from the ptlib build system. Make the actual build
