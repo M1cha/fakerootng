@@ -7,6 +7,8 @@
     * The -p option will now connect to an existing debugger, if one exists.
     * Allow use of FAKEROOT_TMPDIR as well as TMPDIR for setting the location
       of the temporary files
+    * Allow changing the default shared mem directory from /tmp via a
+      configure command option (--with-memdir)
 
 Version 0.13
     * Remove libtool from the ptlib build system. Make the actual build

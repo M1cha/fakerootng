@@ -775,7 +775,7 @@ static bool allocate_shared_mem( pid_t pid, pid_state *state )
         tmpdir=getenv("TMPDIR");
 
     if( tmpdir==NULL || strlen(tmpdir)>=PATH_MAX-sizeof("/fakeroot-ng.XXXXXX") )
-        tmpdir="/tmp";
+        tmpdir=DEFAULT_TMPDIR;
 
     sprintf(filename, "%s/fakeroot-ng.XXXXXX", tmpdir);
 

@@ -141,7 +141,7 @@ static bool sanity_check()
     if( tmp!=NULL ) {
         tmppath=tmp;
     } else {
-        tmppath="/tmp";
+        tmppath=DEFAULT_TMPDIR;
     }
 
     std::auto_ptr<char> templt(new char[tmppath.length()+20]);

@@ -168,6 +168,21 @@ AC_COMPILE_IFELSE(
         )
     ] )
 
+AC_MSG_CHECKING([what alternate location to use for shared memory files])
+AC_ARG_WITH([memdir], [AC_HELP_STRING([--with-memdir=DIR],[Where to create shared memory files (default /tmp)])],
+[
+    if [[ "$with_memdir" ]]
+    then
+        AC_MSG_RESULT([$with_memdir])
+        dnl AC_DEFINE([DEFAULT_TMPDIR], ["$with_memdir"])
+        echo "#define DEFAULT_TMPDIR \"$with_memdir\"" >> confdefs.h
+    fi
+
+], [
+        AC_MSG_RESULT([/tmp])
+        AC_DEFINE([DEFAULT_TMPDIR], ["/tmp"], [Where to create shared memory files if no environment overrides])
+])
+
 # Custom steps
 
 dnl Canoninize the canonical system names
