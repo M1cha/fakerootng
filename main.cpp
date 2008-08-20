@@ -130,8 +130,12 @@ int parse_options( int argc, char *argv[] )
 // Make sure we are running in a sane environment
 static bool sanity_check()
 {
-    // Make sure that /tmp (or $TMPDIR) allow us to map executable files
-    const char *tmp=getenv("TMPDIR");
+    // Make sure that /tmp (or $TMPDIR, or $FAKEROOT_TMPDIR) allow us to map executable files
+    const char *tmp=getenv("FAKEROOT_TMPDIR");
+
+    if( tmp==NULL )
+        tmp=getenv("TMPDIR");
+
     std::string tmppath;
 
     if( tmp!=NULL ) {
@@ -170,7 +174,8 @@ static bool sanity_check()
     if( map==MAP_FAILED ) {
         if( error==EPERM ) {
             fprintf( stderr, "Temporary area points to %s, but it is mounted with \"noexec\".\n"
-                    "Set the TMPDIR environment variable to point to a directory from which executables can be run.\n",
+                    "Set either the FAKEROOT_TMPDIR or TMPDIR environment variables to point to a\n"
+                    "directory from which executables can be run.\n",
                     tmppath.c_str() );
         } else {
             perror("Couldn't mmap temporary file");

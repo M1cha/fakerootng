@@ -769,7 +769,11 @@ static bool allocate_shared_mem( pid_t pid, pid_state *state )
 {
     char filename[PATH_MAX];
 
-    const char *tmpdir=getenv("TMPDIR");
+    const char *tmpdir=getenv("FAKEROOT_TMPDIR");
+
+    if( tmpdir==NULL )
+        tmpdir=getenv("TMPDIR");
+
     if( tmpdir==NULL || strlen(tmpdir)>=PATH_MAX-sizeof("/fakeroot-ng.XXXXXX") )
         tmpdir="/tmp";
 
@@ -786,8 +790,7 @@ static bool allocate_shared_mem( pid_t pid, pid_state *state )
     }
 
     // Make sure that the file is big enough, but create it sparse
-    lseek( fd, shared_mem_size-1, SEEK_SET );
-    write( fd, filename, 1 );
+    ftruncate( fd, shared_mem_size );
 
     // Map the file into the local address space
     char *memory=(char *)mmap( NULL, shared_mem_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0 );

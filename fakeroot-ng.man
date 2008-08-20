@@ -41,6 +41,21 @@ core file from being created.
 .TP
 \fB\-v\fP
 Print out the version number and copyright info and exit without doing anything.
+.SH ENVIRONMENT VARIABLES AND SHARED MEMORY
+Some of the communication between fakeroot\-ng and the program being fooled is done through a
+shared memory mechanism. In order to create it, fakeroot\-ng creates a temporary file and maps
+it into memory as executable segment. Some systems have their /tmp folder mounted with the
+\fBnoexec\fP flag. On those system, the mmap will fail and fakeroot\-ng will not run.
+
+There are two environment variables that allow fakeroot\-ng to find a folder in which the
+shared memory files can be created. The first is \fBTMPDIR\fP. If it exists, fakeroot\-ng will
+use it to create the temporary files, rather than /tmp. The problem with using \fBTMPDIR\fP
+for creating temporary files is that fakeroot\-ng is not the only one to use it. For that reason,
+if the environment has a variable called \fBFAEKROOT_TMPDIR\fP, its value will override that
+of either \fBTMPDIR\fP or the default /tmp directory.
+
+On Linux, it is usually entirely safe to point \fBFAKEROOT_TMPDIR\fP to \fB/dev/shm\fP, which
+usually lives up to expectations regarding mount mode and writability.
 .SH SECURITY CONSIDERATIONS
 Fakeroot\-ng is a non-SUID executable, and does not modify any sensitive data. It, therefor,
 does not affect the overall security of the system. One may be tempted, however, to use
