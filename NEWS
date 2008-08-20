@@ -1,3 +1,6 @@
+Fakeroot-ng now supports running two independent instances using the same
+state file, and have the fake image both instances see be synchronized.
+
 As of version 1.10, fakeroot-ng now supports the "chroot" system call. Once
 called, a process will be restriced to a subtree of the entire file system.
 This applies to almost all system calls.

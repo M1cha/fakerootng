@@ -1,3 +1,4 @@
+Version 0.14
     * Fix bug in unlinkat - context data used in incorrect order, resulting in
       "Not a directory" error when deleting a file.
     * Remove configure command line to get format string protection to dlog
