@@ -41,7 +41,7 @@ int ptlib_linux_continue( int request, pid_t pid, int signal )
 
 void ptlib_linux_prepare( pid_t pid )
 {
-    if( ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_TRACEFORK|PTRACE_O_TRACEVFORK|PTRACE_O_TRACECLONE|PTRACE_O_TRACEEXEC)!=0 )
+    if( ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_TRACEFORK|PTRACE_O_TRACEVFORK|PTRACE_O_TRACECLONE)!=0 )
         perror("PTRACE_SETOPTIONS failed");
 }
 
