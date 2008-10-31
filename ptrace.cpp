@@ -75,57 +75,68 @@ static bool begin_trace( pid_t debugger, pid_t child )
     return true;
 }
 
+static void real_handle_cont( pid_t pid, pid_state *state )
+{
+    pid_t child=(pid_t)state->context_state[1];
+    pid_state *child_state=lookup_state( child );
+    __ptrace_request req=(__ptrace_request)state->context_state[0];
+    if( req==PTRACE_CONT ) {
+        child_state->trace_mode|=TRACE_CONT;
+        dlog("ptrace: %d PTRACE_CONT("PID_F")\n", pid, child );
+    } else if( req==PTRACE_SYSCALL ) {
+        child_state->trace_mode|=TRACE_SYSCALL;
+        dlog("ptrace: %d PTRACE_SYSCALL("PID_F")\n", pid, child );
+    } else if( req==PTRACE_DETACH ) {
+        child_state->trace_mode&=TRACE_MASK2;
+    } else {
+        // Wrong mode for calling this function!
+    }
+
+    long rc=0;
+
+    if( (child_state->trace_mode&TRACE_MASK2)==TRACE_STOPPED1 ) {
+        dlog("handle_cont_syscall: "PID_F" process "PID_F" was in pre-syscall hook\n", pid, child );
+        // Need to restart the syscall
+        int status=child_state->context_state[1];
+        PTLIB_WAIT_RET wait_state=(PTLIB_WAIT_RET)child_state->context_state[0];
+        long ret=ptlib_get_syscall( child );
+        int sig=process_sigchld( child, wait_state, status, ret );
+        // If our processing requested no special handling, use the signal requested by the debugger
+        if( sig==0 ) {
+            sig=(int)state->context_state[3];
+        }
+        if( sig>=0 ) {
+            rc=ptlib_continue(PTRACE_SYSCALL, child, sig);
+        }
+    } else if( (child_state->trace_mode&TRACE_MASK2)==TRACE_STOPPED2 ) {
+        dlog("handle_cont_syscall: "PID_F" process "PID_F" was in post-syscall hook\n", pid, child );
+        child_state->trace_mode&=TRACE_MASK1;
+        rc=ptlib_continue( PTRACE_SYSCALL, child, (int)state->context_state[3] );
+    } else {
+        // Our child was not stopped (at least, by us)
+        // This is an internal inconsistency
+
+        dlog("handle_cont_syscall: "PID_F" process "PID_F" was started with no specific state (%x)\n", pid, child,
+                child_state->trace_mode );
+        dlog(NULL);
+        rc=-1;
+    }
+
+    if( rc!=-1 ) {
+        dlog("ptrace: %d request successful\n", pid );
+        ptlib_set_retval( pid, rc );
+    } else {
+        ptlib_set_error( pid, state->orig_sc, errno );
+        dlog("ptrace: %d request failed: %s\n", pid, strerror(errno) );
+    }
+}
+
 static void handle_cont_syscall( pid_t pid, pid_state *state )
 {
     if( verify_permission( pid, state ) ) {
-        pid_t child=(pid_t)state->context_state[1];
-        pid_state *child_state=lookup_state( child );
-        __ptrace_request req=(__ptrace_request)state->context_state[0];
-        if( req==PTRACE_CONT ) {
-            child_state->trace_mode|=TRACE_CONT;
-            dlog("ptrace: %d PTRACE_CONT("PID_F")\n", pid, child );
-        } else {
-            child_state->trace_mode|=TRACE_SYSCALL;
-            dlog("ptrace: %d PTRACE_SYSCALL("PID_F")\n", pid, child );
-        }
-
-        long rc=0;
-
-        if( (child_state->trace_mode&TRACE_MASK2)==TRACE_STOPPED1 ) {
-            dlog("handle_cont_syscall: "PID_F" process "PID_F" was in pre-syscall hook\n", pid, child );
-            // Need to restart the syscall
-            int status=child_state->context_state[1];
-            PTLIB_WAIT_RET wait_state=(PTLIB_WAIT_RET)child_state->context_state[0];
-            long ret=ptlib_get_syscall( child );
-            int sig=process_sigchld( child, wait_state, status, ret );
-            // If our processing requested no special handling, use the signal requested by the debugger
-            if( sig==0 ) {
-                sig=(int)state->context_state[3];
-            }
-            if( sig>=0 ) {
-                rc=ptlib_continue(PTRACE_SYSCALL, child, sig);
-            }
-        } else if( (child_state->trace_mode&TRACE_MASK2)==TRACE_STOPPED2 ) {
-            dlog("handle_cont_syscall: "PID_F" process "PID_F" was in post-syscall hook\n", pid, child );
-            child_state->trace_mode&=TRACE_MASK1;
-            rc=ptlib_continue( PTRACE_SYSCALL, child, (int)state->context_state[3] );
-        } else {
-            // Our child was not stopped (at least, by us)
-            // This is an internal inconsistency
-
-            dlog("handle_cont_syscall: "PID_F" process "PID_F" was started with no specific state (%x)\n", pid, child,
-                child_state->trace_mode );
-            dlog(NULL);
-            rc=-1;
-        }
-
-        if( rc!=-1 ) {
-            dlog("ptrace: %d request successful\n", pid );
-            ptlib_set_retval( pid, rc );
-        } else {
-            ptlib_set_error( pid, state->orig_sc, errno );
-            dlog("ptrace: %d request failed: %s\n", pid, strerror(errno) );
-        }
+        real_handle_cont( pid, state );
+    } else {
+        ptlib_set_error( pid, state->orig_sc, errno );
     }
 }
 
@@ -139,8 +150,10 @@ static bool handle_detach( pid_t pid, pid_state *state )
         child_state->debugger=0;
         state->num_debugees--;
 
-        child_state->trace_mode=TRACE_DETACHED;
-        ptlib_set_retval( pid, 0 );
+        child_state->trace_mode&=TRACE_MASK2;
+
+        // Call the cont handler to make sure the debuggee is runing again
+        real_handle_cont( pid, state );
 
         return true;
     } else {
