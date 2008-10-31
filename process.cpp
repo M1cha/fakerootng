@@ -78,6 +78,7 @@ bool sys_vfork( int sc_num, pid_t pid, pid_state *state )
     return true;
 }
 
+#ifdef SYS_clone
 bool sys_clone( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
@@ -95,13 +96,25 @@ bool sys_clone( int sc_num, pid_t pid, pid_state *state )
             state->context_state[0]|=NEW_PROCESS_SAME_FD;
         if( (flags&CLONE_VM)!=0 )
             state->context_state[0]|=NEW_PROCESS_SAME_VM;
+        if( (flags&CLONE_PTRACE)!=0 )
+            state->context_state[0]|=NEW_PROCESS_SAME_DEBUGGER;
 
+        // Whatever it originally was, add a CLONE_PTRACE to the flags so that we remain in control
+        flags|=CLONE_PTRACE;
+        flags&=~CLONE_UNTRACED; // Reset the UNTRACED flag
+        ptlib_set_argument( pid, 1, flags );
     } else if( state->state==pid_state::RETURN ) {
+        // Was the call successful?
+        if( ptlib_success( pid, state->orig_sc ) ) {
+            // So what IS the new process we created?
+            handle_new_process( pid, ptlib_get_retval(pid) );
+        }
         state->state=pid_state::NONE;
     }
 
     return true;
 }
+#endif // SYS_CLONE
 
 // Function interface is different - returns an extra bool to signify whether to send a trap after the call
 // context_state[0] is state machine:
