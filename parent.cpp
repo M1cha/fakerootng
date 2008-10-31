@@ -389,9 +389,7 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
 void handle_new_process( pid_t parent_id, pid_t child_id )
 {
     // Copy the session information
-
-    pid_state *parent=lookup_state(parent_id),
-              *child=&state[child_id]; // We actually want to create the state if it did not already exist
+    pid_state *child=&state[child_id]; // We actually want to create the state if it did not already exist
 
     if( child->state!=pid_state::INIT ) {
         // Due to platform incompatibilities and other issues, we may be called several times over the same
@@ -408,33 +406,48 @@ void handle_new_process( pid_t parent_id, pid_t child_id )
     ptlib_prepare(child_id);
     child->state=pid_state::NONE;
 
-    int_ptr process_type=parent->context_state[0];
+    pid_state *parent=lookup_state(parent_id);
+    if( parent!=NULL ) {
+        // If this assert fails, we somehow created a -1 process - not good
+        assert(parent_id!=-1);
 
-    if( (process_type&NEW_PROCESS_SAME_PARENT)==0 )
-        child->parent=parent_id;
-    else
-        child->parent=parent->parent;
+        // This process is a root process - it has no parent
 
-    child->session_id=parent->session_id;
-    state[child->parent].num_children++;
+        int_ptr process_type=parent->context_state[0];
 
-    // if( (process_type&NEW_PROCESS_SAME_ROOT)==0 )
+        if( (process_type&NEW_PROCESS_SAME_PARENT)==0 )
+            child->parent=parent_id;
+        else
+            child->parent=parent->parent;
+
+        pid_state *child_parent=lookup_state(child->parent);
+        if( child_parent!=NULL ) {
+            child_parent->num_children++;
+        }
+
+        child->session_id=parent->session_id;
+
+        // if( (process_type&NEW_PROCESS_SAME_ROOT)==0 )
         // XXX Need to contrast deep copy with shallow copy of root
-    child->root=parent->root;
+        child->root=parent->root;
 
-    // Whether the VM was copied or shared, the new process has the same static and shared memory
-    child->memory=parent->memory;
-    child->shared_memory=parent->shared_memory;
-    // If the VM is not shared, setting shared_memory but not shared_mem_local is an indication that the
-    // old memory needs to be freed
-    if( (process_type&NEW_PROCESS_SAME_VM)!=0 ) {
-        // The processes share the same VM - have them share the same shared memory
-        child->shared_mem_local=parent->shared_mem_local;
-    }
+        // Whether the VM was copied or shared, the new process has the same static and shared memory
+        child->memory=parent->memory;
+        child->shared_memory=parent->shared_memory;
+        // If the VM is not shared, setting shared_memory but not shared_mem_local is an indication that the
+        // old memory needs to be freed
+        if( (process_type&NEW_PROCESS_SAME_VM)!=0 ) {
+            // The processes share the same VM - have them share the same shared memory
+            child->shared_mem_local=parent->shared_mem_local;
+        }
 
-    if( (process_type&NEW_PROCESS_SAME_DEBUGGER)!=0 ) {
-        // The process inherits the debugger from the parent
-        child->debugger=parent->debugger;
+        if( (process_type&NEW_PROCESS_SAME_DEBUGGER)!=0 ) {
+            // The process inherits the debugger from the parent
+            child->debugger=parent->debugger;
+        }
+    } else {
+        // This is a root process - no parent. Set it with the real session ID
+        child->session_id=getsid(child_id);
     }
 
     num_processes++;
@@ -689,13 +702,8 @@ bool attach_debugger( pid_t child, int socket )
 
     // Child has started, and is debugged
     root_children[child]=socket; // Mark this as a root child
-    num_processes++;
 
-    state[child]=pid_state();
-    state[child].session_id=getsid(child); // The initial session ID
-    // First child gets special treatment - some of the operations are done manually for it
-    state[child].state=pid_state::NONE;
-    ptlib_prepare(child);
+    handle_new_process( -1, child ); // No parent - a root process
 
     return true;
 }
