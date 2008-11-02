@@ -24,6 +24,7 @@
 #include <sys/wait.h>
 #include <linux/ptrace.h>
 #include <signal.h>
+#include <sched.h>
 
 #include <stdio.h>
 #include <unistd.h>
@@ -41,8 +42,9 @@ int ptlib_linux_continue( int request, pid_t pid, int signal )
 
 void ptlib_linux_prepare( pid_t pid )
 {
-    if( ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_TRACEFORK|PTRACE_O_TRACEVFORK|PTRACE_O_TRACECLONE)!=0 )
-        perror("PTRACE_SETOPTIONS failed");
+    // These cause more harm than good
+    //if( ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_TRACEFORK|PTRACE_O_TRACEVFORK|PTRACE_O_TRACECLONE)!=0 )
+    //    perror("PTRACE_SETOPTIONS failed");
 }
 
 int ptlib_linux_wait( pid_t *pid, int *status, ptlib_extra_data *data, int async )
@@ -247,3 +249,68 @@ ssize_t ptlib_linux_get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
     return ret;
 }
 
+pid_t ptlib_linux_get_parent( pid_t pid )
+{
+    /* Query the proc filesystem to figure out who the process' parent is */
+    char filename[100];
+    sprintf(filename, "/proc/"PID_F"/status", pid);
+
+    FILE *stat_file=fopen(filename, "r");
+    if( stat_file==NULL ) {
+        dlog("%s: Failed to open %s: %s\n", __FUNCTION__, filename, strerror(errno) );
+
+        return -1;
+    }
+
+    pid_t ret=-1;
+
+    while( !feof(stat_file) && ret==-1 ) {
+        char line[400];
+        fgets(line, sizeof(line), stat_file );
+
+        /* If this was not the whole line, consume the rest of it */
+        if( line[strlen(line)-1]!='\n' ) {
+            int ch;
+            while( (ch=getc( stat_file ))!=EOF && ch!='\n' )
+                ;
+        }
+
+        if( sscanf( line, "PPid: "PID_F, &ret)!=1 )
+            ret=-1;
+    }
+
+    fclose(stat_file);
+
+    return ret;
+}
+
+int ptlib_linux_fork_enter( pid_t pid, int orig_sc )
+{
+    /* Turn the fork/vfork into a clone */
+    int clone_flags=CLONE_PTRACE|SIGCHLD;
+
+    if( orig_sc==SYS_vfork ) {
+        clone_flags|=CLONE_VFORK;
+    }
+
+    ptlib_set_syscall( pid, SYS_clone );
+    ptlib_set_argument( pid, 1, clone_flags ); /* Flags */
+    ptlib_set_argument( pid, 2, 0 ); /* Stack base (keep the same) */
+
+    /* We did change the system call in use */
+    return 0;
+}
+
+int ptlib_linux_fork_exit( pid_t pid, int orig_sc, pid_t *newpid )
+{
+    int ret=0;
+
+    if( ptlib_success( pid, SYS_clone ) ) {
+        ret=1;
+        *newpid=ptlib_get_retval( pid );
+    }
+
+    ptlib_set_syscall( pid, orig_sc );
+
+    return ret;
+}
