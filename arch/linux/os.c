@@ -176,7 +176,7 @@ int ptlib_linux_set_mem( pid_t pid, const void *local_ptr, void *process_ptr, si
         // overwriting data outside of our intended area
         long buffer2=ptrace( PTRACE_PEEKDATA, pid, process_ptr, 0 );
 
-        int i;
+        unsigned int i;
         for( i=offset; i<sizeof(long); ++i )
             ((char *)&buffer)[i]=((char *)&buffer2)[i];
 
@@ -190,9 +190,9 @@ int ptlib_linux_set_mem( pid_t pid, const void *local_ptr, void *process_ptr, si
 int ptlib_linux_get_string( pid_t pid, void *process_ptr, char *local_ptr, size_t maxlen )
 {
     /* Are we aligned on the "start" front? */
-    int offset=((unsigned long)process_ptr)%sizeof(long);
+    unsigned int offset=((unsigned long)process_ptr)%sizeof(long);
     process_ptr-=offset;
-    int i=0;
+    unsigned int i=0;
     int done=0;
     int word_offset=0;
 

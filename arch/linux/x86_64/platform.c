@@ -377,12 +377,14 @@ static int syscall_64_to_32[MAP_SIZE_32_64];
 /* We init the reverse map when the library loads */
 void ptlib_init()
 {
-    int i;
+    unsigned int i;
     for( i=0; i<ARRAY_SIZE(syscall_64_to_32); ++i )
         syscall_64_to_32[i]=-1;
 
     for( i=0; i<ARRAY_SIZE(syscall_32_to_64); ++i ) {
-        if( syscall_32_to_64[i]!=-1 && syscall_32_to_64[i]>=(-SYS_X86_32_OFFSET) && syscall_32_to_64[i]<ARRAY_SIZE(syscall_32_to_64) ) {
+        if( syscall_32_to_64[i]!=-1 && syscall_32_to_64[i]>=(-SYS_X86_32_OFFSET) &&
+                syscall_32_to_64[i]<(int)ARRAY_SIZE(syscall_32_to_64) )
+        {
             syscall_64_to_32[syscall_32_to_64[i]+SYS_X86_32_OFFSET]=i;
         }
     }
@@ -461,7 +463,7 @@ int ptlib_get_syscall( pid_t pid )
 
     // Need to translate the 32 bit syscalls to 64 bit ones
     if( !is_64(pid) ) {
-        if( syscall>=0 && syscall<ARRAY_SIZE(syscall_32_to_64) ) {
+        if( syscall>=0 && (unsigned int)syscall<ARRAY_SIZE(syscall_32_to_64) ) {
             syscall=syscall_32_to_64[syscall];
         } else {
             dlog("ptlib_get_syscall: "PID_F" syscall out of range %d\n", pid, syscall);
@@ -478,7 +480,7 @@ static int translate_syscall( pid_t pid, int sc_num )
     if( !is_64(pid) ) {
         int sc=sc_num+SYS_X86_32_OFFSET;
 
-        if( (sc-SYS_X86_32_OFFSET)!=-1 && sc>=0 && sc<ARRAY_SIZE(syscall_64_to_32) ) {
+        if( (sc-SYS_X86_32_OFFSET)!=-1 && sc>=0 && (unsigned int)sc<ARRAY_SIZE(syscall_64_to_32) ) {
             sc=syscall_64_to_32[sc];
         } else {
             sc=-1;
