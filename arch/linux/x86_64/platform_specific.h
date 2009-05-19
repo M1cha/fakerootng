@@ -110,8 +110,8 @@ typedef struct rusage ptlib_extra_data;
 #define PID_F "%d"
 #define DEV_F "%lx"
 #define INODE_F "%ld"
-#define UID_F "%lu"
-#define GID_F "%lu"
+#define UID_F "%u"
+#define GID_F "%u"
 
 /* Preferred stat functions to use */
 #define PREF_STAT SYS_stat

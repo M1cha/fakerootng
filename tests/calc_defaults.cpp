@@ -139,7 +139,7 @@ int parent_wait_test()
 int main()
 {
     cerr<<"Sizes: char "<<sizeof(char)<<", short "<<sizeof(short)<<", int "<<sizeof(int)<<", long "<<sizeof(long)<<", long long "<<sizeof(long long)<<
-        ", void * "<<sizeof(void *)<<endl;
+        ", void * "<<sizeof(void *)<<", size_t "<<sizeof(size_t)<<endl;
     cerr<<"Sizes: pid_t "<<sizeof(pid_t)<<", gid_t "<<sizeof(gid_t)<<", dev_t "<<sizeof(dev_t)<<", ino_t "<<sizeof(ino_t)<<endl;
 
     /* Check status of PTLIB_PARENT_CAN_WAIT */

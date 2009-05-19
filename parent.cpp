@@ -853,7 +853,8 @@ static bool handle_memory_allocation( int sc_num, pid_t pid, pid_state *state )
         // First step - mmap just returned
         if( ptlib_success( pid, sc_num ) ) {
             state->memory=(void *)ptlib_get_retval( pid );
-            dlog("handle_memory_allocation: "PID_F" allocated for our use %d bytes at %p\n", pid, static_mem_size, state->memory);
+            dlog("handle_memory_allocation: "PID_F" allocated for our use %lu bytes at %p\n", pid,
+                    (unsigned long)static_mem_size, state->memory);
 
             // "All" we need now is the shared memory. First, let's generate the local version for it.
             if(allocate_shared_mem( pid, state ))
@@ -922,8 +923,8 @@ static bool handle_memory_allocation( int sc_num, pid_t pid, pid_state *state )
         if( ptlib_success( pid, sc_num ) ) {
             // mmap succeeded
             state->shared_memory=(void *)(ptlib_get_retval( pid )+ptlib_prepare_memory_len());
-            dlog("handle_memory_allocation: "PID_F" allocated for our use %d shared bytes at %p\n", pid, shared_mem_size,
-                (char *)state->shared_memory-ptlib_prepare_memory_len());
+            dlog("handle_memory_allocation: "PID_F" allocated for our use %lu shared bytes at %p\n", pid,
+                    (unsigned long)shared_mem_size, (char *)state->shared_memory-ptlib_prepare_memory_len());
 
             // We now need to close the file descriptor
             ptlib_set_argument( pid, 1, state->context_state[1] );
