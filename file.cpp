@@ -41,7 +41,7 @@ static void stat_override_copy( const ptlib_stat *stat, stat_override *override 
     override->dev=stat->dev;
     override->inode=stat->ino;
     override->uid=stat->uid;
-    override->gid=stat->uid;
+    override->gid=stat->gid;
     override->dev_id=stat->rdev;
     override->mode=stat->mode;
 }

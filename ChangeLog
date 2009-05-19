@@ -1,3 +1,6 @@
+    * Fix bug - when importing existing file's permission into the lie database,
+      we used to copy the file's real uid into the fake gid.
+
 Version 0.14
     * Fix bug in unlinkat - context data used in incorrect order, resulting in
       "Not a directory" error when deleting a file.
