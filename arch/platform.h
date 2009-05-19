@@ -80,23 +80,6 @@ void ptlib_restore_state( pid_t pid, const void *buffer );
 const void *ptlib_prepare_memory( ); /* Returns pointer to static buffer with the desired opcods, of ptlib_prepare_memory_len length */
 size_t ptlib_prepare_memory_len(); /* How much memory does the platform need beyond how much the process needs */
 
-/* Process relationship - return the parent of a process */
-pid_t ptlib_get_parent( pid_t pid );
-
-/* Process creation with debugger attached:
- * call the "enter" right before the function, "exit" right after it returns
- * ptlib_fork_enter returns true if it did not change the syscall, false if it did.
- * orig_sc is the original system call used by the process.
- * ptlib_fork_exit returns true if a new process was created. The pid of the new process is returned in newpid.
- * Whether true or false, ptlib_fork_exit makes sure that the return value from the kernel matches what the
- * called of fork (or whatever) would expect
- * 
- * process_mem is a pointer to the shared memory area in the process space (as per ptlib_generate_syscall)
- * our_mem is a pointer to the same memory in the debugger porcess space
- */
-int ptlib_fork_enter( pid_t pid, int orig_sc, void *process_mem, void *our_mem );
-int ptlib_fork_exit( pid_t pid, int orig_sc, pid_t *newpid, void *process_mem, void *our_mem );
-
 /* This is a function that must be provided by the user of the library */
 void __dlog_( const char *format, ... ) COMPHINT_PRINTF( 1, 2);
 extern int log_level;

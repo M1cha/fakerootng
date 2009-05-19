@@ -20,9 +20,6 @@ bool attach_debugger( pid_t child, int socket );
 int process_children( int master_socket );
 int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long ret );
 
-// Called whenever a new process is created
-void handle_new_process( pid_t parent_id, pid_t child_id );
-
 #define NUM_SAVED_STATES 5
 
 struct pid_state {

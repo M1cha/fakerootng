@@ -174,7 +174,8 @@ AC_ARG_WITH([memdir], [AC_HELP_STRING([--with-memdir=DIR],[Where to create share
     if [[ "$with_memdir" ]]
     then
         AC_MSG_RESULT([$with_memdir])
-        AC_DEFINE_UNQUOTED([DEFAULT_TMPDIR], ["$with_memdir"])
+        dnl AC_DEFINE([DEFAULT_TMPDIR], ["$with_memdir"])
+        echo "#define DEFAULT_TMPDIR \"$with_memdir\"" >> confdefs.h
     fi
 
 ], [
