@@ -84,7 +84,12 @@ bool sys_stat( int sc_num, pid_t pid, pid_state *state )
                     // If the override is not a device, and the types do not match, this is not a valid entry
                     ok=(S_IFMT&ret.mode)==(S_IFMT&override.mode);
                 }
-                ret.mode=(ret.mode&(~(07000|S_IFMT))) | (override.mode&(07000|S_IFMT));
+                // Override the u=x flag for directories, but not files
+                if( S_ISDIR(ret.mode) ) {
+                    ret.mode=(ret.mode&(~(07700|S_IFMT))) | (override.mode&(07700|S_IFMT));
+                } else {
+                    ret.mode=(ret.mode&(~(07600|S_IFMT))) | (override.mode&(07600|S_IFMT));
+                }
 
                 if( ok ) {
                     dlog("stat64: "PID_F" override dev="DEV_F" inode="INODE_F" mode=%o uid="UID_F" gid="GID_F"\n",
@@ -128,57 +133,105 @@ static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             return allocate_process_mem( pid, state, sc_num );
         }
 
-        mode_t mode=(mode_t)ptlib_get_argument( pid, mode_offset+1 ); // Store the requested mode
-        state->context_state[0]=mode;
+        // First we stat the file to find out what we are up against (dev/inode etc.)
+        state->state=pid_state::REDIRECT2;
+        state->orig_sc=sc_num;
 
-        mode=mode&~07000;
-        ptlib_set_argument( pid, mode_offset+1, mode ); // Zero out the S* field
+        state->context_state[1]=ptlib_get_argument( pid, mode_offset+1 ); // Store the requested mode
+        state->context_state[0]=0; // syscall parts progress
 
-        dlog("chmod: "PID_F" mode %o changed to %o\n", pid, (unsigned int)state->context_state[1], mode );
-        state->state=pid_state::RETURN;
-    } else if( state->state==pid_state::RETURN ) {
+        ptlib_set_argument( pid, mode_offset+1, (int_ptr)state->memory ); // where to store the stat result
+
+        ptlib_set_syscall( pid, stat_function );
+
+    } else if( state->state==pid_state::REDIRECT2 && state->context_state[0]==0 ) {
         if( ptlib_success( pid, sc_num ) ) {
-            dlog("chmod: "PID_F" chmod successful, performing stat so we can update the map\n", pid);
+            // Our stat succeeded
+            struct stat_override override;
+            struct ptlib_stat stat;
 
-            // We need to call "stat/fstat" so we can know the dev/inode
-            state->state=pid_state::REDIRECT1;
+            ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
+
             ptlib_save_state( pid, state->saved_state );
-            state->orig_sc=sc_num;
 
+            // Restore the original parameters to restart the actual chmod call
             for( int i=1; i<=mode_offset; ++i )
-                ptlib_set_argument( pid, i, state->context_state[i] );
+                ptlib_set_argument( pid, i, state->context_state[i+1] );
 
-            ptlib_set_argument( pid, mode_offset+1, (int_ptr)state->memory ); // Where to store the stat result
-
-            // One anomaly handled with special case. Ugly, but not worth the interface complication
+            // one anomaly handled with special case. ugly, but not worth the interface complication
             if( extra_flags!=-1 ) {
-                // Some of the functions require an extra flag after the usual parameters
+                // some of the functions require an extra flag after the usual parameters
                 ptlib_set_argument( pid, mode_offset+2, extra_flags );
             }
 
-            return ptlib_generate_syscall( pid, stat_function, state->shared_memory );
+            state->state=pid_state::REDIRECT1;
+
+            // Modify the chmod mode
+            mode_t mode=(mode_t)state->context_state[1];
+
+            mode&=~07000; // Clear the SUID etc. bits
+            if( S_ISDIR( stat.mode ) ) {
+                // The node in question is a directory
+                mode|=00700; // Make sure we have read, write and execute permission
+            } else {
+                // Node is not a directory
+                mode|=00600; // Set read and write for owner
+            }
+            ptlib_set_argument( pid, mode_offset+1, mode );
+
+            // Save the stuff we'll need in order to update the lies database
+            state->context_state[2]=stat.dev;
+            state->context_state[3]=stat.ino;
+
+            state->context_state[0]=1; // Mark this as the actual chmod call
+
+            // If we don't already have an entry for this file in the lies database, we will not have
+            // the complete stat struct later on to create it.
+            if( !get_map( stat.dev, stat.ino, &override ) ) {
+                // Create a lie that is identical to the actual file
+                stat_override_copy( &stat, &override );
+                set_map( &override );
+            }
+
+            return ptlib_generate_syscall( pid, state->orig_sc, state->shared_memory );
         } else {
+            // stat failed - return that failure to the caller as is
             state->state=pid_state::NONE;
-            dlog("chmod: "PID_F" chmod failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)));
         }
-    } else if( state->state==pid_state::REDIRECT2 ) {
-        // Update our lies database
-        struct stat_override override;
-        struct ptlib_stat stat;
+    } else if( state->state==pid_state::REDIRECT2 && state->context_state[0]==1 ) {
+        if( ptlib_success( pid, sc_num ) ) {
+            // The chmod call succeeded - update the lies database
+            struct stat_override override;
 
-        ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
+            if( !get_map( state->context_state[2], state->context_state[3], &override ) ) {
+                // We explicitly created this map not so long ago - something is wrong
+                // XXX What can we do except hope these are reasonable values
+                override.dev=state->context_state[2];
+                override.inode=state->context_state[3];
+                override.uid=0;
+                override.gid=0;
+                override.dev_id=0;
+                override.transient=true;
 
-        if( !get_map( stat.dev, stat.ino, &override ) ) {
-            stat_override_copy( &stat, &override );
+                dlog("chmod: "PID_F" error (race?) getting override info for dev "DEV_F" inode "INODE_F"\n",
+                        pid, state->context_state[2], state->context_state[3] );
+            }
+            override.mode=(override.mode&~07777)|(((mode_t)state->context_state[1])&07777);
+            dlog("chmod: "PID_F" Setting override mode %o dev "DEV_F" inode "INODE_F"\n", pid, override.mode, override.dev,
+                    override.inode );
+            set_map( &override );
+
+            ptlib_restore_state( pid, state->saved_state );
+            ptlib_set_retval( pid, 0 );
+        } else {
+            // We just need to restore the saved state but keep the chmod error code
+            int err=ptlib_get_error( pid, sc_num );
+
+            ptlib_restore_state( pid, state->saved_state );
+            ptlib_set_error( pid, sc_num, err );
         }
-        override.mode=(override.mode&~07777)|(((mode_t)state->context_state[0])&07777);
-
-        dlog("chmod: "PID_F" Setting override mode %o dev "DEV_F" inode "INODE_F"\n", pid, override.mode, override.dev,
-            override.inode );
-        set_map( &override );
 
         state->state=pid_state::NONE;
-        ptlib_restore_state( pid, state->saved_state );
     } else {
         dlog("chmod: "PID_F" unknown state %d\n", pid, state->state );
     }
@@ -192,7 +245,7 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
     if( state->state==pid_state::NONE ) {
         chroot_translate_param( pid, state, 1, true );
 
-        state->context_state[1]=ptlib_get_argument( pid, 1 ); // Store the file name
+        state->context_state[2]=ptlib_get_argument( pid, 1 ); // Store the file name
     }
 
     return real_chmod( sc_num, pid, state, 1, PREF_STAT );
@@ -201,7 +254,7 @@ bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
 bool sys_fchmod( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        state->context_state[1]=ptlib_get_argument( pid, 1 ); // Store the file descriptor
+        state->context_state[2]=ptlib_get_argument( pid, 1 ); // Store the file descriptor
     }
 
     return real_chmod( sc_num, pid, state, 1, PREF_FSTAT );
@@ -215,12 +268,12 @@ bool sys_fchmodat( int sc_num, pid_t pid, pid_state *state )
         // this chroot translation will need to be reconsidered
         chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1), 2, true ); 
 
-        state->context_state[1]=ptlib_get_argument( pid, 1 ); // Store the base dir fd
-        state->context_state[2]=ptlib_get_argument( pid, 2 ); // Store the file name
-        state->context_state[3]=ptlib_get_argument( pid, 4 ); // Store the flags
+        state->context_state[2]=ptlib_get_argument( pid, 1 ); // Store the base dir fd
+        state->context_state[3]=ptlib_get_argument( pid, 2 ); // Store the file name
+        state->context_state[4]=ptlib_get_argument( pid, 4 ); // Store the flags
     }
 
-    return real_chmod( sc_num, pid, state, 2, PREF_FSTATAT, state->context_state[3] );
+    return real_chmod( sc_num, pid, state, 2, PREF_FSTATAT, 0 );
 }
 #endif
 
