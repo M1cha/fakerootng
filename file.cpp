@@ -806,6 +806,7 @@ bool sys_getcwd( int sc_num, pid_t pid, pid_state *state )
 
 bool sys_munmap( int sc_num, pid_t pid, pid_state *state )
 {
+    // XXX Does this work? We should never be called with REDIRECT1
     if( state->state==pid_state::NONE || state->state==pid_state::REDIRECT1 ) {
         if( state->state==pid_state::NONE ) {
             // This is our first time entering this munmap

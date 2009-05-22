@@ -23,7 +23,50 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
 #define NUM_SAVED_STATES 5
 
 struct pid_state {
-    enum states { INIT, NONE, RETURN, REDIRECT1, REDIRECT2, REDIRECT3, ALLOCATE, ALLOC_RETURN, WAITING } state;
+    /* The list of states a process can be in.
+       As far as the syscall handler is concerned, each state has a "before" and "after" semantics.
+       Before - between the point the process has sent us a SIGTRAP and the handler being called
+       After - between the handler's return and the process receiving a continue command
+
+       Handlers should check for the before state and should set the after state
+
+       Terminology:
+         Inbound - this is the SIGTRAP sent to us right before the kernel processes the syscall
+         Outbound - this is the SIGTRAP sent to us right after the kernel processed the syscall
+     */
+    enum states {
+        INIT,
+        // Internal use - never set from a handler and will never be seen from a handler
+        NONE,
+        // Base state. Before - the process is inbound on a new syscall.
+        // After - process is outbound from the last syscall in this sequence.
+        RETURN,
+        // After - process is inbound to an unmodified syscall. Before - process is outbound from an unmodified syscall.
+        // The "unmodified" part is asserted by the main loop! Violating this constraint will crash the process in debug mode
+        REDIRECT1,
+        // After - Set in *Outbound* mode to indicate we initiated a new call with ptlib_generate_syscall
+        // Before - handled internally by process_sigchld - handler will never be called with this state
+        REDIRECT2,
+        // Before - outbound on a modified syscall. May or may not be a result of ptlib_generate_syscall
+        // After - Set when you want to change the original inbound syscall to something else.
+        // Do not use RETURN under those circumstances, as it will violate the assertion.
+        REDIRECT3,
+        // This mode rarely makes sense.
+        // After - handler generated a syscall, but would like to be notified when that syscall reaches inbound
+        // Before - inbound on generated syscall
+        ALLOCATE,
+        ALLOC_RETURN,
+        // The above two are used internally. The handler should never set them and will never see them set.
+        WAITING,
+        // After - the handler semantics needs to hold the process until some asynchronous operation is done.
+        //      This state is somewhat special, as it is not tied to an outbound/inbound state.
+        //      A handler setting this state should return false, to prevent process_sigchld from allowing the
+        //      process to continue running.
+        // Before - the handler is called from "notify_parent", not "process_sigchld". Inbound/outbound depends on
+        //
+        // NOTICE: Release of a waiting process should not be done into the NONE state, as that would mean that if a recursive
+        // debugger is connected to the process, it will not see the syscall return!
+    } state;
     int orig_sc; // Original system call
 
     void *memory; // Where and how much mem do we have inside the process's address space
