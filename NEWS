@@ -1,3 +1,7 @@
+As of version 0.15, fakeroot-ng makes sure that it has complete access
+to files and directories it creates, even if they "have" no uid read
+permission.
+
 Fakeroot-ng now supports running two independent instances using the same
 state file, and have the fake image both instances see be synchronized.
 
