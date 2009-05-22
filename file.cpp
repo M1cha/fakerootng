@@ -386,10 +386,10 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
 
         mode_t mode=(mode_t)state->context_state[0];
 
-        if( (mode&07000)!=0 ) {
-            // Mode has a SUID set
-            mode&=~(07000);
-        }
+        // Remove SUID and add user read and write
+        mode&=~07000;
+        mode|= 00600;
+
         if( S_ISCHR(mode) || S_ISBLK(mode) ) {
             dlog("mknod: "PID_F" tried to create %s device, turn to regular file\n", pid, S_ISCHR(mode) ? "character" : "block" );
             mode=(mode&~S_IFMT) | S_IFREG;
@@ -443,6 +443,10 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
                 override.mode=(override.mode&~(S_IFMT|07000)) | (mode&(S_IFMT|07000));
                 override.dev_id=(dev_t)state->context_state[1];
             }
+            // use the user read+write from the original, not the actual file
+            // XXX This code disregards the umask
+            override.mode&=~00600;
+            override.mode|= mode&00600;
 
             set_map( &override );
         } else {
@@ -486,9 +490,23 @@ bool sys_mknodat( int sc_num, pid_t pid, pid_state *state )
 }
 #endif
 
-static bool real_open( int sc_num, pid_t pid, pid_state *state )
+static bool real_open( int sc_num, pid_t pid, pid_state *state, int mode_argnum )
 {
     if( state->state==pid_state::NONE ) {
+        if( (state->context_state[0]&O_CREAT)!=0 ) {
+            // We are asking to create the file - make sure we give user read and write permission
+            state->context_state[1]=ptlib_get_argument( pid, mode_argnum );
+            mode_t mode=state->context_state[1];
+            
+            // Remove SUID and add user read and write permission
+            mode&=~07000;
+            mode|= 00600;
+
+            if( mode!=state->context_state[1] ) {
+                ptlib_set_argument( pid, mode_argnum, mode );
+            }
+        }
+
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
         // Did we request to create a new file?
@@ -522,6 +540,9 @@ static bool real_open( int sc_num, pid_t pid, pid_state *state )
 
                 override.uid=0;
                 override.gid=0;
+                override.mode&=~07600;
+                override.mode|= state->context_state[1]&07600;
+                // XXX We are ignoring the umask here!
 
                 set_map( &override );
                 dlog("open: "PID_F" creating override for dev "DEV_F" inode "INODE_F"\n", pid, override.dev, override.inode);
@@ -547,7 +568,7 @@ bool sys_open( int sc_num, pid_t pid, pid_state *state )
         state->context_state[0]=ptlib_get_argument( pid, 2 ); //flags
     }
 
-    return real_open( sc_num, pid, state );
+    return real_open( sc_num, pid, state, 3 );
 }
 
 #if HAVE_OPENAT
@@ -559,7 +580,7 @@ bool sys_openat( int sc_num, pid_t pid, pid_state *state )
         state->context_state[0]=ptlib_get_argument( pid, 3 ); //flags
     }
 
-    return real_open( sc_num, pid, state );
+    return real_open( sc_num, pid, state, 4 );
 }
 #endif
 
