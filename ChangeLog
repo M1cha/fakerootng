@@ -1,3 +1,4 @@
+    * mkdirat would not put the directory into the lie database
     * When running chmod - do not allow the user to actually remove the permission
       for user - emulates the root behavior of allowing access to a file regardless
       of its actual permission

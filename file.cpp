@@ -600,8 +600,8 @@ static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset
             ptlib_save_state( pid, state->saved_state );
 
             // Perform a stat operation so we can know the directory's dev and inode
-            for( int i=0; i<mode_offset; ++i )
-                ptlib_set_argument( pid, i+1, state->context_state[i] ); // Name
+            for( int i=1; i<=mode_offset; ++i )
+                ptlib_set_argument( pid, i, state->context_state[i] ); // The original mkdir arguments
             ptlib_set_argument( pid, mode_offset+1, (int_ptr)state->memory ); // stat structure
 
             if( extra_flags!=-1 ) {
@@ -646,7 +646,7 @@ bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
     if( state->state==pid_state::NONE && state->memory!=NULL ) {
         chroot_translate_param( pid, state, 1, true );
 
-        state->context_state[0]=ptlib_get_argument( pid, 1 ); // Directory name
+        state->context_state[1]=ptlib_get_argument( pid, 1 ); // Directory name
 
         if( log_level>0  ) {
             char name[PATH_MAX];
@@ -666,13 +666,14 @@ bool sys_mkdirat( int sc_num, pid_t pid, pid_state *state )
     if( state->state==pid_state::NONE ) {
         chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, true );
 
-        state->context_state[0]=ptlib_get_argument( pid, 2 ); // Directory name
+        state->context_state[1]=ptlib_get_argument( pid, 1 ); // File descriptor
+        state->context_state[2]=ptlib_get_argument( pid, 2 ); // Directory name
 
         if( log_level>0  ) {
             char name[PATH_MAX];
 
-            ptlib_get_string( pid, (void *)state->context_state[0], name, sizeof(name) );
-            int fd=(int)ptlib_get_argument( pid, 1 );
+            ptlib_get_string( pid, (void *)state->context_state[2], name, sizeof(name) );
+            int fd=(int)state->context_state[1];
 
             dlog("mkdirat: %d creates %s at %x\n", pid, name, fd );
         }
