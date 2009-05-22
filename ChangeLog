@@ -1,7 +1,8 @@
     * mkdirat would not put the directory into the lie database
-    * When running chmod - do not allow the user to actually remove the permission
-      for user - emulates the root behavior of allowing access to a file regardless
-      of its actual permission
+    * When running chmod and when creating files and directories - do not
+      allow the user to actually remove the permission for user - emulates the
+      root behavior of allowing access to a file regardless of its actual
+      permission.
     * Fix bug - when importing existing file's permission into the lie database,
       we used to copy the file's real uid into the fake gid.
 

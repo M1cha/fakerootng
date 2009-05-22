@@ -591,6 +591,17 @@ static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset
         if( state->memory==NULL )
             return allocate_process_mem( pid, state, sc_num );
 
+        // Make sure user has rwx on the created directory
+        state->context_state[0]=ptlib_get_argument( pid, mode_offset+1 );
+
+        mode_t mode=state->context_state[0];
+        mode|= 00700;
+
+        if( mode!=state->context_state[0] ) {
+            // We did change the mode
+            ptlib_set_argument( pid, mode_offset+1, mode );
+        }
+
         state->state=pid_state::RETURN;
     } else if( state->state==pid_state::RETURN ) {
         state->state=pid_state::NONE;
@@ -627,6 +638,10 @@ static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset
             stat_override_copy( &stat, &override );
             override.uid=0;
             override.gid=0;
+
+            override.mode&=~00700;
+            override.mode|= state->context_state[0]&00700;
+            // XXX This code does not take the umask into account
 
             dlog("mkdir: "PID_F" storing override for dev "DEV_F" inode "INODE_F"\n", pid, override.dev, override.inode);
             set_map( &override );
