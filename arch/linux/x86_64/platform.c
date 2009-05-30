@@ -655,3 +655,17 @@ size_t ptlib_prepare_memory_len()
     return mem_offset;
 }
 
+pid_t ptlib_get_parent( pid_t pid )
+{
+    return ptlib_linux_get_parent(pid);
+}
+
+int ptlib_fork_enter( pid_t pid, int orig_sc, void *process_mem, void *our_mem )
+{
+    return ptlib_linux_fork_enter( pid, orig_sc );
+}
+
+int ptlib_fork_exit( pid_t pid, int orig_sc, pid_t *newpid, void *process_mem, void *our_mem )
+{
+    return ptlib_linux_fork_exit( pid, orig_sc, newpid );
+}
