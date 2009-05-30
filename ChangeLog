@@ -1,3 +1,10 @@
+    * Greater support for platforms that have no automatic new process attach
+      mechanisms. Will now detect children through the clone return code.
+    * Improve the ptrace emulation layer - will now attach fake debugger to
+      child correctly.
+    * Fix to the PTRACE_DETACH emulation - would not restart the process from
+      which we detached.
+
 Version 0.15
     * mkdirat would not put the directory into the lie database
     * When running chmod and when creating files and directories - do not
