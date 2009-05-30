@@ -54,9 +54,27 @@ static bool handle_memory_allocation( int sc_num, pid_t pid, pid_state *state );
 static MAP_CLASS<int, syscall_hook> syscalls;
 
 // Keep track of the states for the various processes
-static MAP_CLASS<pid_t, pid_state> state;
+template <class key, class data> class map_class : public  MAP_CLASS<key, data> 
+{
+    // Inherit everything, just disable the dangerous operator[]
+public:
+    data &operator[] (const key &k)
+    {
+        return MAP_CLASS<key,data>::operator[] (k);
+    }
+    const data &operator[] ( const key &k) const
+    {
+        return MAP_CLASS<key,data>::operator[] (k);
+    }
+};
+
+static map_class<pid_t, pid_state> state;
 
 size_t static_mem_size, shared_mem_size;
+
+static MAP_CLASS<pid_t, int> root_children; // Map of all root children
+
+static int num_processes; // Number of running processes
 
 static void init_handlers()
 {
@@ -368,44 +386,69 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
     state.erase(pid);
 }
 
-static void handle_new_process( pid_t parent, pid_t child )
+void handle_new_process( pid_t parent_id, pid_t child_id )
 {
     // Copy the session information
-    dlog("%s: Registering "PID_F" with parent "PID_F"\n", __FUNCTION__, child, parent);
 
-    int_ptr process_type=state[parent].context_state[0];
+    pid_state *parent=lookup_state(parent_id),
+              *child=&state[child_id]; // We actually want to create the state if it did not already exist
+
+    if( child->state!=pid_state::INIT ) {
+        // Due to platform incompatibilities and other issues, we may be called several times over the same
+        // child. Don't make a fuss - just return.
+
+        dlog("%s: Process "PID_F" already registered - not performing any operation\n", __FUNCTION__, child_id );
+
+        return;
+    }
+
+    dlog("%s: Registering "PID_F" with parent "PID_F"\n", __FUNCTION__, child_id, parent_id );
+
+    // The platform may want to init the process in some way
+    ptlib_prepare(child_id);
+    child->state=pid_state::NONE;
+
+    int_ptr process_type=parent->context_state[0];
 
     if( (process_type&NEW_PROCESS_SAME_PARENT)==0 )
-        state[child].parent=parent;
+        child->parent=parent_id;
     else
-        state[child].parent=state[parent].parent;
+        child->parent=parent->parent;
 
-    state[child].session_id=state[parent].session_id;
-    state[state[child].parent].num_children++;
+    child->session_id=parent->session_id;
+    state[child->parent].num_children++;
 
     // if( (process_type&NEW_PROCESS_SAME_ROOT)==0 )
         // XXX Need to contrast deep copy with shallow copy of root
-    state[child].root=state[parent].root;
+    child->root=parent->root;
 
     // Whether the VM was copied or shared, the new process has the same static and shared memory
-    state[child].memory=state[parent].memory;
-    state[child].shared_memory=state[parent].shared_memory;
+    child->memory=parent->memory;
+    child->shared_memory=parent->shared_memory;
     // If the VM is not shared, setting shared_memory but not shared_mem_local is an indication that the
     // old memory needs to be freed
     if( (process_type&NEW_PROCESS_SAME_VM)!=0 ) {
         // The processes share the same VM - have them share the same shared memory
-        state[child].shared_mem_local=state[parent].shared_mem_local;
+        child->shared_mem_local=parent->shared_mem_local;
     }
+
+    if( (process_type&NEW_PROCESS_SAME_DEBUGGER)!=0 ) {
+        // The process inherits the debugger from the parent
+        child->debugger=parent->debugger;
+    }
+
+    num_processes++;
 }
-
-static MAP_CLASS<pid_t, int> root_children; // Map of all root children
-
-static int num_processes; // Number of running processes
 
 int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long ret )
 {
     long sig=0;
 
+    MAP_CLASS<pid_t, pid_state>::iterator proc_state=state.find(pid);
+    if( proc_state==state.end() ) {
+        // The process does not exist!
+        wait_state=NEWPROCESS;
+    }
     //dlog("process_sigchld: "PID_F" state=%d, status=%x, ret=%d\n", pid, wait_state, status, ret );
 
     switch(wait_state) {
@@ -574,7 +617,6 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
         {
             dlog(PID_F": Created new child process %ld\n", pid, ret);
             handle_new_process( pid, ret );
-            num_processes++;
         }
     }
 
@@ -651,6 +693,9 @@ bool attach_debugger( pid_t child, int socket )
 
     state[child]=pid_state();
     state[child].session_id=getsid(child); // The initial session ID
+    // First child gets special treatment - some of the operations are done manually for it
+    state[child].state=pid_state::NONE;
+    ptlib_prepare(child);
 
     return true;
 }
@@ -726,14 +771,6 @@ int process_children( int master_socket )
             }
 
             continue;
-        }
-
-        // If this is the first time we see this process, we need to init the ptrace options for it
-        if( state[pid].state==pid_state::INIT ) {
-            dlog( PID_F": Init new process\n", pid);
-
-            ptlib_prepare(pid);
-            state[pid].state=pid_state::NONE;
         }
 
         ret=ptlib_parse_wait( pid, status, &wait_state );
