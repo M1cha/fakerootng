@@ -43,6 +43,7 @@
 
 static FILE *debug_log;
 int log_level;
+bool log_flush=false;
 
 void __dlog_( const char *format, ... )
 {
@@ -53,7 +54,8 @@ void __dlog_( const char *format, ... )
             va_start(params, format);
             vfprintf(debug_log, format, params);
             va_end(params);
-        } else {
+        }
+        if( format==NULL || log_flush ) {
             fflush( debug_log );
         }
     }
@@ -73,7 +75,7 @@ int parse_options( int argc, char *argv[] )
 {
     int opt;
 
-    while( (opt=getopt(argc, argv, "+p:l:dv" ))!=-1 ) {
+    while( (opt=getopt(argc, argv, "+p:l:dvf" ))!=-1 ) {
         switch( opt ) {
         case 'p': // Persist file
             if( optarg[0]!='/' ) {
@@ -107,6 +109,9 @@ int parse_options( int argc, char *argv[] )
 
                 return -1;
             }
+            break;
+        case 'f':
+            log_flush=true;
             break;
         case 'd':
             nodetach=true;

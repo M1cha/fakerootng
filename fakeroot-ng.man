@@ -3,7 +3,7 @@
 .SH NAME
 fakeroot\-ng \- run a command while making it believe it is running as root
 .SH SYNOPSIS
-\fBfakeroot\-ng\fP [ \fB\-l\fIlogfile\fP ] [ \fB\-p\fIpersist_file\fP ] [\-d] \fIcommand line\fP
+\fBfakeroot\-ng\fP [ \fB\-l\fIlogfile\fP [\fB\-f\fP] ] [ \fB\-p\fIpersist_file\fP ] [\-d] \fIcommand line\fP
 .SH DESCRIPTION
 This manual page documents the \fBfakeroot\-ng\fP command.
 .PP
@@ -33,6 +33,11 @@ the two instances will share state and their processes will see the same picture
 \fB\-l\fIlog_file\fP
 Causes fakeroot\-ng to dump to \fIlog_file\fP internal state and processing information. This is
 mostly useful for cases where fakeroot\-ng fails to act as expected.
+.TP
+\fB-f\fP
+Causes the log file to be flushed after every print. Guarantees that the important hint as to why
+the crash happened will be in the actual file, but has non-negligent performance effect. Only has
+effect if \fB\-l\fP is specified.
 .TP
 \fB\-d\fP
 Tells fakeroot\-ng not to completely daemonize itself. This is mostly useful in case of crashes that
