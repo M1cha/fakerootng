@@ -465,6 +465,7 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
         ret=pid;
         pid=ptlib_get_parent(ret);
 
+        dlog("Caught unknown new process %lu, detected parent "PID_F"\n", ret, pid);
         dlog(NULL);
         assert( state.find(pid)!=state.end() ); // Make sure the parent is, indeed, ours
     }
@@ -780,6 +781,11 @@ int process_children( int master_socket )
                         }
                     }
                 }
+            } else if( errno==ECHILD ) {
+                // We should never get here. If we have no more children, we should have known about it already
+                dlog( "BUG - ptlib_wait failed with %s while numchildren is still %d\n", strerror(errno), num_processes );
+                dlog(NULL);
+                num_processes=0;
             } else {
                 dlog("ptlib_wait failed %d: %s\n", errno, strerror(errno) );
             }
