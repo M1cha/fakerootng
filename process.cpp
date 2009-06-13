@@ -65,7 +65,8 @@ bool sys_fork( int sc_num, pid_t pid, pid_state *state )
     } else if( state->state==pid_state::RETURN || state->state==pid_state::REDIRECT2 ) {
         pid_t newpid;
         if( ptlib_fork_exit( pid, state->orig_sc, &newpid, state->shared_memory, state->shared_mem_local.get() ) ) {
-            handle_new_process( pid, newpid );
+            // This if might very well be called after the process HAS ALREADY EXIT!
+            // We rely on process_sigchld to figure out new processes.
         }
 
         state->state=pid_state::NONE;
@@ -115,8 +116,7 @@ bool sys_clone( int sc_num, pid_t pid, pid_state *state )
     } else if( state->state==pid_state::RETURN ) {
         // Was the call successful?
         if( ptlib_success( pid, state->orig_sc ) ) {
-            // So what IS the new process we created?
-            handle_new_process( pid, ptlib_get_retval(pid) );
+            // By the time we reach here the process might already be dead - do not call handle_new_process
         }
         state->state=pid_state::NONE;
     }
