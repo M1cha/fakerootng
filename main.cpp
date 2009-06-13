@@ -66,7 +66,7 @@ void print_version(void)
         "and redistribution rights.\n");
 }
 
-static bool nodetach=false;
+static bool nodetach=true;
 static char persistent_file[PATH_MAX];
 
 int parse_options( int argc, char *argv[] )

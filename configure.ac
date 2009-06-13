@@ -63,7 +63,7 @@ AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
 
 dnl Check which std::map variant to use
 AC_LANG_PUSH(C++)
-AC_LANG_WERROR
+#AC_LANG_WERROR
 
 AC_MSG_CHECKING([whether compiler supports the upcoming ISO C++ standard])
 saved_CXXFLAGS=$CXXFLAGS

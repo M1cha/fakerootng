@@ -460,7 +460,13 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
     MAP_CLASS<pid_t, pid_state>::iterator proc_state=state.find(pid);
     if( proc_state==state.end() ) {
         // The process does not exist!
+        // Find out who the parent is
         wait_state=NEWPROCESS;
+        ret=pid;
+        pid=ptlib_get_parent(ret);
+
+        dlog(NULL);
+        assert( state.find(pid)!=state.end() ); // Make sure the parent is, indeed, ours
     }
     //dlog("process_sigchld: "PID_F" state=%d, status=%x, ret=%d\n", pid, wait_state, status, ret );
 
