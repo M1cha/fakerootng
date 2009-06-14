@@ -299,6 +299,7 @@ static const char *state2str( pid_state::states state )
         STATENAME(ALLOCATE)
         STATENAME(ALLOC_RETURN)
         STATENAME(WAITING)
+        STATENAME(ZOMBIE)
 #undef STATENAME
     }
 
@@ -383,7 +384,9 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
             i->second.debugger=0;
         }
     }
-    state.erase(pid);
+
+    dlog("%s: "PID_F" is now a zombie\n", __func__, pid );
+    proc_state->state=pid_state::ZOMBIE;
 }
 
 void handle_new_process( pid_t parent_id, pid_t child_id )
@@ -409,6 +412,7 @@ void handle_new_process( pid_t parent_id, pid_t child_id )
     pid_state *parent=lookup_state(parent_id);
     if( parent!=NULL ) {
         // If this assert fails, we somehow created a -1 process - not good
+        dlog(NULL);
         assert(parent_id!=-1);
 
         // This process is not a root process - it has a parent
@@ -1066,4 +1070,11 @@ pid_state *lookup_state( pid_t pid ) {
     }
 
     return NULL;
+}
+
+void delete_state( pid_t pid )
+{
+    assert(lookup_state(pid)!=NULL);
+
+    state.erase(pid);
 }

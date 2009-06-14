@@ -69,6 +69,8 @@ struct pid_state {
         //
         // NOTICE: Release of a waiting process should not be done into the NONE state, as that would mean that if a recursive
         // debugger is connected to the process, it will not see the syscall return!
+        ZOMBIE,
+        // As with real processes - the process has terminated, but has not yet been waited on.
     } state;
     int orig_sc; // Original system call
 
@@ -125,6 +127,7 @@ struct pid_state {
 };
 
 pid_state *lookup_state( pid_t pid );
+void delete_state( pid_t pid );
 
 typedef bool (*sys_callback)( int sc_num, pid_t pid, pid_state *state );
 struct syscall_hook {

@@ -26,6 +26,7 @@
 #include <limits.h>
 #include <string.h>
 #include <unistd.h>
+#include <assert.h>
 
 #include "syscalls.h"
 #include "arch/platform.h"
@@ -79,8 +80,6 @@ bool sys_vfork( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
         sys_fork( sc_num, pid, state );
-
-        state->context_state[0]=NEW_PROCESS_SAME_VM;
     } else {
         sys_fork( sc_num, pid, state );
     }
@@ -109,6 +108,8 @@ bool sys_clone( int sc_num, pid_t pid, pid_state *state )
         if( (flags&CLONE_PTRACE)!=0 )
             state->context_state[0]|=NEW_PROCESS_SAME_DEBUGGER;
 
+        dlog(PID_F": clone called with flags %lx\n", pid, (unsigned long)flags );
+
         // Whatever it originally was, add a CLONE_PTRACE to the flags so that we remain in control
         flags|=CLONE_PTRACE;
         flags&=~CLONE_UNTRACED; // Reset the UNTRACED flag
@@ -117,7 +118,11 @@ bool sys_clone( int sc_num, pid_t pid, pid_state *state )
         // Was the call successful?
         if( ptlib_success( pid, state->orig_sc ) ) {
             // By the time we reach here the process might already be dead - do not call handle_new_process
+            dlog(PID_F": clone succeeded, new process "PID_F"\n", pid, (pid_t)ptlib_get_retval( pid ) );
+        } else {
+            dlog(PID_F": clone failed: %s\n", pid, strerror( ptlib_get_error( pid, state->orig_sc ) ) );
         }
+
         state->state=pid_state::NONE;
     }
 
@@ -289,17 +294,34 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
             // Let's see what was asked for
             pid_t wait_pid=(pid_t)state->context_state[0];
             std::list<pid_state::wait_state>::iterator child=state->waiting_signals.begin();
+            assert(child!=state->waiting_signals.end());
+
+            pid_state *child_state=NULL;
 
             if( wait_pid<-1 ) {
                 // We are looking for process with session id= -pid
-                while( child!=state->waiting_signals.end() && state[child->pid()].session_id!=-wait_pid )
-                    ++child;
+                child_state=lookup_state(child->pid());
+                while( child!=state->waiting_signals.end() && child_state->session_id!=-wait_pid )
+                {
+                    if( (++child)!=state->waiting_signals.end() )
+                    {
+                        child_state=lookup_state(child->pid());
+                        assert(child_state!=NULL);
+                    }
+                }
             } else if( wait_pid==-1 ) {
                 // Wait for anything. Just leave child as it is
             } else if( wait_pid==0 ) {
                 // Wait for session_id==parent's
-                while( child!=state->waiting_signals.end() && state[child->pid()].session_id!=state->session_id )
-                    ++child;
+                child_state=lookup_state(child->pid());
+                while( child!=state->waiting_signals.end() && child_state->session_id!=state->session_id )
+                {
+                    if( (++child)!=state->waiting_signals.end() )
+                    {
+                        child_state=lookup_state(child->pid());
+                        assert(child_state!=NULL);
+                    }
+                }
             } else {
                 // Wait for exact match
                 while( child!=state->waiting_signals.end() && child->pid()!=wait_pid )
@@ -307,7 +329,22 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
             }
 
             if( child!=state->waiting_signals.end() ) {
-                // We have what to report - allow the syscall to return
+                // We have what to report
+                if( child_state==NULL ) {
+                    child_state=lookup_state(child->pid());
+                    assert(child_state!=NULL);
+                }
+
+                assert( child_state->state!=pid_state::INIT );
+               
+                if( child_state->state==pid_state::ZOMBIE ) {
+                    // We can dispense with the pid entry
+                    delete_state(child->pid());
+                    dlog("%s: Child "PID_F" removed from process table\n", __func__, child->pid() );
+                    child_state=NULL;
+                }
+
+                // allow the syscall to return
                 
                 // Fill in the rusage
                 if( ((void *)state->context_state[3])!=NULL )
