@@ -1,3 +1,5 @@
+    * Sending an ALRM signal to the fakeroot-ng process dumps to the log all
+      tracked processes, along with their state
     * Add -f option - flush log after every print
     * Greater support for platforms that have no automatic new process attach
       mechanisms. Will now detect children through the clone return code.

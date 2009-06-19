@@ -501,7 +501,7 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
 
         dlog("Caught unknown new process %lu, detected parent "PID_F"\n", ret, pid);
         dlog(NULL);
-        assert( state.find(pid)!=state.end() ); // Make sure the parent is, indeed, ours
+        assert( pid==0 || pid==1 || state.find(pid)!=state.end() ); // Make sure the parent is, indeed, ours
     }
     //dlog("process_sigchld: "PID_F" state=%d, status=%x, ret=%d\n", pid, wait_state, status, ret );
 
@@ -754,6 +754,14 @@ static void sigchld_handler(int signum)
 {
 }
 
+// Signify whether an alarm was received while we were waiting
+static bool alarm_happened=false;
+
+static void sigalrm_handler(int signum)
+{
+    alarm_happened=true;
+}
+
 int process_children( int master_socket )
 {
     // Initialize the ptlib library
@@ -768,19 +776,25 @@ int process_children( int master_socket )
 
     struct sigaction action;
     memset( &action, 0, sizeof( action ) );
+
     action.sa_handler=sigchld_handler;
-    sigfillset( &action.sa_mask );
+    sigemptyset( &action.sa_mask );
     action.sa_flags=0;
 
     sigaction( SIGCHLD, &action, NULL );
+
+    action.sa_handler=sigalrm_handler;
+    sigaction( SIGALRM, &action, NULL );
 
     sigset_t orig_signals, child_signals;
 
     sigemptyset( &child_signals );
     sigaddset( &child_signals, SIGCHLD );
+    sigaddset( &child_signals, SIGALRM );
     sigprocmask( SIG_BLOCK, &child_signals, &orig_signals );
 
     sigdelset( &orig_signals, SIGCHLD );
+    sigdelset( &orig_signals, SIGALRM );
 
     // Prepare the file descriptors
     fd_set file_set;
@@ -815,6 +829,14 @@ int process_children( int master_socket )
                         }
                     }
                 }
+
+                // Did an alarm signal arrive?
+                if( alarm_happened ) {
+                    alarm_happened=false;
+
+                    dump_states();
+                }
+
             } else if( errno==ECHILD ) {
                 // We should never get here. If we have no more children, we should have known about it already
                 dlog( "BUG - ptlib_wait failed with %s while numchildren is still %d\n", strerror(errno), num_processes );
@@ -1110,4 +1132,22 @@ void delete_state( pid_t pid )
 
     if( (--proc_state->context_state[0])==0 )
         state.erase(pid);
+}
+
+void dump_states()
+{
+    // Print the header
+    dlog("PID\tParent\tState\n");
+
+    for( map_class<pid_t, pid_state>::const_iterator i=state.begin(); i!=state.end(); ++i ) {
+        dlog(PID_F"\t"PID_F"\t%s", i->first, i->second.parent, state2str(i->second.state) );
+
+        if( i->second.state==pid_state::ZOMBIE ) {
+            dlog("(%d)", (int)i->second.context_state[0]);
+        }
+
+        dlog("\n");
+    }
+
+    dlog(NULL);
 }

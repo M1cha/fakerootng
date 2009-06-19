@@ -46,6 +46,10 @@ core file from being created.
 .TP
 \fB\-v\fP
 Print out the version number and copyright info and exit without doing anything.
+.SH SIGNALS
+Sending the ALRM signal to the fakeroot\-ng master process makes it dump to the log a complete
+list of all tracked processes, along with their parent and current state. This is, mostly, a
+debugging feature. The signal does nothing if \fB\-l\fP is not active.
 .SH ENVIRONMENT VARIABLES AND SHARED MEMORY
 Some of the communication between fakeroot\-ng and the program being fooled is done through a
 shared memory mechanism. In order to create it, fakeroot\-ng creates a temporary file and maps

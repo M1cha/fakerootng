@@ -126,8 +126,13 @@ struct pid_state {
     }
 };
 
+// Look up a state by pid. Return NULL if the state does not exist
 pid_state *lookup_state( pid_t pid );
+// Delete a process. Must be called with state as ZOMBIE.
+// Does reference counting, and will only perform actual delete when no more users.
 void delete_state( pid_t pid );
+// Dump all of the registered processes, including parent, state and zombie use count
+void dump_states();
 
 typedef bool (*sys_callback)( int sc_num, pid_t pid, pid_state *state );
 struct syscall_hook {
