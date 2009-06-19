@@ -30,6 +30,7 @@
 #include <sys/socket.h>
 
 #include MAP_INCLUDE
+#include <set>
 
 #include <stdio.h>
 #include <assert.h>
@@ -328,7 +329,9 @@ static void notify_parent( pid_t parent, const pid_state::wait_state &waiting )
         return;
     }
     dlog("notify_parent: "PID_F" sent a notify about "PID_F"(%x)\n", parent, waiting.pid(), waiting.status());
-    pid_state *proc_state=&state[parent];
+    pid_state *proc_state=lookup_state(parent);
+    assert(proc_state!=NULL);
+
     proc_state->waiting_signals.push_back( waiting );
 
     // Is the parent currently waiting?
@@ -348,7 +351,14 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
     dlog(NULL);
     assert(proc_state!=NULL);
 
-    // First thing first - notify the parent
+    // Set the process state to ZOMBIE with usage count of 1
+    proc_state->state=pid_state::ZOMBIE;
+    proc_state->context_state[0]=1;
+    dlog("%s: "PID_F" is now a zombie\n", __func__, pid );
+
+    pid_state *parent_state=lookup_state(proc_state->parent);
+
+    // Notify the parent
 #if PTLIB_PARENT_CAN_WAIT
     // If a parent can wait on a debugged child we need to notify it even if the child is being debugged,
     // but only if it actually has a parent (i.e. - was not reparented to init)
@@ -358,35 +368,55 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
     // If a parent cannot wait, we need to let it know ourselves only if it's not being debugged
     if( (proc_state->debugger==0 || proc_state->debugger==proc_state->parent) && proc_state->parent!=0 && proc_state->parent!=1 )
 #endif
+    {
+        proc_state->context_state[0]++; // Update use count
         notify_parent( proc_state->parent, pid_state::wait_state( pid, status, &usage, false ) );
+    }
+
+    // Regardless of whether it is being notified or not, the parent's child num needs to be decreased
+    if( parent_state!=NULL ) {
+        parent_state->num_children--;
+    }
 
     if( proc_state->debugger!=0 && proc_state->debugger!=proc_state->parent ) {
         // The process was being debugged - notify the debugger as well
+        proc_state->context_state[0]++; // Update use count
         notify_parent( proc_state->parent, pid_state::wait_state( pid, status, &usage, true ) );
         state[proc_state->debugger].num_debugees--;
     }
 
-    pid_state *parent_state;
-    // Regardless of whether it is being notified or not, the parent's child num needs to be decreased
-    if( proc_state->parent!=0 && proc_state->parent!=1 && (parent_state=lookup_state(proc_state->parent))!=NULL ) {
-        parent_state->num_children--;
-    }
-
     // Is any process a child of this process?
+    // We need to delete all child zombie processes. This means changing the list while scanning it.
+    // Instead, create a list of pids to delete
+    std::set<pid_t> need_delete;
     for( MAP_CLASS<pid_t, pid_state>::iterator i=state.begin(); i!=state.end(); ++i ) {
         if( i->second.parent==pid ) {
             dlog("Reparenting process %d to init from %d\n", i->first, pid);
             i->second.parent=1;
-        }
 
+            if( i->second.state==pid_state::ZOMBIE ) {
+                // "init" should release it
+                need_delete.insert(i->first);
+            }
+        } 
+        
         if( i->second.debugger==pid ) {
             dlog("Detaching process %d from recursive debugger %d\n", i->first, pid );
             i->second.debugger=0;
+
+            if( i->second.state==pid_state::ZOMBIE && i->second.parent!=pid ) {
+                // The process is in zombie state, pid is its debugger but not parent
+                need_delete.insert(i->first);
+            }
         }
     }
 
-    dlog("%s: "PID_F" is now a zombie\n", __func__, pid );
-    proc_state->state=pid_state::ZOMBIE;
+    for( std::set<pid_t>::iterator i=need_delete.begin(); i!=need_delete.end(); ++i ) {
+        delete_state(*i);
+    }
+
+    // Delete the state from our end. The state is reference counted, so it may not actually be deleted just yet
+    delete_state(pid);
 }
 
 void handle_new_process( pid_t parent_id, pid_t child_id )
@@ -1074,7 +1104,10 @@ pid_state *lookup_state( pid_t pid ) {
 
 void delete_state( pid_t pid )
 {
-    assert(lookup_state(pid)!=NULL);
+    pid_state *proc_state=lookup_state(pid);
+    assert(proc_state!=NULL);
+    assert(proc_state->state==pid_state::ZOMBIE);
 
-    state.erase(pid);
+    if( (--proc_state->context_state[0])==0 )
+        state.erase(pid);
 }
