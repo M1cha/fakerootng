@@ -290,7 +290,7 @@ int ptlib_linux_fork_enter( pid_t pid, int orig_sc )
     int clone_flags=CLONE_PTRACE|SIGCHLD;
 
     if( orig_sc==SYS_vfork ) {
-        clone_flags|=CLONE_VFORK;
+        clone_flags|=CLONE_VFORK|CLONE_VM;
     }
 
     ptlib_set_syscall( pid, SYS_clone );

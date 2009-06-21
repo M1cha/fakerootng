@@ -80,6 +80,8 @@ bool sys_vfork( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
         sys_fork( sc_num, pid, state );
+        state->context_state[0]=NEW_PROCESS_SAME_VM;
+        // XXX Is this a Linux specific thing?
     } else {
         sys_fork( sc_num, pid, state );
     }
