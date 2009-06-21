@@ -65,9 +65,8 @@ bool sys_fork( int sc_num, pid_t pid, pid_state *state )
         state->context_state[0]=0;
     } else if( state->state==pid_state::RETURN || state->state==pid_state::REDIRECT2 ) {
         pid_t newpid;
-        if( ptlib_fork_exit( pid, state->orig_sc, &newpid, state->shared_memory, state->shared_mem_local.get() ) ) {
-            // This if might very well be called after the process HAS ALREADY EXIT!
-            // We rely on process_sigchld to figure out new processes.
+        if( ptlib_fork_exit( pid, &newpid, state->shared_memory, state->shared_mem_local.get() ) && newpid>0 ) {
+            handle_new_process( pid, newpid );
         }
 
         state->state=pid_state::NONE;

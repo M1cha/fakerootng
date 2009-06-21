@@ -87,15 +87,27 @@ pid_t ptlib_get_parent( pid_t pid );
  * call the "enter" right before the function, "exit" right after it returns
  * ptlib_fork_enter returns true if it did not change the syscall, false if it did.
  * orig_sc is the original system call used by the process.
- * ptlib_fork_exit returns true if a new process was created. The pid of the new process is returned in newpid.
- * Whether true or false, ptlib_fork_exit makes sure that the return value from the kernel matches what the
- * called of fork (or whatever) would expect
+
+ * ptlib_fork_exit returns true if a new process was created, false if the call failed.
+ *
+ * Caller should make sure to call ptlib_fork_exit for both child AND parent process.
+ * Keep in mind that child process might start running (traced) before the parent
+ * process returns from the fork, or after. It is also possible that child or parent
+ * will run to completion before the other one returns from the fork. Caller must be
+ * prepared to handle them in arbitrary order.
  * 
+ * The pid of the new process is returned in newpid as per fork's return code (or
+ * whatever function it is that was called).
+ *
+ * ptlib_fork_exit makes sure that the return value from the kernel matches what the
+ * called of fork (or whatever) would expect
+
+
  * process_mem is a pointer to the shared memory area in the process space (as per ptlib_generate_syscall)
  * our_mem is a pointer to the same memory in the debugger porcess space
  */
 int ptlib_fork_enter( pid_t pid, int orig_sc, void *process_mem, void *our_mem );
-int ptlib_fork_exit( pid_t pid, int orig_sc, pid_t *newpid, void *process_mem, void *our_mem );
+int ptlib_fork_exit( pid_t pid, pid_t *newpid, void *process_mem, void *our_mem );
 
 /* This is a function that must be provided by the user of the library */
 void __dlog_( const char *format, ... ) COMPHINT_PRINTF( 1, 2);

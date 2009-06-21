@@ -479,6 +479,13 @@ void handle_new_process( pid_t parent_id, pid_t child_id )
             // The process inherits the debugger from the parent
             child->debugger=parent->debugger;
         }
+
+        // Both parent and child need to call ptlib_fork_exit. We may need to copy the state
+        // from one to the other.
+        // XXX Need to figure out precise details.
+        // ptlib_fork_state_copy( parent_id, parent->
+        child->orig_sc=parent->orig_sc;
+        child->state=parent->state;
     } else {
         // This is a root process - no parent. Set it with the real session ID
         child->session_id=getsid(child_id);
@@ -492,18 +499,20 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
     long sig=0;
 
     MAP_CLASS<pid_t, pid_state>::iterator proc_state=state.find(pid);
-    if( proc_state==state.end() ) {
+    if( wait_state!=NEWPROCESS && proc_state==state.end() ) {
         // The process does not exist!
-        // Find out who the parent is
-        wait_state=NEWPROCESS;
-        ret=pid;
-        pid=ptlib_get_parent(ret);
-
+        // Register it
         dlog("Caught unknown new process %lu, detected parent "PID_F"\n", ret, pid);
         dlog(NULL);
-        assert( pid==0 || pid==1 || state.find(pid)!=state.end() ); // Make sure the parent is, indeed, ours
+        pid_t parent_pid=ptlib_get_parent(pid);
+        assert( parent_pid==0 || parent_pid==1 || state.find(parent_pid)!=state.end() ); // Make sure the parent is, indeed, ours
+
+        // Handle the process creation before handling the syscall return
+        process_sigchld( parent_pid, NEWPROCESS, status, pid );
+
+        // Handle the rest of the syscall as a return from a syscall
+        wait_state=SYSCALL;
     }
-    //dlog("process_sigchld: "PID_F" state=%d, status=%x, ret=%d\n", pid, wait_state, status, ret );
 
     switch(wait_state) {
     case SYSCALL:

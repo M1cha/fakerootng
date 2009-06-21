@@ -284,7 +284,7 @@ pid_t ptlib_linux_get_parent( pid_t pid )
     return ret;
 }
 
-int ptlib_linux_fork_enter( pid_t pid, int orig_sc )
+int ptlib_linux_fork_enter( pid_t pid, int orig_sc, void *clobber_buff )
 {
     /* Turn the fork/vfork into a clone */
     int clone_flags=CLONE_PTRACE|SIGCHLD;
@@ -292,6 +292,11 @@ int ptlib_linux_fork_enter( pid_t pid, int orig_sc )
     if( orig_sc==SYS_vfork ) {
         clone_flags|=CLONE_VFORK|CLONE_VM;
     }
+
+    // Store a copy of the arguments we change, in case they held something important
+    int_ptr *buffer=(int_ptr *)clobber_buff;
+    buffer[0]=ptlib_get_argument( pid, 1 );
+    buffer[1]=ptlib_get_argument( pid, 2 );
 
     ptlib_set_syscall( pid, SYS_clone );
     ptlib_set_argument( pid, 1, clone_flags ); /* Flags */
@@ -301,7 +306,7 @@ int ptlib_linux_fork_enter( pid_t pid, int orig_sc )
     return 0;
 }
 
-int ptlib_linux_fork_exit( pid_t pid, int orig_sc, pid_t *newpid )
+int ptlib_linux_fork_exit( pid_t pid, pid_t *newpid, void *clobber_buff )
 {
     int ret=0;
 
@@ -310,7 +315,10 @@ int ptlib_linux_fork_exit( pid_t pid, int orig_sc, pid_t *newpid )
         *newpid=ptlib_get_retval( pid );
     }
 
-    ptlib_set_syscall( pid, orig_sc );
+    /* Restore the clobbered registers */
+    int_ptr *buffer=(int_ptr *)clobber_buff;
+    ptlib_set_argument( pid, 1, buffer[0] );
+    ptlib_set_argument( pid, 2, buffer[1] );
 
     return ret;
 }
