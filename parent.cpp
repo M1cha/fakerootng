@@ -498,8 +498,8 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
 {
     long sig=0;
 
-    MAP_CLASS<pid_t, pid_state>::iterator proc_state=state.find(pid);
-    if( wait_state!=NEWPROCESS && proc_state==state.end() ) {
+    pid_state *proc_state=lookup_state(pid);
+    if( wait_state!=NEWPROCESS && proc_state==NULL ) {
         // The process does not exist!
         // Register it
         dlog("Caught unknown new process %lu, detected parent "PID_F"\n", ret, pid);
@@ -512,6 +512,9 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
 
         // Handle the rest of the syscall as a return from a syscall
         wait_state=SYSCALL;
+        proc_state=lookup_state(pid);
+        assert(proc_state!=NULL);
+        ret=proc_state->orig_sc;
     }
 
     switch(wait_state) {
@@ -519,7 +522,6 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
         {
             bool posttrap_always=false;
 
-            pid_state *proc_state=&state[pid];
             if( proc_state->state==pid_state::REDIRECT1 ) {
                 // REDIRECT1 is just a filler state between the previous call, where the arguments were set up and
                 // the call initiated, and the call's return (REDIRECT2). No need to actually call the handler
@@ -635,7 +637,7 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
         break;
     case SIGNAL:
         dlog(PID_F": Signal %s\n", pid, sig2str(ret));
-        if( state[pid].debugger==0 )
+        if( proc_state->debugger==0 )
             sig=ret;
         else {
             // Pass the signal to the debugger
@@ -644,8 +646,8 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
             waiting.status()=status;
             getrusage( RUSAGE_CHILDREN, &waiting.usage() ); // XXX BUG this is the wrong function!
             waiting.debugonly()=true;
-            state[pid].trace_mode=TRACE_STOPPED2;
-            notify_parent( state[pid].debugger, waiting );
+            proc_state->trace_mode=TRACE_STOPPED2;
+            notify_parent( proc_state->debugger, waiting );
             sig=-1;
         }
         break;
