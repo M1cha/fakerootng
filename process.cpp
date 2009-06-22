@@ -117,14 +117,15 @@ bool sys_clone( int sc_num, pid_t pid, pid_state *state )
         ptlib_set_argument( pid, 1, flags );
     } else if( state->state==pid_state::RETURN ) {
         // Was the call successful?
+        state->state=pid_state::NONE;
+
         if( ptlib_success( pid, state->orig_sc ) ) {
-            // By the time we reach here the process might already be dead - do not call handle_new_process
-            dlog(PID_F": clone succeeded, new process "PID_F"\n", pid, (pid_t)ptlib_get_retval( pid ) );
+            pid_t newpid=(pid_t)ptlib_get_retval( pid );
+            dlog(PID_F": clone succeeded, new process "PID_F"\n", pid, newpid );
+            handle_new_process( pid, newpid );
         } else {
             dlog(PID_F": clone failed: %s\n", pid, strerror( ptlib_get_error( pid, state->orig_sc ) ) );
         }
-
-        state->state=pid_state::NONE;
     }
 
     return true;

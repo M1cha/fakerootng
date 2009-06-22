@@ -502,9 +502,9 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
     if( wait_state!=NEWPROCESS && proc_state==NULL ) {
         // The process does not exist!
         // Register it
-        dlog("Caught unknown new process %lu, detected parent "PID_F"\n", ret, pid);
-        dlog(NULL);
         pid_t parent_pid=ptlib_get_parent(pid);
+        dlog("Caught unknown new process "PID_F", detected parent "PID_F"\n", pid, parent_pid );
+        dlog(NULL);
         assert( parent_pid==0 || parent_pid==1 || state.find(parent_pid)!=state.end() ); // Make sure the parent is, indeed, ours
 
         // Handle the process creation before handling the syscall return
