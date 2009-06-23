@@ -3,6 +3,9 @@ fakeroot-ng is copyright (c) 2007-2009 by Shachar Shemesh
 Special thanks goes to Bernhard R. Link for insisting that things be better
 than "good enough".
 
+Thanks should also go to Tyler Larson, for saying "I need this fixed, so I'll
+pay for your time". The true open source model at work.
+
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation; either version 2 of the License, or
@@ -45,4 +48,3 @@ the core technology used, and therefor has limitations over how complete the
 environment is. It is hoped that as fakeroot-ng progresses, we can eliminate
 all of the limitations libchroot lists in its home page except this one:
  * /lib/ld-linux.so.2 is always loaded from real environment.
-

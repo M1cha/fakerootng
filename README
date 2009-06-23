@@ -12,8 +12,9 @@ TODO
 BUGS
 - The "wait" type syscalls are only emulated enough to allow two specific
   debuggers to run: fakeroot-ng and strace
-- Strace does not support tracing children (i.e. - the -f option)
 - Poor handling (race) of redirected syscalls with threaded programs.
+- Poor handling of multithreaded programs
+- Poor handling of 32 bit programs on X86_64
 - In chroot, the actual interpreter file (ld-linux for ELF executable) is
   searched for in the real root, rather than in the chrooted jail.
 
