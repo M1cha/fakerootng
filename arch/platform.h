@@ -102,12 +102,14 @@ pid_t ptlib_get_parent( pid_t pid );
  * ptlib_fork_exit makes sure that the return value from the kernel matches what the
  * called of fork (or whatever) would expect
 
-
  * process_mem is a pointer to the shared memory area in the process space (as per ptlib_generate_syscall)
  * our_mem is a pointer to the same memory in the debugger porcess space
  */
-int ptlib_fork_enter( pid_t pid, int orig_sc, void *process_mem, void *our_mem );
-int ptlib_fork_exit( pid_t pid, pid_t *newpid, void *process_mem, void *our_mem );
+
+#define FORK_CONTEXT_SIZE 3
+int ptlib_fork_enter( pid_t pid, int orig_sc, void *process_mem, void *our_mem, void *registers[PTLIB_STATE_SIZE],
+        int_ptr context[FORK_CONTEXT_SIZE] );
+int ptlib_fork_exit( pid_t pid, pid_t *newpid, void *registers[PTLIB_STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] );
 
 /* This is a function that must be provided by the user of the library */
 void __dlog_( const char *format, ... ) COMPHINT_PRINTF( 1, 2);

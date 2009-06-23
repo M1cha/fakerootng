@@ -15,7 +15,8 @@ ssize_t ptlib_linux_get_fd( pid_t pid, int fd, char *buffer, size_t buff_size );
 void ptlib_linux_save_state( pid_t pid, void *buffer );
 void ptlib_linux_restore_state( pid_t pid, const void *buffer );
 pid_t ptlib_linux_get_parent( pid_t pid );
-int ptlib_linux_fork_enter( pid_t pid, int orig_sc, void *clobber_buff );
-int ptlib_linux_fork_exit( pid_t pid, pid_t *newpid, void *clobber_buff );
+int ptlib_linux_fork_enter( pid_t pid, int orig_sc, void *process_mem, void *our_mem, void *registers[PTLIB_STATE_SIZE],
+        int_ptr context[FORK_CONTEXT_SIZE] );
+int ptlib_linux_fork_exit( pid_t pid, pid_t *newpid, void *registers[PTLIB_STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] );
 
 #endif /* ARCH_OS_H */

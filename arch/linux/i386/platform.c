@@ -197,12 +197,13 @@ pid_t ptlib_get_parent( pid_t pid )
     return ptlib_linux_get_parent(pid);
 }
 
-int ptlib_fork_enter( pid_t pid, int orig_sc, void *process_mem, void *our_mem )
+int ptlib_fork_enter( pid_t pid, int orig_sc, void *process_mem, void *our_mem, void *registers[PTLIB_STATE_SIZE],
+        int_ptr context[FORK_CONTEXT_SIZE] )
 {
-    return ptlib_linux_fork_enter( pid, orig_sc, our_mem );
+    return ptlib_linux_fork_enter( pid, orig_sc, process_mem, our_mem, registers, context );
 }
 
-int ptlib_fork_exit( pid_t pid, pid_t *newpid, void *process_mem, void *our_mem )
+int ptlib_fork_exit( pid_t pid, pid_t *newpid, void *registers[PTLIB_STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] )
 {
-    return ptlib_linux_fork_exit( pid, newpid, our_mem );
+    return ptlib_linux_fork_exit( pid, newpid, registers, context );
 }

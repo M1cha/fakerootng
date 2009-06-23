@@ -56,7 +56,9 @@ bool sys_getuid( int sc_num, pid_t pid, pid_state *state )
 bool sys_fork( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        if( ptlib_fork_enter( pid, sc_num, state->shared_memory, state->shared_mem_local.get() ) ) {
+        if( ptlib_fork_enter( pid, sc_num, state->shared_memory, state->shared_mem_local.get(), state->saved_state,
+                    state->context_state+1 ) )
+        {
             state->state=pid_state::RETURN;
         } else {
             state->state=pid_state::REDIRECT2;
@@ -65,7 +67,7 @@ bool sys_fork( int sc_num, pid_t pid, pid_state *state )
         state->context_state[0]=0;
     } else if( state->state==pid_state::RETURN || state->state==pid_state::REDIRECT2 ) {
         pid_t newpid;
-        if( ptlib_fork_exit( pid, &newpid, state->shared_memory, state->shared_mem_local.get() ) && newpid>0 ) {
+        if( ptlib_fork_exit( pid, &newpid, state->saved_state, state->context_state+1 ) && newpid>0 ) {
             handle_new_process( pid, newpid );
         }
 

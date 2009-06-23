@@ -482,10 +482,13 @@ void handle_new_process( pid_t parent_id, pid_t child_id )
 
         // Both parent and child need to call ptlib_fork_exit. We may need to copy the state
         // from one to the other.
-        // XXX Need to figure out precise details.
-        // ptlib_fork_state_copy( parent_id, parent->
         child->orig_sc=parent->orig_sc;
         child->state=parent->state;
+        for( unsigned int i=0; i<PTLIB_STATE_SIZE; ++i )
+            child->saved_state[i]=parent->saved_state[i];
+
+        for( unsigned int i=0; i<=FORK_CONTEXT_SIZE; ++i )
+            child->context_state[i]=parent->context_state[i];
     } else {
         // This is a root process - no parent. Set it with the real session ID
         child->session_id=getsid(child_id);

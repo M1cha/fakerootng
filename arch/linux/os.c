@@ -34,6 +34,7 @@
 #include <assert.h>
 
 #include "../platform.h"
+#include "os.h"
 
 int ptlib_linux_continue( int request, pid_t pid, int signal )
 {
@@ -284,7 +285,8 @@ pid_t ptlib_linux_get_parent( pid_t pid )
     return ret;
 }
 
-int ptlib_linux_fork_enter( pid_t pid, int orig_sc, void *clobber_buff )
+int ptlib_linux_fork_enter( pid_t pid, int orig_sc, void *process_mem, void *our_mem, void *registers[PTLIB_STATE_SIZE],
+        int_ptr context[FORK_CONTEXT_SIZE] )
 {
     /* Turn the fork/vfork into a clone */
     int clone_flags=CLONE_PTRACE|SIGCHLD;
@@ -294,9 +296,10 @@ int ptlib_linux_fork_enter( pid_t pid, int orig_sc, void *clobber_buff )
     }
 
     // Store a copy of the arguments we change, in case they held something important
-    int_ptr *buffer=(int_ptr *)clobber_buff;
-    buffer[0]=ptlib_get_argument( pid, 1 );
-    buffer[1]=ptlib_get_argument( pid, 2 );
+    int_ptr *save_state=(int_ptr *)registers;
+    save_state[0]=ptlib_get_syscall( pid );
+    save_state[1]=ptlib_get_argument( pid, 1 );
+    save_state[2]=ptlib_get_argument( pid, 2 );
 
     ptlib_set_syscall( pid, SYS_clone );
     ptlib_set_argument( pid, 1, clone_flags ); /* Flags */
@@ -306,7 +309,7 @@ int ptlib_linux_fork_enter( pid_t pid, int orig_sc, void *clobber_buff )
     return 0;
 }
 
-int ptlib_linux_fork_exit( pid_t pid, pid_t *newpid, void *clobber_buff )
+int ptlib_linux_fork_exit( pid_t pid, pid_t *newpid, void *registers[PTLIB_STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] )
 {
     int ret=0;
 
@@ -316,9 +319,10 @@ int ptlib_linux_fork_exit( pid_t pid, pid_t *newpid, void *clobber_buff )
     }
 
     /* Restore the clobbered registers */
-    int_ptr *buffer=(int_ptr *)clobber_buff;
-    ptlib_set_argument( pid, 1, buffer[0] );
-    ptlib_set_argument( pid, 2, buffer[1] );
+    const int_ptr *save_state=(const int_ptr *)registers;
+    ptlib_set_syscall( pid, save_state[0] );
+    ptlib_set_argument( pid, 1, save_state[1] );
+    ptlib_set_argument( pid, 2, save_state[2] );
 
     return ret;
 }
