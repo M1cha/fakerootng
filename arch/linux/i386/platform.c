@@ -199,10 +199,10 @@ pid_t ptlib_get_parent( pid_t pid )
 
 int ptlib_fork_enter( pid_t pid, int orig_sc, void *process_mem, void *our_mem )
 {
-    return ptlib_linux_fork_enter( pid, orig_sc );
+    return ptlib_linux_fork_enter( pid, orig_sc, our_mem );
 }
 
-int ptlib_fork_exit( pid_t pid, int orig_sc, pid_t *newpid, void *process_mem, void *our_mem )
+int ptlib_fork_exit( pid_t pid, pid_t *newpid, void *process_mem, void *our_mem )
 {
-    return ptlib_linux_fork_exit( pid, orig_sc, newpid );
+    return ptlib_linux_fork_exit( pid, newpid, our_mem );
 }
