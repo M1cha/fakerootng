@@ -79,175 +79,180 @@ static int num_processes; // Number of running processes
 
 static void init_handlers()
 {
-    syscalls[SYS_geteuid]=syscall_hook(sys_geteuid, "geteuid");
+    // A macro for defining a system call with different syscall and handler names
+#define DEF_SYS2( syscall, function ) syscalls[SYS_##syscall]=syscall_hook(sys_##function, #syscall)
+    // A macro fro defining a system call with the same syscall and handler names
+#define DEF_SYS1( syscall ) DEF_SYS2( syscall, syscall )
+
+    DEF_SYS1(geteuid);
 #if defined(SYS_geteuid32)
-    syscalls[SYS_geteuid32]=syscall_hook(sys_geteuid, "geteuid32");
+    DEF_SYS2(geteuid32, geteuid);
 #endif
-    syscalls[SYS_getuid]=syscall_hook(sys_getuid, "getuid");
+    DEF_SYS1(getuid);
 #if defined(SYS_getuid32)
-    syscalls[SYS_getuid32]=syscall_hook(sys_getuid, "getuid32");
+    DEF_SYS2(getuid32, getuid);
 #endif
-    syscalls[SYS_getegid]=syscall_hook(sys_getegid, "getegid");
+    DEF_SYS1(getegid);
 #if defined(SYS_getegid32)
-    syscalls[SYS_getegid32]=syscall_hook(sys_getegid, "getegid32");
+    DEF_SYS2(getegid32, getegid);
 #endif
-    syscalls[SYS_getgid]=syscall_hook(sys_getgid, "getgid");
+    DEF_SYS1(getgid);
 #if defined(SYS_getgid32)
-    syscalls[SYS_getgid32]=syscall_hook(sys_getgid, "getgid32");
+    DEF_SYS2(getgid32, getgid);
 #endif
-    syscalls[SYS_getresuid]=syscall_hook(sys_getresuid, "getresuid");
+    DEF_SYS1(getresuid);
 #if defined(SYS_getresuid32)
-    syscalls[SYS_getresuid32]=syscall_hook(sys_getresuid, "getresuid32");
+    DEF_SYS2(getresuid32, getresuid);
 #endif
     syscalls[SYS_getresgid]=syscall_hook(sys_getresuid, "getresuid");
 #if defined(SYS_getresgid32)
     syscalls[SYS_getresgid32]=syscall_hook(sys_getresuid, "getresuid32");
 #endif
-    syscalls[SYS_getgroups]=syscall_hook(sys_getgroups, "getgroups");
+    DEF_SYS1(getgroups);
 
-    syscalls[SYS_fork]=syscall_hook(sys_fork, "fork");
-    syscalls[SYS_vfork]=syscall_hook(sys_vfork, "vfork");
+    DEF_SYS1(fork);
+    DEF_SYS1(vfork);
 #if defined(SYS_clone)
-    syscalls[SYS_clone]=syscall_hook(sys_clone, "clone");
+    DEF_SYS1(clone);
 #endif
 
 //    Execve is special cased
-//    syscalls[SYS_execve]=syscall_hook(sys_execve, "execve");
+//    DEF_SYS1(execve);
 #if defined(SYS_sigreturn)
-    syscalls[SYS_sigreturn]=syscall_hook(sys_sigreturn, "sigreturn");
+    DEF_SYS1(sigreturn);
 #endif
 #if defined(SYS_rt_sigreturn)
     syscalls[SYS_rt_sigreturn]=syscall_hook(sys_sigreturn, "sigreturn");
 #endif
-    syscalls[SYS_setsid]=syscall_hook(sys_setsid, "setsid");
+    DEF_SYS1(setsid);
 #if defined(SYS_wait4)
-    syscalls[SYS_wait4]=syscall_hook(sys_wait4, "wait4");
+    DEF_SYS1(wait4);
 #endif
 #if defined(SYS_waitpid)
-    syscalls[SYS_waitpid]=syscall_hook(sys_waitpid, "waitpid");
+    DEF_SYS1(waitpid);
 #endif
-    syscalls[SYS_ptrace]=syscall_hook(sys_ptrace, "ptrace");
-    syscalls[SYS_kill]=syscall_hook(sys_kill, "kill");
+    DEF_SYS1(ptrace);
+    DEF_SYS1(kill);
 
-    syscalls[SYS_stat]=syscall_hook(sys_stat, "stat");
+    DEF_SYS1(stat);
 #ifdef SYS_stat64
-    syscalls[SYS_stat64]=syscall_hook(sys_stat, "stat64");
+    DEF_SYS2(stat64, stat);
 #endif
-    syscalls[SYS_fstat]=syscall_hook(sys_stat, "fstat");
+    DEF_SYS2(fstat, stat);
 #ifdef SYS_fstat64
-    syscalls[SYS_fstat64]=syscall_hook(sys_stat, "fstat64");
+    DEF_SYS2(fstat64, stat);
 #endif
-    syscalls[SYS_lstat]=syscall_hook(sys_stat, "lstat");
+    DEF_SYS2(lstat, stat);
 #ifdef SYS_lstat64
-    syscalls[SYS_lstat64]=syscall_hook(sys_stat, "lstat64");
+    DEF_SYS2(lstat64, stat);
 #endif
 #if defined(SYS_fstatat64) && HAVE_OPENAT
-    syscalls[SYS_fstatat64]=syscall_hook(sys_fstatat64, "fstatat64");
+    DEF_SYS1(fstatat64);
 #endif
 
-    syscalls[SYS_chown]=syscall_hook(sys_chown, "chown");
+    DEF_SYS1(chown);
 #if defined(SYS_chown32)
-    syscalls[SYS_chown32]=syscall_hook(sys_chown, "chown32");
+    DEF_SYS2(chown32, chown);
 #endif
-    syscalls[SYS_fchown]=syscall_hook(sys_fchown, "fchown");
+    DEF_SYS1(fchown);
 #if defined(SYS_fchown32)
-    syscalls[SYS_fchown32]=syscall_hook(sys_fchown, "fchown32");
+    DEF_SYS2(fchown32, fchown);
 #endif
-    syscalls[SYS_lchown]=syscall_hook(sys_lchown, "lchown");
+    DEF_SYS1(lchown);
 #if defined(SYS_lchown32)
-    syscalls[SYS_lchown32]=syscall_hook(sys_lchown, "lchown32");
+    DEF_SYS2(lchown32, lchown);
 #endif
 #if defined(SYS_fchownat) && HAVE_OPENAT
-    syscalls[SYS_fchownat]=syscall_hook(sys_fchownat, "fchownat");
+    DEF_SYS1(fchownat);
 #endif
 
-    syscalls[SYS_chmod]=syscall_hook(sys_chmod, "chmod");
-    syscalls[SYS_fchmod]=syscall_hook(sys_fchmod, "fchmod");
+    DEF_SYS1(chmod);
+    DEF_SYS1(fchmod);
 #if defined(SYS_fchmodat) && HAVE_OPENAT
-    syscalls[SYS_fchmodat]=syscall_hook(sys_fchmodat, "fchmodat");
+    DEF_SYS1(fchmodat);
 #endif
 
-    syscalls[SYS_mknod]=syscall_hook(sys_mknod, "mknod");
+    DEF_SYS1(mknod);
 #if defined(SYS_mknodat) && HAVE_OPENAT
-    syscalls[SYS_mknodat]=syscall_hook(sys_mknodat, "mknodat");
+    DEF_SYS1(mknodat);
 #endif
-    syscalls[SYS_open]=syscall_hook(sys_open, "open");
+    DEF_SYS1(open);
 #if defined(SYS_openat) && HAVE_OPENAT
-    syscalls[SYS_openat]=syscall_hook(sys_openat, "openat");
+    DEF_SYS1(openat);
 #endif
-    syscalls[SYS_mkdir]=syscall_hook(sys_mkdir, "mkdir");
+    DEF_SYS1(mkdir);
 #if defined(SYS_mkdirat) && HAVE_OPENAT
-    syscalls[SYS_mkdirat]=syscall_hook(sys_mkdirat, "mkdirat");
+    DEF_SYS1(mkdirat);
 #endif
-    syscalls[SYS_symlink]=syscall_hook(sys_symlink, "symlink");
+    DEF_SYS1(symlink);
 #if defined(SYS_mkdirat) && HAVE_OPENAT
-    syscalls[SYS_symlinkat]=syscall_hook(sys_symlinkat, "symlinkat");
+    DEF_SYS1(symlinkat);
 #endif
-    syscalls[SYS_link]=syscall_hook(sys_link, "link");
+    DEF_SYS1(link);
 #if defined(SYS_linkat) && HAVE_OPENAT
-    syscalls[SYS_linkat]=syscall_hook(sys_linkat, "linkat");
+    DEF_SYS1(linkat);
 #endif
-    syscalls[SYS_unlink]=syscall_hook(sys_unlink, "unlink");
+    DEF_SYS1(unlink);
 #if defined(SYS_unlinkat) && HAVE_OPENAT
-    syscalls[SYS_unlinkat]=syscall_hook(sys_unlinkat, "unlinkat");
+    DEF_SYS1(unlinkat);
 #endif
-    syscalls[SYS_rename]=syscall_hook(sys_rename, "rename");
+    DEF_SYS1(rename);
 #if defined(SYS_renameat) && HAVE_OPENAT
-    syscalls[SYS_renameat]=syscall_hook(sys_renameat, "renameat");
+    DEF_SYS1(renameat);
 #endif
-    syscalls[SYS_rmdir]=syscall_hook(sys_rmdir, "rmdir");
-    syscalls[SYS_readlink]=syscall_hook(sys_generic_chroot_support_link_param1, "readlink");
+    DEF_SYS1(rmdir);
+    DEF_SYS2(readlink, generic_chroot_support_link_param1);
 #if defined(SYS_renameat) && HAVE_OPENAT
-    syscalls[SYS_readlinkat]=syscall_hook(sys_generic_chroot_link_at, "readlinkat");
+    DEF_SYS2(readlinkat, generic_chroot_link_at);
 #endif
-    syscalls[SYS_truncate]=syscall_hook(sys_generic_chroot_support_param1, "truncate");
+    DEF_SYS2(truncate, generic_chroot_support_param1);
 #ifdef SYS_truncate64
-    syscalls[SYS_truncate64]=syscall_hook(sys_generic_chroot_support_param1, "truncate64");
+    DEF_SYS2(truncate64, generic_chroot_support_param1);
 #endif
-    syscalls[SYS_statfs]=syscall_hook(sys_generic_chroot_support_param1, "statfs"); // XXX Should last link be resolved?
+    DEF_SYS2(statfs, generic_chroot_support_param1); // XXX Should last link be resolved?
 #ifdef SYS_statfs64
-    syscalls[SYS_statfs64]=syscall_hook(sys_generic_chroot_support_param1, "statfs64"); // XXX Should last link be resolved?
+    DEF_SYS2(statfs64, generic_chroot_support_param1); // XXX Should last link be resolved?
 #endif
-    syscalls[SYS_chdir]=syscall_hook(sys_generic_chroot_support_param1, "chdir");
-    syscalls[SYS_access]=syscall_hook(sys_generic_chroot_support_param1, "access");
+    DEF_SYS2(chdir, generic_chroot_support_param1);
+    DEF_SYS2(access, generic_chroot_support_param1);
 #if defined(SYS_faccessat) && HAVE_OPENAT
-    syscalls[SYS_faccessat]=syscall_hook(sys_generic_chroot_at_link4, "faccessat");
+    DEF_SYS2(faccessat, generic_chroot_at_link4);
 #endif
-    syscalls[SYS_utime]=syscall_hook(sys_generic_chroot_support_param1, "utime");
-    syscalls[SYS_utimes]=syscall_hook(sys_generic_chroot_support_param1, "utimes");
+    DEF_SYS2(utime, generic_chroot_support_param1);
+    DEF_SYS2(utimes, generic_chroot_support_param1);
 #ifdef SYS_setxattr
-    syscalls[SYS_setxattr]=syscall_hook(sys_generic_chroot_support_param1, "setxattr");
-    syscalls[SYS_getxattr]=syscall_hook(sys_generic_chroot_support_param1, "getxattr");
-    syscalls[SYS_listxattr]=syscall_hook(sys_generic_chroot_support_param1, "listxattr");
-    syscalls[SYS_removexattr]=syscall_hook(sys_generic_chroot_support_param1, "removexattr");
+    DEF_SYS2(setxattr, generic_chroot_support_param1);
+    DEF_SYS2(getxattr, generic_chroot_support_param1);
+    DEF_SYS2(listxattr, generic_chroot_support_param1);
+    DEF_SYS2(removexattr, generic_chroot_support_param1);
 #endif
 #ifdef SYS_lsetxattr
-    syscalls[SYS_lsetxattr]=syscall_hook(sys_generic_chroot_support_link_param1, "lsetxattr");
-    syscalls[SYS_lgetxattr]=syscall_hook(sys_generic_chroot_support_link_param1, "lgetxattr");
-    syscalls[SYS_llistxattr]=syscall_hook(sys_generic_chroot_support_link_param1, "llistxattr");
-    syscalls[SYS_lremovexattr]=syscall_hook(sys_generic_chroot_support_link_param1, "lremovexattr");
+    DEF_SYS2(lsetxattr, generic_chroot_support_link_param1);
+    DEF_SYS2(lgetxattr, generic_chroot_support_link_param1);
+    DEF_SYS2(llistxattr, generic_chroot_support_link_param1);
+    DEF_SYS2(lremovexattr, generic_chroot_support_link_param1);
 #endif
 #ifdef SYS_uselib
-    syscalls[SYS_uselib]=syscall_hook(sys_generic_chroot_support_param1, "uselib");
+    DEF_SYS2(uselib, generic_chroot_support_param1);
 #endif
 #ifdef SYS_inotify_add_watch
-    syscalls[SYS_inotify_add_watch]=syscall_hook(sys_generic_chroot_support_param1, "inotify_add_watch");
+    DEF_SYS2(inotify_add_watch, generic_chroot_support_param1);
 #endif
 #if defined(SYS_futimesat) && HAVE_OPENAT
-    syscalls[SYS_futimesat]=syscall_hook(sys_generic_chroot_at, "futimesat");
+    DEF_SYS2(futimesat, generic_chroot_at);
 #endif
 #if defined(SYS_utimensat) && HAVE_OPENAT
-    syscalls[SYS_utimensat]=syscall_hook(sys_generic_chroot_at_link4, "utimensat");
+    DEF_SYS2(utimensat, generic_chroot_at_link4);
 #endif
 
-    syscalls[SYS_chroot]=syscall_hook(sys_chroot, "chroot");
-    syscalls[SYS_getcwd]=syscall_hook(sys_getcwd, "getcwd");
+    DEF_SYS1(chroot);
+    DEF_SYS1(getcwd);
 
-    syscalls[SYS_mmap]=syscall_hook(sys_mmap, "mmap");
+    DEF_SYS1(mmap);
 #ifdef SYS_mmap2
-    syscalls[SYS_mmap2]=syscall_hook(sys_mmap, "mmap2");
+    DEF_SYS2(mmap2, mmap);
 #endif
-    syscalls[SYS_munmap]=syscall_hook(sys_munmap, "munmap");
+    DEF_SYS1(munmap);
 }
 
 void init_globals()
