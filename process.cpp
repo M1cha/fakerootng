@@ -37,22 +37,6 @@
 // Not implemented functions:
 // acct
 
-bool sys_getuid( int sc_num, pid_t pid, pid_state *state )
-{
-    switch( state->state ) {
-    default:
-    case pid_state::NONE:
-        state->state=pid_state::RETURN;
-        break;
-    case pid_state::RETURN:
-        ptlib_set_retval( pid, 0 );
-        state->state=pid_state::NONE;
-        break;
-    }
-
-    return true;
-}
-
 bool sys_fork( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {

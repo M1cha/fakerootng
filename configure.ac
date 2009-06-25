@@ -8,6 +8,8 @@ AM_INIT_AUTOMAKE([no-dist])
 AC_CONFIG_SRCDIR([parent.h])
 AC_CONFIG_HEADER([config.h])
 
+AC_USE_SYSTEM_EXTENSIONS
+
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_CC
@@ -36,6 +38,10 @@ AC_TYPE_MODE_T
 AC_TYPE_PID_T
 AC_TYPE_SIZE_T
 AC_TYPE_SSIZE_T
+
+dnl Globally define the root UID
+AC_DEFINE([ROOT_UID],[0],[UID for root])
+AC_DEFINE([ROOT_GID],[0],[GID for root])
 
 dnl Check whether we have PTRACE_GETREGS
 AC_MSG_CHECKING([for PTRACE_GETREGS])

@@ -8,6 +8,24 @@
 // UID reporting
 DECLARE_SYSFUNC(geteuid)
 DECLARE_SYSFUNC(getuid)
+DECLARE_SYSFUNC(getegid)
+DECLARE_SYSFUNC(getgid)
+#ifdef SYS_getresuid
+DECLARE_SYSFUNC(getresuid)
+#endif
+#ifdef SYS_getresgid
+DECLARE_SYSFUNC(getresgid)
+#endif
+DECLARE_SYSFUNC(seteuid)
+DECLARE_SYSFUNC(setuid)
+DECLARE_SYSFUNC(setegid)
+DECLARE_SYSFUNC(setgid)
+#ifdef SYS_setresuid
+DECLARE_SYSFUNC(sys_setresuid)
+#endif
+#ifdef SYS_setresgid
+DECLARE_SYSFUNC(sys_setresgid)
+#endif
 
 // Process management
 DECLARE_SYSFUNC(fork)

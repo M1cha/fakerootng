@@ -79,21 +79,29 @@ static int num_processes; // Number of running processes
 
 static void init_handlers()
 {
-    syscalls[SYS_geteuid]=syscall_hook(sys_getuid, "geteuid");
+    syscalls[SYS_geteuid]=syscall_hook(sys_geteuid, "geteuid");
 #if defined(SYS_geteuid32)
-    syscalls[SYS_geteuid32]=syscall_hook(sys_getuid, "geteuid");
+    syscalls[SYS_geteuid32]=syscall_hook(sys_geteuid, "geteuid32");
 #endif
     syscalls[SYS_getuid]=syscall_hook(sys_getuid, "getuid");
 #if defined(SYS_getuid32)
-    syscalls[SYS_getuid32]=syscall_hook(sys_getuid, "getuid");
+    syscalls[SYS_getuid32]=syscall_hook(sys_getuid, "getuid32");
 #endif
-    syscalls[SYS_getegid]=syscall_hook(sys_getuid, "getegid");
+    syscalls[SYS_getegid]=syscall_hook(sys_getegid, "getegid");
 #if defined(SYS_getegid32)
-    syscalls[SYS_getegid32]=syscall_hook(sys_getuid, "getegid");
+    syscalls[SYS_getegid32]=syscall_hook(sys_getegid, "getegid32");
 #endif
-    syscalls[SYS_getgid]=syscall_hook(sys_getuid, "getgid");
+    syscalls[SYS_getgid]=syscall_hook(sys_getgid, "getgid");
 #if defined(SYS_getgid32)
-    syscalls[SYS_getgid32]=syscall_hook(sys_getuid, "getgid");
+    syscalls[SYS_getgid32]=syscall_hook(sys_getgid, "getgid32");
+#endif
+    syscalls[SYS_getresuid]=syscall_hook(sys_getresuid, "getresuid");
+#if defined(SYS_getresuid32)
+    syscalls[SYS_getresuid32]=syscall_hook(sys_getresuid, "getresuid32");
+#endif
+    syscalls[SYS_getresgid]=syscall_hook(sys_getresuid, "getresuid");
+#if defined(SYS_getresgid32)
+    syscalls[SYS_getresgid32]=syscall_hook(sys_getresuid, "getresuid32");
 #endif
 
     syscalls[SYS_fork]=syscall_hook(sys_fork, "fork");
