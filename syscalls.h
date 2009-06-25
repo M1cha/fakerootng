@@ -21,11 +21,13 @@ DECLARE_SYSFUNC(setuid)
 DECLARE_SYSFUNC(setegid)
 DECLARE_SYSFUNC(setgid)
 #ifdef SYS_setresuid
-DECLARE_SYSFUNC(sys_setresuid)
+DECLARE_SYSFUNC(setresuid)
 #endif
 #ifdef SYS_setresgid
-DECLARE_SYSFUNC(sys_setresgid)
+DECLARE_SYSFUNC(setresgid)
 #endif
+DECLARE_SYSFUNC(getgroups)
+DECLARE_SYSFUNC(setgroups)
 
 // Process management
 DECLARE_SYSFUNC(fork)

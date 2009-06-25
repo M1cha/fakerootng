@@ -142,6 +142,39 @@ bool sys_getresgid( int sc_num, pid_t pid, pid_state *state )
 }
 #endif
 
+bool sys_getgroups( int sc_num, pid_t pid, pid_state *state )
+{
+    if( state->state==pid_state::NONE ) {
+        ptlib_set_syscall(pid, PREF_NOP);
+        state->state=pid_state::REDIRECT2;
+
+        // Store the arguments for later
+        state->context_state[0]=ptlib_get_argument( pid, 1 );
+        state->context_state[1]=ptlib_get_argument( pid, 2 );
+    } else if( state->state==pid_state::REDIRECT2 ) {
+        state->state=pid_state::NONE;
+
+        // What is the size?
+        if( state->context_state[0]==0 ) {
+            // Merely report the number of groups we have
+            ptlib_set_retval( pid, state->groups.size() );
+        } else if( state->context_state[0]<state->groups.size() ) {
+            // Not enough room
+            ptlib_set_error( pid, state->orig_sc, EINVAL );
+        } else {
+            unsigned int count=0;
+            gid_t *groups=(gid_t *)state->context_state[1];
+            for( std::set<gid_t>::const_iterator i=state->groups.begin(); i!=state->groups.end(); ++i, ++count ) {
+                ptlib_set_mem( pid, &*i, groups+count, sizeof(gid_t) );
+            }
+
+            ptlib_set_retval( pid, count );
+        }
+    }
+
+    return true;
+}
+
 bool sys_setuid( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {

@@ -103,6 +103,7 @@ static void init_handlers()
 #if defined(SYS_getresgid32)
     syscalls[SYS_getresgid32]=syscall_hook(sys_getresuid, "getresuid32");
 #endif
+    syscalls[SYS_getgroups]=syscall_hook(sys_getgroups, "getgroups");
 
     syscalls[SYS_fork]=syscall_hook(sys_fork, "fork");
     syscalls[SYS_vfork]=syscall_hook(sys_vfork, "vfork");
