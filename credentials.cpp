@@ -282,23 +282,26 @@ bool sys_setresuid( int sc_num, pid_t pid, pid_state *state )
         bool success=true;
         uid_t new_uid=state->uid, new_euid=state->euid, new_suid=state->suid;
 
-        if( state->context_state[0]!=-1 )
+        if( state->context_state[0]!=(int_ptr)-1 ) {
             if( check_uids( state->context_state[0], state ) )
                 new_uid=state->context_state[0];
             else
                 success=false;
+        }
 
-        if( state->context_state[1]!=-1 )
+        if( state->context_state[1]!=(int_ptr)-1 ) {
             if( success && check_uids( state->context_state[1], state ) )
                 new_euid=state->context_state[1];
             else
                 success=false;
+        }
 
-        if( state->context_state[2]!=-1 )
+        if( state->context_state[2]!=(int_ptr)-1 ) {
             if( success && check_uids( state->context_state[2], state ) )
                 new_suid=state->context_state[2];
             else
                 success=false;
+        }
 
         // If all checks passed, commit the changes
         if( success ) {
@@ -332,7 +335,7 @@ bool sys_setreuid( int sc_num, pid_t pid, pid_state *state )
         bool success=true;
         uid_t new_uid=state->uid, new_euid=state->euid, new_suid=state->suid;
 
-        if( state->context_state[0]!=-1 ) {
+        if( state->context_state[0]!=(int_ptr)-1 ) {
             // XXX Linux specific behavior
             if( state->euid==ROOT_UID || state->context_state[0]==state->uid || state->context_state[0]==state->suid )
                 new_uid=state->context_state[0];
@@ -340,15 +343,19 @@ bool sys_setreuid( int sc_num, pid_t pid, pid_state *state )
                 success=false;
         }
 
-        if( state->context_state[1]!=-1 )
+        if( state->context_state[1]!=(int_ptr)-1 ) {
             if( success && check_uids( state->context_state[1], state ) )
                 new_euid=state->context_state[1];
             else
                 success=false;
+        }
 
         // There is no POSIX documentation on what should happen to the saved UID. The following is the Linux logic
-        if( success && (state->context_state[0]!=-1 || ( state->context_state[1]!=-1 && state->context_state[1]!=state->uid )) )
+        if( success && (state->context_state[0]!=(int_ptr)-1 ||
+                    ( state->context_state[1]!=(int_ptr)-1 && state->context_state[1]!=state->uid )) )
+        {
             new_suid=new_euid;
+        }
 
         // If all checks passed, commit the changes
         if( success ) {
@@ -504,23 +511,26 @@ bool sys_setresgid( int sc_num, pid_t pid, pid_state *state )
         bool success=true;
         gid_t new_gid=state->gid, new_egid=state->egid, new_sgid=state->sgid;
 
-        if( state->context_state[0]!=-1 )
+        if( state->context_state[0]!=(int_ptr)-1 ) {
             if( check_gids( state->context_state[0], state ) )
                 new_gid=state->context_state[0];
             else
                 success=false;
+        }
 
-        if( state->context_state[1]!=-1 )
+        if( state->context_state[1]!=(int_ptr)-1 ) {
             if( success && check_gids( state->context_state[1], state ) )
                 new_egid=state->context_state[1];
             else
                 success=false;
+        }
 
-        if( state->context_state[2]!=-1 )
+        if( state->context_state[2]!=(int_ptr)-1 ) {
             if( success && check_gids( state->context_state[2], state ) )
                 new_sgid=state->context_state[2];
             else
                 success=false;
+        }
 
         // If all checks passed, commit the changes
         if( success ) {
@@ -554,7 +564,7 @@ bool sys_setregid( int sc_num, pid_t pid, pid_state *state )
         bool success=true;
         gid_t new_gid=state->gid, new_egid=state->egid, new_sgid=state->sgid;
 
-        if( state->context_state[0]!=-1 ) {
+        if( state->context_state[0]!=(int_ptr)-1 ) {
             // XXX Linux specific behavior
             if( state->egid==ROOT_GID || state->context_state[0]==state->gid || state->context_state[0]==state->sgid )
                 new_gid=state->context_state[0];
@@ -562,15 +572,19 @@ bool sys_setregid( int sc_num, pid_t pid, pid_state *state )
                 success=false;
         }
 
-        if( state->context_state[1]!=-1 )
+        if( state->context_state[1]!=(int_ptr)-1 ) {
             if( success && check_gids( state->context_state[1], state ) )
                 new_egid=state->context_state[1];
             else
                 success=false;
+        }
 
         // There is no POSIX documentation on what should happen to the saved UID. The following is the Linux logic
-        if( success && (state->context_state[0]!=-1 || ( state->context_state[1]!=-1 && state->context_state[1]!=state->gid )) )
+        if( success && (state->context_state[0]!=(int_ptr)-1 || 
+                    ( state->context_state[1]!=(int_ptr)-1 && state->context_state[1]!=state->gid )) )
+        {
             new_sgid=new_egid;
+        }
 
         // If all checks passed, commit the changes
         if( success ) {
