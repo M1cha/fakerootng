@@ -160,6 +160,10 @@ static void init_handlers()
 #ifdef SYS_setregid32
     DEF_SYS2(setregid32, setregid);
 #endif
+    DEF_SYS1(setgroups);
+#if defined(SYS_setgroups32)
+    DEF_SYS2(setgroups32, setgroups);
+#endif
 
     DEF_SYS1(fork);
     DEF_SYS1(vfork);
