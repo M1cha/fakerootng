@@ -104,11 +104,62 @@ static void init_handlers()
 #if defined(SYS_getresuid32)
     DEF_SYS2(getresuid32, getresuid);
 #endif
-    syscalls[SYS_getresgid]=syscall_hook(sys_getresuid, "getresuid");
+    DEF_SYS1(getresgid);
 #if defined(SYS_getresgid32)
-    syscalls[SYS_getresgid32]=syscall_hook(sys_getresuid, "getresuid32");
+    DEF_SYS2(getresgid32, getresgid);
 #endif
     DEF_SYS1(getgroups);
+#if defined(SYS_getgroups32)
+    DEF_SYS2(getgroups32, getgroups);
+#endif
+
+    DEF_SYS1(setuid);
+#ifdef SYS_seteuid
+    DEF_SYS1(seteuid);
+#endif
+#ifdef SYS_seteuid32
+    DEF_SYS2(seteuid32, seteuid);
+#endif
+#ifdef SYS_setfsuid
+    DEF_SYS1(setfsuid);
+#endif
+#ifdef SYS_setfsuid32
+    DEF_SYS2(setfsuid32, setfsuid);
+#endif
+#ifdef SYS_setresuid
+    DEF_SYS1(setresuid);
+#endif
+#ifdef SYS_setresuid32
+    DEF_SYS2(setresuid32, setresuid);
+#endif
+    DEF_SYS1(setreuid);
+#ifdef SYS_setreuid32
+    DEF_SYS2(setreuid32, setreuid);
+#endif
+
+    DEF_SYS1(setgid);
+#ifdef SYS_setegid
+    DEF_SYS1(setegid);
+#endif
+#ifdef SYS_setegid32
+    DEF_SYS2(setegid32, setegid);
+#endif
+#ifdef SYS_setfsgid
+    DEF_SYS1(setfsgid);
+#endif
+#ifdef SYS_setfsgid32
+    DEF_SYS2(setfsgid32, setfsgid);
+#endif
+#ifdef SYS_setresgid
+    DEF_SYS1(setresgid);
+#endif
+#ifdef SYS_setresgid32
+    DEF_SYS2(setresgid32, setresgid);
+#endif
+    DEF_SYS1(setregid);
+#ifdef SYS_setregid32
+    DEF_SYS2(setregid32, setregid);
+#endif
 
     DEF_SYS1(fork);
     DEF_SYS1(vfork);
@@ -122,7 +173,7 @@ static void init_handlers()
     DEF_SYS1(sigreturn);
 #endif
 #if defined(SYS_rt_sigreturn)
-    syscalls[SYS_rt_sigreturn]=syscall_hook(sys_sigreturn, "sigreturn");
+    DEF_SYS2(rt_sigreturn, sigreturn);
 #endif
     DEF_SYS1(setsid);
 #if defined(SYS_wait4)
