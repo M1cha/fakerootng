@@ -183,7 +183,7 @@ bool sys_setuid( int sc_num, pid_t pid, pid_state *state )
 
         // NOP the actual call
         ptlib_set_syscall( pid, PREF_NOP );
-        state->state==pid_state::REDIRECT2;
+        state->state=pid_state::REDIRECT2;
     } else if( state->state==pid_state::REDIRECT2 ) {
         // Let's see if we want to perform the action
         uid_t uid=(uid_t)state->context_state[0];
@@ -200,7 +200,7 @@ bool sys_setuid( int sc_num, pid_t pid, pid_state *state )
             ptlib_set_error( pid, state->orig_sc, EPERM );
         }
 
-        state->state==pid_state::NONE;
+        state->state=pid_state::NONE;
     }
 
     return true;
@@ -219,7 +219,7 @@ bool sys_seteuid( int sc_num, pid_t pid, pid_state *state )
 
         // NOP the actual call
         ptlib_set_syscall( pid, PREF_NOP );
-        state->state==pid_state::REDIRECT2;
+        state->state=pid_state::REDIRECT2;
     } else if( state->state==pid_state::REDIRECT2 ) {
         // Let's see if we want to perform the action
         uid_t uid=(uid_t)state->context_state[0];
@@ -232,7 +232,7 @@ bool sys_seteuid( int sc_num, pid_t pid, pid_state *state )
             ptlib_set_error( pid, state->orig_sc, EPERM );
         }
 
-        state->state==pid_state::NONE;
+        state->state=pid_state::NONE;
     }
 
     return true;
@@ -246,7 +246,7 @@ bool sys_setfsuid( int sc_num, pid_t pid, pid_state *state )
 
         // NOP the actual call
         ptlib_set_syscall( pid, PREF_NOP );
-        state->state==pid_state::REDIRECT2;
+        state->state=pid_state::REDIRECT2;
     } else if( state->state==pid_state::REDIRECT2 ) {
         // Let's see if we want to perform the action
         uid_t uid=(uid_t)state->context_state[0];
@@ -260,7 +260,7 @@ bool sys_setfsuid( int sc_num, pid_t pid, pid_state *state )
 
         ptlib_set_retval( pid, old_fsuid );
 
-        state->state==pid_state::NONE;
+        state->state=pid_state::NONE;
     }
 
     return true;
@@ -276,7 +276,7 @@ bool sys_setresuid( int sc_num, pid_t pid, pid_state *state )
 
         // NOP the actual call
         ptlib_set_syscall( pid, PREF_NOP );
-        state->state==pid_state::REDIRECT2;
+        state->state=pid_state::REDIRECT2;
     } else if( state->state==pid_state::REDIRECT2 ) {
         // Let's see if we want to perform the action
         bool success=true;
@@ -311,7 +311,7 @@ bool sys_setresuid( int sc_num, pid_t pid, pid_state *state )
             ptlib_set_error( pid, state->orig_sc, EPERM );
         }
 
-        state->state==pid_state::NONE;
+        state->state=pid_state::NONE;
     }
 
     return true;
@@ -326,7 +326,7 @@ bool sys_setreuid( int sc_num, pid_t pid, pid_state *state )
 
         // NOP the actual call
         ptlib_set_syscall( pid, PREF_NOP );
-        state->state==pid_state::REDIRECT2;
+        state->state=pid_state::REDIRECT2;
     } else if( state->state==pid_state::REDIRECT2 ) {
         // Let's see if we want to perform the action
         bool success=true;
@@ -361,7 +361,7 @@ bool sys_setreuid( int sc_num, pid_t pid, pid_state *state )
             ptlib_set_error( pid, state->orig_sc, EPERM );
         }
 
-        state->state==pid_state::NONE;
+        state->state=pid_state::NONE;
     }
 
     return true;
@@ -405,7 +405,7 @@ bool sys_setgid( int sc_num, pid_t pid, pid_state *state )
 
         // NOP the actual call
         ptlib_set_syscall( pid, PREF_NOP );
-        state->state==pid_state::REDIRECT2;
+        state->state=pid_state::REDIRECT2;
     } else if( state->state==pid_state::REDIRECT2 ) {
         // Let's see if we want to perform the action
         gid_t gid=(gid_t)state->context_state[0];
@@ -422,7 +422,7 @@ bool sys_setgid( int sc_num, pid_t pid, pid_state *state )
             ptlib_set_error( pid, state->orig_sc, EPERM );
         }
 
-        state->state==pid_state::NONE;
+        state->state=pid_state::NONE;
     }
 
     return true;
@@ -441,7 +441,7 @@ bool sys_setegid( int sc_num, pid_t pid, pid_state *state )
 
         // NOP the actual call
         ptlib_set_syscall( pid, PREF_NOP );
-        state->state==pid_state::REDIRECT2;
+        state->state=pid_state::REDIRECT2;
     } else if( state->state==pid_state::REDIRECT2 ) {
         // Let's see if we want to perform the action
         gid_t gid=(gid_t)state->context_state[0];
@@ -454,7 +454,7 @@ bool sys_setegid( int sc_num, pid_t pid, pid_state *state )
             ptlib_set_error( pid, state->orig_sc, EPERM );
         }
 
-        state->state==pid_state::NONE;
+        state->state=pid_state::NONE;
     }
 
     return true;
@@ -468,7 +468,7 @@ bool sys_setfsgid( int sc_num, pid_t pid, pid_state *state )
 
         // NOP the actual call
         ptlib_set_syscall( pid, PREF_NOP );
-        state->state==pid_state::REDIRECT2;
+        state->state=pid_state::REDIRECT2;
     } else if( state->state==pid_state::REDIRECT2 ) {
         // Let's see if we want to perform the action
         gid_t gid=(gid_t)state->context_state[0];
@@ -482,7 +482,7 @@ bool sys_setfsgid( int sc_num, pid_t pid, pid_state *state )
 
         ptlib_set_retval( pid, old_fsgid );
 
-        state->state==pid_state::NONE;
+        state->state=pid_state::NONE;
     }
 
     return true;
@@ -498,7 +498,7 @@ bool sys_setresgid( int sc_num, pid_t pid, pid_state *state )
 
         // NOP the actual call
         ptlib_set_syscall( pid, PREF_NOP );
-        state->state==pid_state::REDIRECT2;
+        state->state=pid_state::REDIRECT2;
     } else if( state->state==pid_state::REDIRECT2 ) {
         // Let's see if we want to perform the action
         bool success=true;
@@ -533,7 +533,7 @@ bool sys_setresgid( int sc_num, pid_t pid, pid_state *state )
             ptlib_set_error( pid, state->orig_sc, EPERM );
         }
 
-        state->state==pid_state::NONE;
+        state->state=pid_state::NONE;
     }
 
     return true;
@@ -548,7 +548,7 @@ bool sys_setregid( int sc_num, pid_t pid, pid_state *state )
 
         // NOP the actual call
         ptlib_set_syscall( pid, PREF_NOP );
-        state->state==pid_state::REDIRECT2;
+        state->state=pid_state::REDIRECT2;
     } else if( state->state==pid_state::REDIRECT2 ) {
         // Let's see if we want to perform the action
         bool success=true;
@@ -583,7 +583,7 @@ bool sys_setregid( int sc_num, pid_t pid, pid_state *state )
             ptlib_set_error( pid, state->orig_sc, EPERM );
         }
 
-        state->state==pid_state::NONE;
+        state->state=pid_state::NONE;
     }
 
     return true;
