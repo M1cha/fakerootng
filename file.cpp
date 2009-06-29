@@ -431,8 +431,8 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             stat_override_copy( &stat, &override );
 
             // We created the file, it should have our uid/gid
-            override.uid=0;
-            override.gid=0;
+            override.uid=state->fsuid;
+            override.gid=state->fsgid;
 
             dlog("mknod: "PID_F" registering the new device in the override DB dev "DEV_F" inode "INODE_F"\n", pid,
                 stat.dev, stat.ino );
@@ -538,8 +538,8 @@ static bool real_open( int sc_num, pid_t pid, pid_state *state, int mode_argnum 
                 // If the map already exists, assume we did not create a new file and don't touch the owners
                 stat_override_copy( &stat, &override );
 
-                override.uid=0;
-                override.gid=0;
+                override.uid=state->fsuid;
+                override.gid=state->fsgid;
                 override.mode&=~07600;
                 override.mode|= state->context_state[1]&07600;
                 // XXX We are ignoring the umask here!
@@ -636,8 +636,8 @@ static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset
 
             // Since mkdir fails if the directory already exists, there is no point to check whether the override already exists
             stat_override_copy( &stat, &override );
-            override.uid=0;
-            override.gid=0;
+            override.uid=state->fsuid;
+            override.gid=state->fsgid;
 
             override.mode&=~00700;
             override.mode|= state->context_state[0]&00700;
@@ -735,8 +735,8 @@ static bool real_symlink( int sc_num, pid_t pid, pid_state *state, int mode_offs
                 // No need to check the DB as we just created the file
                 stat_override_copy( &stat, &override );
 
-                override.uid=0;
-                override.gid=0;
+                override.uid=state->fsuid;
+                override.gid=state->fsgid;
 
                 dlog("symlink: "PID_F" set uid/gid override for dev "DEV_F" inode "INODE_F"\n", pid, override.dev, override.inode );
                 set_map( &override );
