@@ -394,6 +394,7 @@ bool sys_setgroups( int sc_num, pid_t pid, pid_state *state )
 
             ptlib_get_mem( pid, process_groups++, &group, sizeof(gid_t) );
             new_groups.insert(group);
+            --state->context_state[0];
         }
 
         state->groups=new_groups;
