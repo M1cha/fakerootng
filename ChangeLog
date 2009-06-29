@@ -1,3 +1,4 @@
+Version 0.17
     * Allow setting the process credentials to things other than root
 
 Version 0.16
