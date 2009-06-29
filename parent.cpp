@@ -515,49 +515,35 @@ void handle_new_process( pid_t parent_id, pid_t child_id )
         assert(parent_id!=-1);
 
         // This process is not a root process - it has a parent
+        // Copy everything from the parent, except what you don't copy
+        *child=*parent;
 
         int_ptr process_type=parent->context_state[0];
 
         if( (process_type&NEW_PROCESS_SAME_PARENT)==0 )
             child->parent=parent_id;
-        else
-            child->parent=parent->parent;
 
         pid_state *child_parent=lookup_state(child->parent);
         if( child_parent!=NULL ) {
             child_parent->num_children++;
         }
 
-        child->session_id=parent->session_id;
-
-        // if( (process_type&NEW_PROCESS_SAME_ROOT)==0 )
-        // XXX Need to contrast deep copy with shallow copy of root
-        child->root=parent->root;
+        child->num_children=0;
+        child->num_debugees=0;
 
         // Whether the VM was copied or shared, the new process has the same static and shared memory
-        child->memory=parent->memory;
-        child->shared_memory=parent->shared_memory;
         // If the VM is not shared, setting shared_memory but not shared_mem_local is an indication that the
         // old memory needs to be freed
-        if( (process_type&NEW_PROCESS_SAME_VM)!=0 ) {
+        if( (process_type&NEW_PROCESS_SAME_VM)==0 ) {
             // The processes share the same VM - have them share the same shared memory
-            child->shared_mem_local=parent->shared_mem_local;
+            child->shared_mem_local=shared_mem();
         }
 
-        if( (process_type&NEW_PROCESS_SAME_DEBUGGER)!=0 ) {
+        if( (process_type&NEW_PROCESS_SAME_DEBUGGER)==0 ) {
             // The process inherits the debugger from the parent
-            child->debugger=parent->debugger;
+            child->debugger=0;
+            child->trace_mode=TRACE_DETACHED;
         }
-
-        // Both parent and child need to call ptlib_fork_exit. We may need to copy the state
-        // from one to the other.
-        child->orig_sc=parent->orig_sc;
-        child->state=parent->state;
-        for( unsigned int i=0; i<PTLIB_STATE_SIZE; ++i )
-            child->saved_state[i]=parent->saved_state[i];
-
-        for( unsigned int i=0; i<=FORK_CONTEXT_SIZE; ++i )
-            child->context_state[i]=parent->context_state[i];
     } else {
         // This is a root process - no parent. Set it with the real session ID
         child->session_id=getsid(child_id);
