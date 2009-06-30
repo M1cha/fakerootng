@@ -389,17 +389,25 @@ bool sys_setgroups( int sc_num, pid_t pid, pid_state *state )
         std::set<gid_t> new_groups;
         gid_t *process_groups=(gid_t *)state->context_state[1];
 
-        while( state->context_state[0]>0 ) {
+        int error=0;
+        while( error==0 && state->context_state[0]>0 ) {
             gid_t group;
 
-            ptlib_get_mem( pid, process_groups++, &group, sizeof(gid_t) );
-            new_groups.insert(group);
-            --state->context_state[0];
+            if( ptlib_get_mem( pid, process_groups++, &group, sizeof(gid_t) ) ) {
+                new_groups.insert(group);
+                --state->context_state[0];
+            } else {
+                error=errno;
+            }
         }
 
-        state->groups=new_groups;
-        
-        ptlib_set_retval( pid, 0 );
+        if( error==0 ) {
+            state->groups=new_groups;
+
+            ptlib_set_retval( pid, 0 );
+        } else {
+            ptlib_set_error( pid, state->orig_sc, error );
+        }
     }
 
     return true;
