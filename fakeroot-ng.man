@@ -1,4 +1,4 @@
-.TH FAKEROOT\-NG 1 "August 20, 2008" "Shachar Shemesh" "Fakeroot Next Gen User Manual"
+.TH FAKEROOT\-NG 1 "June 30, 2009" "Shachar Shemesh" "Fakeroot Next Gen User Manual"
 .\" Please adjust this date whenever revising the manpage.
 .SH NAME
 fakeroot\-ng \- run a command while making it believe it is running as root
@@ -46,6 +46,9 @@ core file from being created.
 .TP
 \fB\-v\fP
 Print out the version number and copyright info and exit without doing anything.
+.TP
+\fB\-h\fP
+Print out a short help screen and exit.
 .SH SIGNALS
 Sending the ALRM signal to the fakeroot\-ng master process makes it dump to the log a complete
 list of all tracked processes, along with their parent and current state. This is, mostly, a

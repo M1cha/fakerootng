@@ -1,3 +1,5 @@
+    * Add -h help command line option
+
 Version 0.17
     * Allow setting the process credentials to things other than root
 

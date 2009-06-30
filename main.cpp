@@ -61,11 +61,26 @@ void __dlog_( const char *format, ... )
     }
 }
 
-void print_version(void)
+static void print_version(void)
 {
     printf(PACKAGE_NAME " version " PACKAGE_VERSION "\n");
     printf("This is free software. Please read the AUTHORS file for details on copyright\n"
         "and redistribution rights.\n");
+}
+
+static void print_usage(void)
+{
+    printf(PACKAGE_NAME " version " PACKAGE_VERSION "\n");
+    printf("Usage: fakeroot-ng [options]... command\n"
+            "Options:\n"
+            "-pstate\tStore persistent state\n"
+            "-llog\tProduce debugging log operation\n"
+            "-f\tFlush the log after each write.\n"
+            "-d\tDo not detach\n"
+            "-v\tPrint version information and quit\n"
+            "-h\tShort help (this text)\n"
+          );
+            
 }
 
 static bool nodetach=false;
@@ -75,7 +90,7 @@ int parse_options( int argc, char *argv[] )
 {
     int opt;
 
-    while( (opt=getopt(argc, argv, "+p:l:dvf" ))!=-1 ) {
+    while( (opt=getopt(argc, argv, "+p:l:dvfh" ))!=-1 ) {
         switch( opt ) {
         case 'p': // Persist file
             if( optarg[0]!='/' ) {
@@ -118,6 +133,9 @@ int parse_options( int argc, char *argv[] )
             break;
         case 'v':
             print_version();
+            return -2;
+        case 'h':
+            print_usage();
             return -2;
         case '?':
             /* Error in parsing */
