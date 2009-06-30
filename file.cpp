@@ -162,7 +162,10 @@ static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             struct stat_override override;
             struct ptlib_stat stat;
 
-            ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
+            if( !ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) ) ) {
+                // This should never happen. We passed a buffer we are in charge of!
+                assert(0);
+            }
 
             ptlib_save_state( pid, state->saved_state );
 
@@ -315,7 +318,10 @@ static bool real_chown( int sc_num, pid_t pid, pid_state *state, int own_offset,
             struct ptlib_stat stat;
             struct stat_override override;
 
-            ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
+            if( !ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) ) ) {
+                // This is a syscall we initiated, to a memory buffer we own. It should not have failed.
+                assert(0);
+            }
 
             if( !get_map( stat.dev, stat.ino, &override ) ) {
                 dlog("chown: "PID_F" no override for file - create a new one\n", pid );
@@ -437,7 +443,10 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             ptlib_stat stat;
             stat_override override;
 
-            ptlib_get_mem( pid, state->memory, &stat, sizeof(stat) );
+            if( !ptlib_get_mem( pid, state->memory, &stat, sizeof(stat) ) ) {
+                // This should never happen. We passed a buffer we are in charge of!
+                assert(0);
+            }
 
             // This file was, supposedly, just created. Even if it has an entry in the override DB, that entry is obsolete
             stat_override_copy( &stat, &override );
@@ -540,7 +549,10 @@ static bool real_open( int sc_num, pid_t pid, pid_state *state, int mode_argnum 
             ptlib_stat stat;
             stat_override override;
 
-            ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
+            if( !ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) ) ) {
+                // This should never happen. We passed a buffer we are in charge of!
+                assert(0);
+            }
 
             // XXX The test whether we just created a new file is not the most accurate in the world
             // In particular, if the previous instance was deleted, this will misbehave
@@ -644,7 +656,10 @@ static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset
             ptlib_stat stat;
             stat_override override;
 
-            ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
+            if( !ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) ) ) {
+                // This should never happen. We passed a buffer we are in charge of!
+                assert(0);
+            }
 
             // Since mkdir fails if the directory already exists, there is no point to check whether the override already exists
             stat_override_copy( &stat, &override );
@@ -740,7 +755,10 @@ static bool real_symlink( int sc_num, pid_t pid, pid_state *state, int mode_offs
             ptlib_stat stat;
             stat_override override;
 
-            ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) );
+            if( !ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) ) ) {
+                // This should never happen. We passed a buffer we are in charge of!
+                assert(0);
+            }
 
             // Make sure we got the right file
             if( S_ISLNK(stat.mode) ) {
@@ -1081,7 +1099,10 @@ bool sys_unlink( int sc_num, pid_t pid, pid_state *state )
                 if( ptlib_success( pid, sc_num ) ) {
                     ptlib_stat stat;
 
-                    ptlib_get_mem( pid, state->memory, &stat, sizeof(stat) );
+                    if( !ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) ) ) {
+                        // This should never happen. We passed a buffer we are in charge of!
+                        assert(0);
+                    }
 
                     if( stat.nlink==1 ) {
                         // Store the relevant data in the shared memory
@@ -1221,7 +1242,10 @@ bool sys_unlinkat( int sc_num, pid_t pid, pid_state *state )
                     ptlib_set_argument( pid, 3, state->context_state[0]==10 ? AT_REMOVEDIR : 0 );
 
                     // Will the file be actually deleted?
-                    ptlib_get_mem( pid, state->memory, &stat, sizeof(stat) );
+                    if( !ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) ) ) {
+                        // This should never happen. We passed a buffer we are in charge of!
+                        assert(0);
+                    }
 
                     if( stat.nlink==1 || state->context_state[0]==10 ) {
                         // Store the relevant data in the shared memory
@@ -1332,7 +1356,10 @@ bool sys_rmdir( int sc_num, pid_t pid, pid_state *state )
             if( ptlib_success( pid, sc_num ) ) {
                 ptlib_stat stat;
 
-                ptlib_get_mem( pid, state->memory, &stat, sizeof(stat) );
+                if( !ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) ) ) {
+                    // This should never happen. We passed a buffer we are in charge of!
+                    assert(0);
+                }
 
                 struct override_key *key=reinterpret_cast<override_key *>(state->shared_mem_local.getc()+PATH_MAX);
                 key->dev=stat.dev;
