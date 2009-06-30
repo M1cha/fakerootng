@@ -64,42 +64,54 @@ bool sys_stat( int sc_num, pid_t pid, pid_state *state )
         // Returning from the syscall
         int returncode=ptlib_get_retval( pid );
         dlog("stat64: "PID_F" returned %x\n", pid, returncode);
-        if( ptlib_success( pid, sc_num ) ) {
-            struct ptlib_stat ret;
-            struct stat_override override;
 
-            ptlib_get_mem( pid, (void *)state->context_state[0], &ret, sizeof(ret) );
+        try {
+            if( ptlib_success( pid, sc_num ) ) {
+                struct ptlib_stat ret;
+                struct stat_override override;
 
-            if( get_map( ret.dev, ret.ino, &override ) ) {
-                bool ok=true;
+                if( !ptlib_get_mem( pid, (void *)state->context_state[0], &ret, sizeof(ret) ) )
+                    // Probably page fault - report the error
+                    throw (int)errno;
 
-                ret.uid=override.uid;
-                ret.gid=override.gid;
-                if( S_ISBLK(override.mode) || S_ISCHR(override.mode) ) {
-                    // Only turn regular files into devices
-                    if( !S_ISREG( ret.mode ) )
-                        ok=false;
-                    ret.rdev=override.dev_id;
-                } else {
-                    // If the override is not a device, and the types do not match, this is not a valid entry
-                    ok=(S_IFMT&ret.mode)==(S_IFMT&override.mode);
-                }
-                // Override the u=x flag for directories, but not files
-                if( S_ISDIR(ret.mode) ) {
-                    ret.mode=(ret.mode&(~(07700|S_IFMT))) | (override.mode&(07700|S_IFMT));
-                } else {
-                    ret.mode=(ret.mode&(~(07600|S_IFMT))) | (override.mode&(07600|S_IFMT));
-                }
+                if( get_map( ret.dev, ret.ino, &override ) ) {
+                    bool ok=true;
 
-                if( ok ) {
-                    dlog("stat64: "PID_F" override dev="DEV_F" inode="INODE_F" mode=%o uid="UID_F" gid="GID_F"\n",
-                        pid, ret.dev, ret.ino, ret.mode, ret.uid, ret.gid );
-                    ptlib_set_mem( pid, &ret, (void *)state->context_state[0], sizeof(struct stat) );
-                } else {
-                    dlog("stat64: "PID_F" dev="DEV_F" inode="INODE_F" override entry corrupt - removed\n", pid, ret.dev, ret.ino );
-                    remove_map( ret.dev, ret.ino );
+                    ret.uid=override.uid;
+                    ret.gid=override.gid;
+                    if( S_ISBLK(override.mode) || S_ISCHR(override.mode) ) {
+                        // Only turn regular files into devices
+                        if( !S_ISREG( ret.mode ) )
+                            ok=false;
+                        ret.rdev=override.dev_id;
+                    } else {
+                        // If the override is not a device, and the types do not match, this is not a valid entry
+                        ok=(S_IFMT&ret.mode)==(S_IFMT&override.mode);
+                    }
+                    // Override the u=x flag for directories, but not files
+                    if( S_ISDIR(ret.mode) ) {
+                        ret.mode=(ret.mode&(~(07700|S_IFMT))) | (override.mode&(07700|S_IFMT));
+                    } else {
+                        ret.mode=(ret.mode&(~(07600|S_IFMT))) | (override.mode&(07600|S_IFMT));
+                    }
+
+                    if( ok ) {
+                        dlog("stat64: "PID_F" override dev="DEV_F" inode="INODE_F" mode=%o uid="UID_F" gid="GID_F"\n",
+                                pid, ret.dev, ret.ino, ret.mode, ret.uid, ret.gid );
+                        if( !ptlib_set_mem( pid, &ret, (void *)state->context_state[0], sizeof(struct stat) ) ) {
+                            // Probably page fault - report the error
+                            throw (int)errno;
+                            // No need to remove the map - it is legitimate
+                        }
+
+                    } else {
+                        dlog("stat64: "PID_F" dev="DEV_F" inode="INODE_F" override entry corrupt - removed\n", pid, ret.dev, ret.ino );
+                        remove_map( ret.dev, ret.ino );
+                    }
                 }
             }
+        } catch( int error ) {
+            ptlib_set_error( pid, state->orig_sc, error );
         }
 
         state->state=pid_state::NONE;
