@@ -836,14 +836,14 @@ bool sys_getcwd( int sc_num, pid_t pid, pid_state *state )
             // We are inside a chroot, and the call was successful
             char buffer[PATH_MAX];
             ptlib_get_string( pid, state->memory, buffer, sizeof(buffer) );
-            char tmp=buffer[state->root.length()];
-            buffer[state->root.length()]='\0';
+            char tmp=buffer[state->root->length()];
+            buffer[state->root->length()]='\0';
             char *ptr=buffer;
 
-            if( ( tmp=='/' || tmp=='\0' ) && state->root==buffer ) {
+            if( ( tmp=='/' || tmp=='\0' ) && *state->root==buffer ) {
                 // Current directory is inside the chroot jail - need to truncate the prefix
                 if( tmp=='/' ) {
-                    ptr+=state->root.length();
+                    ptr+=state->root->length();
                     *ptr=tmp;
                 } else {
                     // The current directory is the new root
@@ -851,7 +851,7 @@ bool sys_getcwd( int sc_num, pid_t pid, pid_state *state )
                 }
             } else {
                 // Current directory is outside of the jail - pass it to the program as is
-                buffer[state->root.length()]=tmp;
+                buffer[state->root->length()]=tmp;
             }
 
             // Emulate the actual call

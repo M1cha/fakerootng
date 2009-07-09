@@ -40,7 +40,7 @@ static const int GLOBAL_LINKS=40, // How many links are globally allowed in the 
 
 bool chroot_is_chrooted( const pid_state *state )
 {
-    return state->root!="" && state->root!="/";
+    return *state->root!="" && *state->root!="/";
 }
 
 // XXX The memory efficiency of the implementation can use a DRASTIC improvement
@@ -75,7 +75,7 @@ static std::string chroot_parse_path_recursion( const pid_state *state, char *pa
         }
     } else if( last_slash==0 ) {
         // Need to process the leading slash
-        dir_part=state->root;
+        dir_part=*state->root;
     } else {
         // A file part is all we have to begin with - see what the we are relative to
         dir_part=wd;
@@ -91,7 +91,7 @@ static std::string chroot_parse_path_recursion( const pid_state *state, char *pa
         // We need to go one directory up. This is not as simple as it sounds
 
         // Are we currently at the root (either real or jail)?
-        if( dir_part==state->root || dir_part=="/" ) {
+        if( dir_part==*state->root || dir_part=="/" ) {
             // Going up is the same as staying at the same place
             return dir_part;
         }
@@ -254,7 +254,8 @@ bool sys_chroot( int sc_num, pid_t pid, pid_state *state )
     } else if( state->state==pid_state::REDIRECT2 ) {
         // We may already be chrooted - need to translate the path
         struct stat stat;
-        std::string newroot=chroot_translate_addr( pid, state, &stat, CHROOT_PWD, (void *)state->context_state[0], true );
+        ref_count<std::string> newroot(new std::string(
+                    chroot_translate_addr( pid, state, &stat, CHROOT_PWD, (void *)state->context_state[0], true )));
 
         if( (int)stat.st_ino!=-1 ) {
             // The call succeeded

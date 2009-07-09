@@ -547,6 +547,7 @@ void handle_new_process( pid_t parent_id, pid_t child_id )
     } else {
         // This is a root process - no parent. Set it with the real session ID
         child->session_id=getsid(child_id);
+        child->root=ref_count<std::string>(new std::string("/"));
     }
 
     num_processes++;

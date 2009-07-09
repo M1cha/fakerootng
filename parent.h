@@ -15,6 +15,8 @@
 
 #include "shared_mem.h"
 
+#include "refcount.h"
+
 extern size_t static_mem_size, shared_mem_size;
 
 bool attach_debugger( pid_t child, int socket );
@@ -88,7 +90,7 @@ struct pid_state {
     int trace_mode; // Which ptrace mode was used to run the process
     pid_t session_id;
 
-    std::string root;
+    ref_count<std::string> root;
 
     // The credentials (including the Linux specific file system UID)
     uid_t uid, euid, suid, fsuid;
@@ -128,7 +130,7 @@ struct pid_state {
     std::list<wait_state> waiting_signals;
 
     pid_state() : state(INIT), memory(NULL), shared_memory(NULL), shared_mem_local(), debugger(0),
-        parent(0), num_children(0), num_debugees(0), trace_mode(TRACE_DETACHED), session_id(0), root("/"),
+        parent(0), num_children(0), num_debugees(0), trace_mode(TRACE_DETACHED), session_id(0), root(),
         uid(ROOT_UID), euid(ROOT_UID), suid(ROOT_UID), fsuid(ROOT_UID), gid(ROOT_GID), egid(ROOT_GID), sgid(ROOT_GID), fsgid(ROOT_GID)
     {
         groups.insert(ROOT_GID);
