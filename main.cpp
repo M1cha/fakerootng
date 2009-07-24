@@ -84,7 +84,8 @@ static void print_usage(void)
 }
 
 static bool nodetach=false;
-static char persistent_file[PATH_MAX];
+static const char *persistent_file;
+static char orig_wd[PATH_MAX];
 
 int parse_options( int argc, char *argv[] )
 {
@@ -93,20 +94,11 @@ int parse_options( int argc, char *argv[] )
     while( (opt=getopt(argc, argv, "+p:l:dvfh" ))!=-1 ) {
         switch( opt ) {
         case 'p': // Persist file
+            persistent_file=optarg;
+            orig_wd[0]='\0';
             if( optarg[0]!='/' ) {
-                if( getcwd( persistent_file, sizeof(persistent_file) )!=NULL ) {
-                    size_t len=strlen(persistent_file);
-                    if( persistent_file[len-1]!='/' )
-                        persistent_file[len++]='/';
-
-                    strncpy( persistent_file+len, optarg, sizeof(persistent_file)-len-1 );
-                }
-            } else {
-                strncpy( persistent_file, optarg, sizeof(persistent_file)-1 );
+                getcwd( orig_wd, sizeof(orig_wd) );
             }
-            
-            // strncpy has been known to leave strings unterminated
-            persistent_file[sizeof(persistent_file)-1]='\0';
             break;
         case 'l':
             if( debug_log==NULL ) {
@@ -270,22 +262,25 @@ static void perform_debugger( int child_socket, int master_socket )
     }
 
     if( persistent_file[0]!='\0' ) {
-        FILE *file=fopen(persistent_file, "w");
+        // Switch to the original work directory, so all relative paths work
+        if( chdir( orig_wd )==0 ) {
+            FILE *file=fopen(persistent_file, "w");
 
-        if( file!=NULL ) {
-            dlog("Saving persitent state to %s\n", persistent_file );
-            save_map( file );
+            if( file!=NULL ) {
+                dlog("Saving persitent state to %s\n", persistent_file );
+                save_map( file );
 
-            fclose(file);
-        } else {
-            dlog("Failed to open persistent file %s for saving - %s\n", persistent_file, strerror(errno) );
+                fclose(file);
+            } else {
+                dlog("Failed to open persistent file %s for saving - %s\n", persistent_file, strerror(errno) );
+            }
+
+            // Remove the unix socket
+            struct sockaddr_un sa;
+
+            snprintf( sa.sun_path, sizeof(sa.sun_path), "%s.run", persistent_file );
+            unlink( sa.sun_path );
         }
-
-        // Remove the unix socket
-        struct sockaddr_un sa;
-
-        snprintf( sa.sun_path, sizeof(sa.sun_path), "%s.run", persistent_file );
-        unlink( sa.sun_path );
     }
 
     exit(0);
