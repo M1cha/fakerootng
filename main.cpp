@@ -211,7 +211,7 @@ static void perform_debugger( int child_socket, int master_socket )
     dlog("Debugger started\n");
 
     // Fill in the file_lie database from persistent file (if relevant)
-    if( persistent_file[0]!='\0' ) {
+    if( persistent_file ) {
         FILE *file=fopen(persistent_file, "rt");
 
         if( file!=NULL ) {
