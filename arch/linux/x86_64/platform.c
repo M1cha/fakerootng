@@ -134,7 +134,7 @@ static int syscall_32_to_64[]={
     __NR_swapon,	/* 87 */
     __NR_reboot,	/* 88 */
     -1, /* readdir,	 89 */
-    __NR_mmap,		/* 90 */
+    SYS_mmap2,		/* 90 */ /* See comment for __NR_mmap (192) */
     __NR_munmap,	/* 91 */
     __NR_truncate,	/* 92 */
     __NR_ftruncate,	/* 93 */
@@ -236,7 +236,8 @@ static int syscall_32_to_64[]={
     __NR_putpmsg,		/* 189 */	/* some people actually want streams */
     __NR_vfork,		        /* 190 */
     -1, /* ugetrlimit,		191 */	/* SuS compliant getrlimit */
-    SYS_mmap2,		        /* 192 */
+    __NR_mmap,                  /* 192 */
+    /* Technically, this is mmap2. However, it is much more reasonable as far as arguments are handled to map it this way. */
     -1, /* truncate64,		 193 */
     -1, /* ftruncate64,		 194 */
     SYS_stat64,		/* 195 */
