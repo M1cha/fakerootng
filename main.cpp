@@ -412,7 +412,7 @@ int main(int argc, char *argv[])
     bool launch_debugger=true; // Whether to start a debugger process
     sockaddr_un sa;
 
-    if( persistent_file[0]!='\0' ) {
+    if( persistent_file ) {
         // We have a state to keep
         // Another thing we do if a persistent file was specified is to create a communication socket
         master_socket=socket(PF_UNIX, SOCK_SEQPACKET, 0);

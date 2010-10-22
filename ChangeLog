@@ -1,3 +1,4 @@
+    * Solve crash when run without a persitent state file
     * Performance changes
     * Update the home page
     * Add packaging tips in the README and README.packaging files
