@@ -45,7 +45,6 @@
 
 #include "syscalls.h"
 #include "parent.h"
-#include "shared_mem.h"
 #include "process.h"
 
 // forward declaration of function
@@ -319,8 +318,6 @@ void init_globals()
     // Round this to the higher page size
     shared_mem_size+=page_size-1;
     shared_mem_size-=shared_mem_size%page_size;
-
-    shared_mem::init_size( shared_mem_size );
 }
 
 // Debug related functions
@@ -535,8 +532,13 @@ void handle_new_process( pid_t parent_id, pid_t child_id )
         // If the VM is not shared, setting shared_memory but not shared_mem_local is an indication that the
         // old memory needs to be freed
         if( (process_type&NEW_PROCESS_SAME_VM)==0 ) {
-            // The processes share the same VM - have them share the same shared memory
-            child->shared_mem_local=shared_mem();
+            // The processes do not share the same VM
+            child->mem=ref_count<pid_state::process_memory>(new pid_state::process_memory);
+            child->mem->set_remote_static(parent->mem->memory);
+
+            // The remote shared pointer for the parent is also valid for the child, but it is the same memory, not a copy.
+            // Keep the "shared_memory" pointer valid, but the "shared_mem_local" will be NULL to signify this is memory we need to munmap.
+            child->mem->shared_memory=parent->mem->shared_memory;
         }
 
         if( (process_type&NEW_PROCESS_SAME_DEBUGGER)==0 ) {
@@ -633,7 +635,7 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
                         waiting.debugonly()=true;
                         notify_parent( proc_state->debugger, waiting );
                         sig=-1; // We'll halt the program until the "debugger" decides what to do with it
-                    } else if( !proc_state->shared_mem_local && proc_state->state==pid_state::NONE && ret!=SYS_execve && ret!=SYS_exit ) {
+                    } else if( !proc_state->mem->shared_mem_local && proc_state->state==pid_state::NONE && ret!=SYS_execve && ret!=SYS_exit ) {
                         // We need to allocate memory
                         // No point in allocating memory when we are just entering an execve that will get rid of it
                         if( !allocate_process_mem( pid, proc_state, ret ) )
@@ -940,7 +942,7 @@ bool allocate_process_mem( pid_t pid, pid_state *state, int sc_num )
     // Save the old state
     ptlib_save_state( pid, state->saved_state );
     state->state=pid_state::ALLOCATE;
-    if( state->shared_memory!=NULL )
+    if( state->mem->shared_mem_local!=NULL )
         state->context_state[0]=20; // Internal allocation state
     else
         state->context_state[0]=0; // Internal allocation state
@@ -999,17 +1001,16 @@ static bool allocate_shared_mem( pid_t pid, pid_state *state )
     close(fd);
 
     // Set the shared memory class to know who we are
-    state->shared_mem_local=shared_mem(memory);
-    state->shared_mem_local.set_pid(pid);
+    state->mem->set_local_addr(memory);
 
     // The local shared memory is mapped. Now we need to map the remote end
     // Generate a new system call
     // Copy the instructions for generating a syscall to the newly created memory
-    ptlib_set_mem( pid, ptlib_prepare_memory(), state->memory, ptlib_prepare_memory_len() );
+    ptlib_set_mem( pid, ptlib_prepare_memory(), state->mem->memory, ptlib_prepare_memory_len() );
 
     // Fill in the parameters to open the same file
-    ptlib_set_argument( pid, 1, ((int_ptr)state->memory)+ptlib_prepare_memory_len() );
-    ptlib_set_string( pid, (char *)state->shared_mem_local.get(), ((char *)state->memory)+ptlib_prepare_memory_len() );
+    ptlib_set_argument( pid, 1, ((int_ptr)state->mem->memory)+ptlib_prepare_memory_len() );
+    ptlib_set_string( pid, (char *)state->mem->shared_mem_local, ((char *)state->mem->memory)+ptlib_prepare_memory_len() );
     ptlib_set_argument( pid, 2, O_RDONLY );
 
     return true;
@@ -1035,13 +1036,13 @@ static bool handle_memory_allocation( int sc_num, pid_t pid, pid_state *state )
     case 1:
         // First step - mmap just returned
         if( ptlib_success( pid, sc_num ) ) {
-            state->memory=(void *)ptlib_get_retval( pid );
+            state->mem->set_remote_static((void *)ptlib_get_retval( pid ));
             dlog("handle_memory_allocation: "PID_F" allocated for our use %lu bytes at %p\n", pid,
-                    (unsigned long)static_mem_size, state->memory);
+                    (unsigned long)static_mem_size, state->mem->memory);
 
             // "All" we need now is the shared memory. First, let's generate the local version for it.
             if(allocate_shared_mem( pid, state ))
-                return ptlib_generate_syscall( pid, SYS_open, ((char *)state->memory)+ptlib_prepare_memory_len() );
+                return ptlib_generate_syscall( pid, SYS_open, ((char *)state->mem->memory)+ptlib_prepare_memory_len() );
             else
                 return false;
         } else {
@@ -1056,7 +1057,7 @@ static bool handle_memory_allocation( int sc_num, pid_t pid, pid_state *state )
         // Start state for the case where there is already an allocated shared mem
 
         // Save the remote pointer to the old memory, so we can free it later
-        state->context_state[2]=(int_ptr)state->shared_memory;
+        state->context_state[2]=(int_ptr)state->mem->shared_memory;
 
         // Need to reallocate the shared memory
         if(allocate_shared_mem( pid, state ) ) {
@@ -1072,7 +1073,7 @@ static bool handle_memory_allocation( int sc_num, pid_t pid, pid_state *state )
         // The "open" syscall returned
 
         // Whether it failed or succeeded, we no longer need the file
-        unlink( (char *)state->shared_mem_local.get() );
+        unlink( (char *)state->mem->shared_mem_local );
 
         if( ptlib_success( pid, sc_num ) ) {
             // Store the fd for our own future use
@@ -1086,10 +1087,10 @@ static bool handle_memory_allocation( int sc_num, pid_t pid, pid_state *state )
             ptlib_set_argument( pid, 5, state->context_state[1] );
             ptlib_set_argument( pid, 6, 0 );
 
-            ptlib_generate_syscall( pid, PREF_MMAP, (char *)state->memory+ptlib_prepare_memory_len() );
+            ptlib_generate_syscall( pid, PREF_MMAP, (char *)state->mem->memory+ptlib_prepare_memory_len() );
         } else {
             // open failed
-            dlog( "handle_memory_allocation: "PID_F" process failed to open %s: %s\n", pid, state->shared_mem_local.getc(),
+            dlog( "handle_memory_allocation: "PID_F" process failed to open %s: %s\n", pid, state->mem->get_loc_c(),
                 strerror(ptlib_get_error(pid, sc_num)) );
             ptlib_continue( PTRACE_KILL, pid, 0 );
             return false;
@@ -1105,14 +1106,14 @@ static bool handle_memory_allocation( int sc_num, pid_t pid, pid_state *state )
 
         if( ptlib_success( pid, sc_num ) ) {
             // mmap succeeded
-            state->shared_memory=(void *)(ptlib_get_retval( pid )+ptlib_prepare_memory_len());
+            state->mem->set_remote_shared((void *)(ptlib_get_retval( pid )+ptlib_prepare_memory_len()));
             dlog("handle_memory_allocation: "PID_F" allocated for our use %lu shared bytes at %p\n", pid,
-                    (unsigned long)shared_mem_size, (char *)state->shared_memory-ptlib_prepare_memory_len());
+                    (unsigned long)shared_mem_size, (char *)state->mem->shared_memory-ptlib_prepare_memory_len());
 
             // We now need to close the file descriptor
             ptlib_set_argument( pid, 1, state->context_state[1] );
 
-            return ptlib_generate_syscall( pid, SYS_close, state->shared_memory );
+            return ptlib_generate_syscall( pid, SYS_close, state->mem->shared_memory );
         } else {
             dlog( "handle_memory_allocation: "PID_F" process failed to mmap memory: %s\n", pid, strerror(ptlib_get_error(pid, sc_num) ) );
 
@@ -1131,7 +1132,7 @@ static bool handle_memory_allocation( int sc_num, pid_t pid, pid_state *state )
             // If close failed, we'll log the error and leak the file descriptor, but otherwise do nothing about it
             dlog( "handle_memory_allocation: "PID_F" procss close failed: %s\n", pid, strerror(ptlib_get_error(pid, sc_num) ) );
         }
-        return ptlib_generate_syscall( pid, state->orig_sc , state->shared_memory );
+        return ptlib_generate_syscall( pid, state->orig_sc , state->mem->shared_memory );
     case 8:
         // The syscall to restart is entering the kernel
         {
@@ -1151,7 +1152,7 @@ static bool handle_memory_allocation( int sc_num, pid_t pid, pid_state *state )
         ptlib_set_argument( pid, 1, state->context_state[2]-ptlib_prepare_memory_len() );
         ptlib_set_argument( pid, 2, shared_mem_size );
 
-        ptlib_generate_syscall( pid, SYS_munmap, state->shared_memory );
+        ptlib_generate_syscall( pid, SYS_munmap, state->mem->shared_memory );
         break;
     case 26:
         // Syscall enter for munmap
@@ -1165,7 +1166,7 @@ static bool handle_memory_allocation( int sc_num, pid_t pid, pid_state *state )
 
         // Restart the original system call
         state->context_state[0]=8; // Merge with the original code
-        return ptlib_generate_syscall( pid, state->orig_sc, state->shared_memory );
+        return ptlib_generate_syscall( pid, state->orig_sc, state->mem->shared_memory );
     }
 
     return true;

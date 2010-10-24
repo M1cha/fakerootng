@@ -9,11 +9,10 @@
 
 #include <stdio.h>
 #include <string>
+#include <assert.h>
 
 #include "arch/platform.h"
 #include "platform_specific.h"
-
-#include "shared_mem.h"
 
 #include "refcount.h"
 
@@ -77,9 +76,43 @@ struct pid_state {
     } state;
     int orig_sc; // Original system call
 
-    void *memory; // Where and how much mem do we have inside the process's address space
-    void *shared_memory; // Process address of shared memory
-    shared_mem shared_mem_local; // local pointers to the shared memory
+    struct process_memory {
+        void *memory; // Where and how much mem do we have inside the process's address space
+        void *shared_memory; // Process address of shared memory
+        void *shared_mem_local; // local pointers to the shared memory
+
+        process_memory() : memory(NULL), shared_memory(NULL)
+        {
+        }
+
+        void set_local_addr(void *addr)
+        {
+            assert(shared_mem_local==NULL);
+            shared_mem_local=addr;
+        }
+        void set_remote_static(void *addr)
+        {
+            assert(memory==NULL);
+            memory=addr;
+        }
+        void set_remote_shared(void *addr)
+        {
+            assert(shared_memory==NULL);
+            shared_memory=addr;
+        }
+
+        // Accessors
+        void *get_loc() const
+        {
+            return shared_mem_local;
+        }
+        char *get_loc_c() const
+        {
+            return (char *)shared_mem_local;
+        }
+    };
+
+    ref_count<process_memory> mem;
 
     int_ptr context_state[NUM_SAVED_STATES];
     void *saved_state[PTLIB_STATE_SIZE];
@@ -129,7 +162,7 @@ struct pid_state {
 #undef DEF_VAR
     std::list<wait_state> waiting_signals;
 
-    pid_state() : state(INIT), memory(NULL), shared_memory(NULL), shared_mem_local(), debugger(0),
+    pid_state() : state(INIT), debugger(0),
         parent(0), num_children(0), num_debugees(0), trace_mode(TRACE_DETACHED), session_id(0), root(),
         uid(ROOT_UID), euid(ROOT_UID), suid(ROOT_UID), fsuid(ROOT_UID), gid(ROOT_GID), egid(ROOT_GID), sgid(ROOT_GID), fsgid(ROOT_GID)
     {

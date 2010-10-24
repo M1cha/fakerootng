@@ -141,7 +141,7 @@ bool sys_fstatat64( int sc_num, pid_t pid, pid_state *state )
 static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset, int stat_function, int extra_flags=-1 )
 {
     if( state->state==pid_state::NONE ) {
-        if( state->memory==NULL ) {
+        if( state->mem->memory==NULL ) {
             return allocate_process_mem( pid, state, sc_num );
         }
 
@@ -152,7 +152,7 @@ static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset
         state->context_state[1]=ptlib_get_argument( pid, mode_offset+1 ); // Store the requested mode
         state->context_state[0]=0; // syscall parts progress
 
-        ptlib_set_argument( pid, mode_offset+1, (int_ptr)state->memory ); // where to store the stat result
+        ptlib_set_argument( pid, mode_offset+1, (int_ptr)state->mem->memory ); // where to store the stat result
 
         ptlib_set_syscall( pid, stat_function );
 
@@ -162,7 +162,7 @@ static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             struct stat_override override;
             struct ptlib_stat stat;
 
-            if( !ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) ) ) {
+            if( !ptlib_get_mem( pid, state->mem->memory, &stat, sizeof( stat ) ) ) {
                 // This should never happen. We passed a buffer we are in charge of!
                 assert(0);
             }
@@ -208,7 +208,7 @@ static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset
                 set_map( &override );
             }
 
-            return ptlib_generate_syscall( pid, state->orig_sc, state->shared_memory );
+            return ptlib_generate_syscall( pid, state->orig_sc, state->mem->shared_memory );
         } else {
             // stat failed - return that failure to the caller as is
             state->state=pid_state::NONE;
@@ -298,12 +298,12 @@ static bool real_chown( int sc_num, pid_t pid, pid_state *state, int own_offset,
     // XXX Do we handle the mode change following a chown (file and directory) correctly?
     if( state->state==pid_state::NONE ) {
         // We're going to need memory
-        if( state->memory==NULL ) {
+        if( state->mem->memory==NULL ) {
             return allocate_process_mem( pid, state, sc_num );
         }
 
         // Map this to a stat operation
-        ptlib_set_argument( pid, own_offset+1, (int_ptr)state->memory );
+        ptlib_set_argument( pid, own_offset+1, (int_ptr)state->mem->memory );
 
         if( extra_flags!=-1 ) {
             ptlib_set_argument( pid, own_offset+2, extra_flags );
@@ -318,7 +318,7 @@ static bool real_chown( int sc_num, pid_t pid, pid_state *state, int own_offset,
             struct ptlib_stat stat;
             struct stat_override override;
 
-            if( !ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) ) ) {
+            if( !ptlib_get_mem( pid, state->mem->memory, &stat, sizeof( stat ) ) ) {
                 // This is a syscall we initiated, to a memory buffer we own. It should not have failed.
                 assert(0);
             }
@@ -347,7 +347,7 @@ static bool real_chown( int sc_num, pid_t pid, pid_state *state, int own_offset,
 
 bool sys_chown( int sc_num, pid_t pid, pid_state *state )
 {
-    if( state->state==pid_state::NONE && state->memory!=NULL ) {
+    if( state->state==pid_state::NONE && state->mem->memory!=NULL ) {
         state->context_state[0]=ptlib_get_argument(pid, 2);
         state->context_state[1]=ptlib_get_argument(pid, 3);
 
@@ -369,7 +369,7 @@ bool sys_fchown( int sc_num, pid_t pid, pid_state *state )
 
 bool sys_lchown( int sc_num, pid_t pid, pid_state *state )
 {
-    if( state->state==pid_state::NONE && state->memory!=NULL ) {
+    if( state->state==pid_state::NONE && state->mem->memory!=NULL ) {
         state->context_state[0]=ptlib_get_argument(pid, 2);
         state->context_state[1]=ptlib_get_argument(pid, 3);
 
@@ -398,7 +398,7 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
 {
     if( state->state==pid_state::NONE ) {
         // Will need memory
-        if( state->memory==NULL ) {
+        if( state->mem->memory==NULL ) {
             return allocate_process_mem(pid, state, sc_num);
         }
 
@@ -424,7 +424,7 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             for( int i=0; i<mode_offset; ++i ) {
                 ptlib_set_argument( pid, i+1, state->context_state[2+i] ); // File name etc.
             }
-            ptlib_set_argument( pid, mode_offset+1, (int_ptr)state->memory ); // Struct stat
+            ptlib_set_argument( pid, mode_offset+1, (int_ptr)state->mem->memory ); // Struct stat
 
             if( extra_flags!=-1 ) {
                 ptlib_set_argument( pid, mode_offset+2, extra_flags );
@@ -433,7 +433,7 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             state->state=pid_state::REDIRECT1;
 
             dlog("mknod: "PID_F" Actual node creation successful. Calling stat\n", pid );
-            return ptlib_generate_syscall( pid, stat_function, state->shared_memory );
+            return ptlib_generate_syscall( pid, stat_function, state->mem->shared_memory );
         } else {
             // Nothing to do if the call failed
             dlog("mknod: "PID_F" call failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num) ) );
@@ -443,7 +443,7 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
             ptlib_stat stat;
             stat_override override;
 
-            if( !ptlib_get_mem( pid, state->memory, &stat, sizeof(stat) ) ) {
+            if( !ptlib_get_mem( pid, state->mem->memory, &stat, sizeof(stat) ) ) {
                 // This should never happen. We passed a buffer we are in charge of!
                 assert(0);
             }
@@ -540,8 +540,8 @@ static bool real_open( int sc_num, pid_t pid, pid_state *state, int mode_argnum 
 
             // Call fstat to find out what we have
             ptlib_set_argument( pid, 1, fd );
-            ptlib_set_argument( pid, 2, (int_ptr)state->memory );
-            return ptlib_generate_syscall( pid, PREF_FSTAT, state->shared_memory );
+            ptlib_set_argument( pid, 2, (int_ptr)state->mem->memory );
+            return ptlib_generate_syscall( pid, PREF_FSTAT, state->mem->shared_memory );
         } else
             state->state=pid_state::NONE;
     } else if( state->state==pid_state::REDIRECT2 ) {
@@ -549,7 +549,7 @@ static bool real_open( int sc_num, pid_t pid, pid_state *state, int mode_argnum 
             ptlib_stat stat;
             stat_override override;
 
-            if( !ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) ) ) {
+            if( !ptlib_get_mem( pid, state->mem->memory, &stat, sizeof( stat ) ) ) {
                 // This should never happen. We passed a buffer we are in charge of!
                 assert(0);
             }
@@ -612,7 +612,7 @@ static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset
 {
     if( state->state==pid_state::NONE ) {
         // Will need memory
-        if( state->memory==NULL )
+        if( state->mem->memory==NULL )
             return allocate_process_mem( pid, state, sc_num );
 
         // Make sure user has rwx on the created directory
@@ -637,7 +637,7 @@ static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset
             // Perform a stat operation so we can know the directory's dev and inode
             for( int i=1; i<=mode_offset; ++i )
                 ptlib_set_argument( pid, i, state->context_state[i] ); // The original mkdir arguments
-            ptlib_set_argument( pid, mode_offset+1, (int_ptr)state->memory ); // stat structure
+            ptlib_set_argument( pid, mode_offset+1, (int_ptr)state->mem->memory ); // stat structure
 
             if( extra_flags!=-1 ) {
                 ptlib_set_argument( pid, mode_offset+2, extra_flags );
@@ -646,7 +646,7 @@ static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset
             state->orig_sc=sc_num;
             state->state=pid_state::REDIRECT1;
 
-            return ptlib_generate_syscall( pid, stat_function, state->shared_memory );
+            return ptlib_generate_syscall( pid, stat_function, state->mem->shared_memory );
         } else {
             // If mkdir failed, we don't have anything else to do.
             dlog("mkdir: "PID_F" failed with error %s\n", pid, strerror(ptlib_get_error( pid, sc_num ) ) );
@@ -656,7 +656,7 @@ static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset
             ptlib_stat stat;
             stat_override override;
 
-            if( !ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) ) ) {
+            if( !ptlib_get_mem( pid, state->mem->memory, &stat, sizeof( stat ) ) ) {
                 // This should never happen. We passed a buffer we are in charge of!
                 assert(0);
             }
@@ -685,7 +685,7 @@ static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset
 
 bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
 {
-    if( state->state==pid_state::NONE && state->memory!=NULL ) {
+    if( state->state==pid_state::NONE && state->mem->memory!=NULL ) {
         chroot_translate_param( pid, state, 1, true );
 
         state->context_state[1]=ptlib_get_argument( pid, 1 ); // Directory name
@@ -737,7 +737,7 @@ static bool real_symlink( int sc_num, pid_t pid, pid_state *state, int mode_offs
             for( int i=0; i<mode_offset; ++i ) {
                 ptlib_set_argument( pid, i+1, state->context_state[i] ); // File name
             }
-            ptlib_set_argument( pid, mode_offset+1, (int_ptr)state->memory ); // stat structure
+            ptlib_set_argument( pid, mode_offset+1, (int_ptr)state->mem->memory ); // stat structure
 
             if( extra_flags!=-1 ) {
                 ptlib_set_argument( pid, mode_offset+2, extra_flags );
@@ -745,7 +745,7 @@ static bool real_symlink( int sc_num, pid_t pid, pid_state *state, int mode_offs
 
             state->state=pid_state::REDIRECT1;
 
-            return ptlib_generate_syscall( pid, stat_function, state->shared_memory );
+            return ptlib_generate_syscall( pid, stat_function, state->mem->shared_memory );
         } else {
             dlog("symlink: "PID_F" failed with error %s\n", pid, strerror( ptlib_get_error(pid, sc_num) ) );
             state->state=pid_state::NONE;
@@ -755,7 +755,7 @@ static bool real_symlink( int sc_num, pid_t pid, pid_state *state, int mode_offs
             ptlib_stat stat;
             stat_override override;
 
-            if( !ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) ) ) {
+            if( !ptlib_get_mem( pid, state->mem->memory, &stat, sizeof( stat ) ) ) {
                 // This should never happen. We passed a buffer we are in charge of!
                 assert(0);
             }
@@ -787,7 +787,7 @@ static bool real_symlink( int sc_num, pid_t pid, pid_state *state, int mode_offs
 
 bool sys_symlink( int sc_num, pid_t pid, pid_state *state )
 {
-    if( state->state==pid_state::NONE && state->memory!=NULL ) {
+    if( state->state==pid_state::NONE && state->mem->memory!=NULL ) {
         chroot_translate_param( pid, state, 2, false );
 
         state->context_state[0]=ptlib_get_argument( pid, 2 ); // new path
@@ -814,7 +814,7 @@ bool sys_getcwd( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
         // Will need memory
-        if( state->memory==NULL )
+        if( state->mem->memory==NULL )
             return allocate_process_mem( pid, state, sc_num );
 
         state->state=pid_state::RETURN;
@@ -826,7 +826,7 @@ bool sys_getcwd( int sc_num, pid_t pid, pid_state *state )
             state->context_state[1]=ptlib_get_argument( pid, 2 ); // Buffer len
 
             // Perform the actual call into our buffer
-            ptlib_set_argument( pid, 1, (int_ptr)state->memory );
+            ptlib_set_argument( pid, 1, (int_ptr)state->mem->memory );
             ptlib_set_argument( pid, 2, PATH_MAX );
         }
     } else if( state->state==pid_state::RETURN ) {
@@ -835,7 +835,7 @@ bool sys_getcwd( int sc_num, pid_t pid, pid_state *state )
         if( ptlib_success( pid, sc_num ) && chroot_is_chrooted(state) ) {
             // We are inside a chroot, and the call was successful
             char buffer[PATH_MAX];
-            ptlib_get_string( pid, state->memory, buffer, sizeof(buffer) );
+            ptlib_get_string( pid, state->mem->memory, buffer, sizeof(buffer) );
             char tmp=buffer[state->root->length()];
             buffer[state->root->length()]='\0';
             char *ptr=buffer;
@@ -894,7 +894,7 @@ bool sys_munmap( int sc_num, pid_t pid, pid_state *state )
             return true;
 
         // Put the lower of the two addreses in addr1
-        int_ptr addr1=(int_ptr)state->shared_memory, addr2=(int_ptr)state->memory;
+        int_ptr addr1=(int_ptr)state->mem->shared_memory, addr2=(int_ptr)state->mem->memory;
         size_t len1=static_mem_size, len2=shared_mem_size-ptlib_prepare_memory_len();
         const char *name1="static", *name2="shared";
 
@@ -977,7 +977,7 @@ bool sys_munmap( int sc_num, pid_t pid, pid_state *state )
 
                 ptlib_set_argument( pid, 1, state->context_state[0] );
                 ptlib_set_argument( pid, 2, state->context_state[1] );
-                return ptlib_generate_syscall( pid, sc_num, state->shared_memory );
+                return ptlib_generate_syscall( pid, sc_num, state->mem->shared_memory );
             }
         } else {
             // The syscall failed - we will end it here even if we thought we had something more to do
@@ -1076,7 +1076,7 @@ bool sys_unlink( int sc_num, pid_t pid, pid_state *state )
 
         // We now implement the second method
         ptlib_set_syscall( pid, PREF_LSTAT );
-        ptlib_set_argument( pid, 2, (int_ptr)state->memory );
+        ptlib_set_argument( pid, 2, (int_ptr)state->mem->memory );
 
         state->state=pid_state::REDIRECT2;
 
@@ -1099,14 +1099,14 @@ bool sys_unlink( int sc_num, pid_t pid, pid_state *state )
                 if( ptlib_success( pid, sc_num ) ) {
                     ptlib_stat stat;
 
-                    if( !ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) ) ) {
+                    if( !ptlib_get_mem( pid, state->mem->memory, &stat, sizeof( stat ) ) ) {
                         // This should never happen. We passed a buffer we are in charge of!
                         assert(0);
                     }
 
                     if( stat.nlink==1 ) {
                         // Store the relevant data in the shared memory
-                        struct override_key *key=reinterpret_cast<override_key *>(state->shared_mem_local.getc()+PATH_MAX);
+                        struct override_key *key=reinterpret_cast<override_key *>(state->mem->get_loc_c()+PATH_MAX);
                         key->dev=stat.dev;
                         key->inode=stat.ino;
 
@@ -1117,7 +1117,7 @@ bool sys_unlink( int sc_num, pid_t pid, pid_state *state )
 
                     // Perform the actual unlink operation
                     ptlib_save_state( pid, state->saved_state );
-                    ptlib_generate_syscall( pid, state->orig_sc, state->shared_memory );
+                    ptlib_generate_syscall( pid, state->orig_sc, state->mem->shared_memory );
                     state->state=pid_state::REDIRECT1;
                     state->context_state[0]=1;
                 } else {
@@ -1138,7 +1138,7 @@ bool sys_unlink( int sc_num, pid_t pid, pid_state *state )
                 if( success ) {
                     if( state->context_state[2]==1 ) {
                         // Need to erase the override from our database
-                        struct override_key *key=reinterpret_cast<override_key *>(state->shared_mem_local.getc()+PATH_MAX);
+                        struct override_key *key=reinterpret_cast<override_key *>(state->mem->get_loc_c()+PATH_MAX);
                         stat_override map;
 
                         if( get_map( key->dev, key->inode, &map ) ) {
@@ -1209,7 +1209,7 @@ bool sys_unlinkat( int sc_num, pid_t pid, pid_state *state )
 
         // We now implement the second method
         ptlib_set_syscall( pid, PREF_FSTATAT );
-        ptlib_set_argument( pid, 3, (int_ptr)state->memory );
+        ptlib_set_argument( pid, 3, (int_ptr)state->mem->memory );
         ptlib_set_argument( pid, 4, AT_SYMLINK_NOFOLLOW );
 
         state->state=pid_state::REDIRECT2;
@@ -1242,14 +1242,14 @@ bool sys_unlinkat( int sc_num, pid_t pid, pid_state *state )
                     ptlib_set_argument( pid, 3, state->context_state[0]==10 ? AT_REMOVEDIR : 0 );
 
                     // Will the file be actually deleted?
-                    if( !ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) ) ) {
+                    if( !ptlib_get_mem( pid, state->mem->memory, &stat, sizeof( stat ) ) ) {
                         // This should never happen. We passed a buffer we are in charge of!
                         assert(0);
                     }
 
                     if( stat.nlink==1 || state->context_state[0]==10 ) {
                         // Store the relevant data in the shared memory
-                        struct override_key *key=reinterpret_cast<override_key *>(state->shared_mem_local.getc()+PATH_MAX);
+                        struct override_key *key=reinterpret_cast<override_key *>(state->mem->get_loc_c()+PATH_MAX);
                         key->dev=stat.dev;
                         key->inode=stat.ino;
 
@@ -1259,7 +1259,7 @@ bool sys_unlinkat( int sc_num, pid_t pid, pid_state *state )
                     }
 
                     // Complete the continuation call
-                    ptlib_generate_syscall( pid, state->orig_sc, state->shared_memory );
+                    ptlib_generate_syscall( pid, state->orig_sc, state->mem->shared_memory );
                     state->state=pid_state::REDIRECT1;
                     state->context_state[0]=1;
                 } else {
@@ -1280,7 +1280,7 @@ bool sys_unlinkat( int sc_num, pid_t pid, pid_state *state )
                 if( success ) {
                     if( state->context_state[2]==1 ) {
                         // Need to erase the override from our database
-                        struct override_key *key=reinterpret_cast<override_key *>(state->shared_mem_local.getc()+PATH_MAX);
+                        struct override_key *key=reinterpret_cast<override_key *>(state->mem->get_loc_c()+PATH_MAX);
                         stat_override map;
 
                         if( get_map( key->dev, key->inode, &map ) ) {
@@ -1346,7 +1346,7 @@ bool sys_rmdir( int sc_num, pid_t pid, pid_state *state )
         state->context_state[1]=ptlib_get_argument( pid, 1 );
 
         // We need to stat the directory before we erase it
-        ptlib_set_argument( pid, 2, (int_ptr)state->memory );
+        ptlib_set_argument( pid, 2, (int_ptr)state->mem->memory );
         ptlib_set_syscall( pid, PREF_LSTAT );
 
         state->state=pid_state::REDIRECT2;
@@ -1356,12 +1356,12 @@ bool sys_rmdir( int sc_num, pid_t pid, pid_state *state )
             if( ptlib_success( pid, sc_num ) ) {
                 ptlib_stat stat;
 
-                if( !ptlib_get_mem( pid, state->memory, &stat, sizeof( stat ) ) ) {
+                if( !ptlib_get_mem( pid, state->mem->memory, &stat, sizeof( stat ) ) ) {
                     // This should never happen. We passed a buffer we are in charge of!
                     assert(0);
                 }
 
-                struct override_key *key=reinterpret_cast<override_key *>(state->shared_mem_local.getc()+PATH_MAX);
+                struct override_key *key=reinterpret_cast<override_key *>(state->mem->get_loc_c()+PATH_MAX);
                 key->dev=stat.dev;
                 key->inode=stat.ino;
 
@@ -1369,7 +1369,7 @@ bool sys_rmdir( int sc_num, pid_t pid, pid_state *state )
 
                 // Run the original syscall
                 ptlib_save_state( pid, state->saved_state );
-                ptlib_generate_syscall( pid, state->orig_sc, state->shared_memory );
+                ptlib_generate_syscall( pid, state->orig_sc, state->mem->shared_memory );
                 state->state=pid_state::REDIRECT1;
             } else {
                 // Pass the lstat error as if it were the rmdir error
@@ -1383,7 +1383,7 @@ bool sys_rmdir( int sc_num, pid_t pid, pid_state *state )
 
             if( success ) {
                 // Need to erase the override from our database
-                struct override_key *key=reinterpret_cast<override_key *>(state->shared_mem_local.getc()+PATH_MAX);
+                struct override_key *key=reinterpret_cast<override_key *>(state->mem->get_loc_c()+PATH_MAX);
                 stat_override map;
 
                 if( get_map( key->dev, key->inode, &map ) ) {

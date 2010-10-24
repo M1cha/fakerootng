@@ -237,8 +237,8 @@ bool chroot_translate_paramat( pid_t pid, const pid_state *state, int dirfd, int
     std::string newpath=chroot_translate_addr( pid, state, &stat, dirfd, path_addr, resolve_last_link );
 
     if( stat.st_ino!=(ino_t)-1 || !abort_error ) {
-        strcpy( state->shared_mem_local.getc()+offset, newpath.c_str() );
-        ptlib_set_argument( pid, param_num, ((int_ptr)state->shared_memory)+offset );
+        strcpy( state->mem->get_loc_c()+offset, newpath.c_str() );
+        ptlib_set_argument( pid, param_num, ((int_ptr)state->mem->shared_memory)+offset );
     }
 
     return stat.st_ino!=(ino_t)-1;

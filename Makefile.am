@@ -9,7 +9,7 @@ distclean-local:
 bin_PROGRAMS=fakeroot-ng
 man1_MANS = fakeroot-ng.man
 
-fakeroot_ng_SOURCES=main.cpp parent.h parent.cpp syscalls.h process.cpp file.cpp file_lie.cpp ptrace.cpp chroot.cpp shared_mem.cpp \
+fakeroot_ng_SOURCES=main.cpp parent.h parent.cpp syscalls.h process.cpp file.cpp file_lie.cpp ptrace.cpp chroot.cpp \
                     credentials.cpp
 
 #fakeroot_ng_LDFLAGS=-Larch/$(target_os)/$(target_cpu)

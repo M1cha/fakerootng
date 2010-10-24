@@ -40,7 +40,7 @@
 bool sys_fork( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        if( ptlib_fork_enter( pid, sc_num, state->shared_memory, state->shared_mem_local.get(), state->saved_state,
+        if( ptlib_fork_enter( pid, sc_num, state->mem->shared_memory, state->mem->get_loc(), state->saved_state,
                     state->context_state+1 ) )
         {
             state->state=pid_state::RETURN;
@@ -159,9 +159,7 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state, bool &trap_after_call 
                 dlog("execve: "PID_F" successfully execed a new command\n", pid );
 
                 // All memory allocations performed before the exec are now null and void
-                state->memory=NULL;
-                state->shared_memory=NULL;
-                state->shared_mem_local=shared_mem();
+                state->mem=ref_count<pid_state::process_memory>(new pid_state::process_memory);
 
 #if PTLIB_TRAP_AFTER_EXEC
                 // The platform sends a SIGTRAP to the process after a successful execve, which results in us thinking it was
