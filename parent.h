@@ -162,7 +162,7 @@ struct pid_state {
 #undef DEF_VAR
     std::list<wait_state> waiting_signals;
 
-    pid_state() : state(INIT), debugger(0),
+    pid_state() : state(INIT), mem(ref_count<process_memory>(new process_memory)), debugger(0),
         parent(0), num_children(0), num_debugees(0), trace_mode(TRACE_DETACHED), session_id(0), root(),
         uid(ROOT_UID), euid(ROOT_UID), suid(ROOT_UID), fsuid(ROOT_UID), gid(ROOT_GID), egid(ROOT_GID), sgid(ROOT_GID), fsgid(ROOT_GID)
     {
