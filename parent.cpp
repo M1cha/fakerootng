@@ -942,7 +942,7 @@ bool allocate_process_mem( pid_t pid, pid_state *state, int sc_num )
     // Save the old state
     ptlib_save_state( pid, state->saved_state );
     state->state=pid_state::ALLOCATE;
-    if( state->mem->shared_mem_local!=NULL )
+    if( state->mem->shared_memory!=NULL )
         state->context_state[0]=20; // Internal allocation state
     else
         state->context_state[0]=0; // Internal allocation state
@@ -1110,6 +1110,7 @@ static bool hma_state5( int sc_num, pid_t pid, pid_state *state )
 
     if( ptlib_success( pid, sc_num ) ) {
         // mmap succeeded
+        state->mem->shared_memory=NULL;
         state->mem->set_remote_shared((void *)(ptlib_get_retval( pid )+ptlib_prepare_memory_len()));
         dlog("handle_memory_allocation: "PID_F" allocated for our use %lu shared bytes at %p\n", pid,
                 (unsigned long)shared_mem_size, (char *)state->mem->shared_memory-ptlib_prepare_memory_len());
