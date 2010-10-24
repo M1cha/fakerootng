@@ -80,15 +80,23 @@ struct pid_state {
         void *memory; // Where and how much mem do we have inside the process's address space
         void *shared_memory; // Process address of shared memory
         void *shared_mem_local; // local pointers to the shared memory
+        size_t shared_overhead; // Size of the overhead the shared memory has
 
-        process_memory() : memory(NULL), shared_memory(NULL)
+        process_memory() : memory(NULL), shared_memory(NULL), shared_overhead(0)
         {
         }
+        
+    private:
+        // Disable the implicit constructors
+        process_memory( const process_memory &rhs );
+        process_memory &operator=( const process_memory &rhs );
 
-        void set_local_addr(void *addr)
+    public:
+        void set_local_addr(void *addr, size_t overhead)
         {
             assert(shared_mem_local==NULL);
-            shared_mem_local=addr;
+            shared_mem_local=(void *)(((int_ptr)addr)+overhead);
+            shared_overhead=overhead;
         }
         void set_remote_static(void *addr)
         {
