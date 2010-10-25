@@ -261,7 +261,7 @@ static void perform_debugger( int child_socket, int master_socket )
         exit(2);
     }
 
-    if( persistent_file[0]!='\0' ) {
+    if( persistent_file ) {
         // Switch to the original work directory, so all relative paths work
         if( chdir( orig_wd )==0 ) {
             FILE *file=fopen(persistent_file, "w");
