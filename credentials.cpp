@@ -97,16 +97,16 @@ bool sys_getresuid( int sc_num, pid_t pid, pid_state *state )
         state->state=pid_state::RETURN;
         
         // Do not trust the syscall not to change the pointers
-        state->saved_state[0]=(void *)ptlib_get_argument( pid, 1 );
-        state->saved_state[1]=(void *)ptlib_get_argument( pid, 2 );
-        state->saved_state[2]=(void *)ptlib_get_argument( pid, 3 );
+        state->context_state[0]=ptlib_get_argument( pid, 1 );
+        state->context_state[1]=ptlib_get_argument( pid, 2 );
+        state->context_state[2]=ptlib_get_argument( pid, 3 );
         break;
     case pid_state::RETURN:
         if( ptlib_success(pid, sc_num) ) {
             bool success;
-            success=ptlib_set_mem( pid, state->saved_state[0], &state->uid, sizeof(state->uid) );
-            success=success && ptlib_set_mem( pid, state->saved_state[1], &state->euid, sizeof(state->euid) );
-            success=success && ptlib_set_mem( pid, state->saved_state[2], &state->suid, sizeof(state->suid) );
+            success=ptlib_set_mem( pid, &state->uid, state->context_state[0], sizeof(state->uid) );
+            success=success && ptlib_set_mem( pid, &state->euid, state->context_state[1], sizeof(state->euid) );
+            success=success && ptlib_set_mem( pid, &state->suid, state->context_state[2], sizeof(state->suid) );
 
             if( !success ) {
                 ptlib_set_error( pid, state->orig_sc, errno );
@@ -129,16 +129,16 @@ bool sys_getresgid( int sc_num, pid_t pid, pid_state *state )
         state->state=pid_state::RETURN;
         
         // Do not trust the syscall not to change the pointers
-        state->saved_state[0]=(void *)ptlib_get_argument( pid, 1 );
-        state->saved_state[1]=(void *)ptlib_get_argument( pid, 2 );
-        state->saved_state[2]=(void *)ptlib_get_argument( pid, 3 );
+        state->context_state[0]=ptlib_get_argument( pid, 1 );
+        state->context_state[1]=ptlib_get_argument( pid, 2 );
+        state->context_state[2]=ptlib_get_argument( pid, 3 );
         break;
     case pid_state::RETURN:
         if( ptlib_success(pid, sc_num) ) {
             bool success;
-            success=ptlib_set_mem( pid, state->saved_state[0], &state->gid, sizeof(state->gid) );
-            success=success && ptlib_set_mem( pid, state->saved_state[1], &state->egid, sizeof(state->egid) );
-            success=success && ptlib_set_mem( pid, state->saved_state[2], &state->sgid, sizeof(state->sgid) );
+            success=ptlib_set_mem( pid, &state->gid, state->context_state[0], sizeof(state->gid) );
+            success=success && ptlib_set_mem( pid, &state->egid, state->context_state[1], sizeof(state->egid) );
+            success=success && ptlib_set_mem( pid, &state->sgid, state->context_state[2], sizeof(state->sgid) );
 
             if( !success ) {
                 ptlib_set_error( pid, state->orig_sc, errno );
@@ -176,7 +176,7 @@ bool sys_getgroups( int sc_num, pid_t pid, pid_state *state )
             gid_t *groups=(gid_t *)state->context_state[1];
             bool success=true;
             for( std::set<gid_t>::const_iterator i=state->groups.begin(); success && i!=state->groups.end(); ++i, ++count ) {
-                success=ptlib_set_mem( pid, &*i, groups+count, sizeof(gid_t) );
+                success=ptlib_set_mem( pid, &*i, (int_ptr)(groups+count), sizeof(gid_t) );
             }
 
             if( success )
@@ -407,7 +407,7 @@ bool sys_setgroups( int sc_num, pid_t pid, pid_state *state )
         while( error==0 && state->context_state[0]>0 ) {
             gid_t group;
 
-            if( ptlib_get_mem( pid, process_groups++, &group, sizeof(gid_t) ) ) {
+            if( ptlib_get_mem( pid, (int_ptr)process_groups++, &group, sizeof(gid_t) ) ) {
                 new_groups.insert(group);
                 --state->context_state[0];
             } else {

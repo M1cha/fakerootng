@@ -39,14 +39,14 @@ int ptlib_reinterpret( enum PTLIB_WAIT_RET prestate, pid_t pid, int status, long
 
 /* Returns/sets the Program Counter (EIP on Intel) for the traced program */
 void *ptlib_get_pc( pid_t pid );
-int ptlib_set_pc( pid_t pid, void *location );
+int ptlib_set_pc( pid_t pid, int_ptr location );
 
 /* Syscall analysis functions - call only when stopped process just invoked a syscall */
 
 /* Report the syscall number being invoked */
 int ptlib_get_syscall( pid_t pid );
 int ptlib_set_syscall( pid_t pid, int sc_num ); /* Change the meaning of a just started system call */
-int ptlib_generate_syscall( pid_t pid, int sc_num, void *base_memory ); /* Generate a new system call */
+int ptlib_generate_syscall( pid_t pid, int sc_num, int_ptr base_memory ); /* Generate a new system call */
 
 /* Return the nth argument passed */
 int_ptr ptlib_get_argument( pid_t pid, int argnum );
@@ -60,12 +60,12 @@ int ptlib_get_error( pid_t pid, int sc_num );
 
 /* Copy memory in and out of the process
  * Return TRUE on success */
-int ptlib_get_mem( pid_t pid, void *process_ptr, void *local_ptr, size_t len );
-int ptlib_set_mem( pid_t pid, const void *local_ptr, void *process_ptr, size_t len );
+int ptlib_get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len );
+int ptlib_set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len );
 
 /* Copy a NULL terminated string. "get" returns the number of bytes copied, including the NULL */
-int ptlib_get_string( pid_t pid, void *process_ptr, char *local_ptr, size_t maxlen );
-int ptlib_set_string( pid_t pid, const char *local_ptr, void *process_ptr );
+int ptlib_get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen );
+int ptlib_set_string( pid_t pid, const char *local_ptr, int_ptr process_ptr );
 
 /* Get a process' current directory and open fds */
 /* Return value is as for "readlink" */
@@ -107,7 +107,7 @@ pid_t ptlib_get_parent( pid_t pid );
  */
 
 #define FORK_CONTEXT_SIZE 3
-int ptlib_fork_enter( pid_t pid, int orig_sc, void *process_mem, void *our_mem, void *registers[PTLIB_STATE_SIZE],
+int ptlib_fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[PTLIB_STATE_SIZE],
         int_ptr context[FORK_CONTEXT_SIZE] );
 int ptlib_fork_exit( pid_t pid, pid_t *newpid, void *registers[PTLIB_STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] );
 

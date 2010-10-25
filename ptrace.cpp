@@ -189,7 +189,7 @@ static void handle_peek_data( pid_t pid, pid_state *state )
 
             // Write the result where applicable
             // XXX This may be a Linux only semantics - pass addres to write result to as "data" argument
-            data=ptlib_set_mem( pid, &data, (void *)state->context_state[3], sizeof(data));
+            data=ptlib_set_mem( pid, &data, state->context_state[3], sizeof(data));
             if( data!=-1 ) {
                 ptlib_set_retval( pid, 0 );
             } else {

@@ -77,53 +77,69 @@ struct pid_state {
     } state;
     int orig_sc; // Original system call
 
-    struct process_memory {
-        void *memory; // Where and how much mem do we have inside the process's address space
-        void *shared_memory; // Process address of shared memory
+    class process_memory {
+        int_ptr memory; // Where and how much mem do we have inside the process's address space
+        int_ptr shared_memory; // Process address of shared memory
         void *shared_mem_local; // local pointers to the shared memory
         size_t shared_overhead; // Size of the overhead the shared memory has
         size_t shared_size; // Total size of mapping
 
-        process_memory() : memory(NULL), shared_memory(NULL), shared_overhead(0), shared_size(0)
+        // Disable the implicit constructors
+        process_memory( const process_memory &rhs );
+        process_memory &operator=( const process_memory &rhs );
+    public:
+
+        process_memory() : memory(0), shared_memory(0), shared_mem_local(MAP_FAILED), shared_overhead(0), shared_size(0)
         {
         }
 
         ~process_memory()
         {
-            munmap( (void*)(((int_ptr)shared_mem_local)-shared_overhead), shared_size );
+            if( shared_mem_local!=MAP_FAILED ) {
+                dlog("%s: freeing mmap this=%p at %p\n", __func__, this, shared_mem_local );
+                munmap( (void*)(((int_ptr)shared_mem_local)-shared_overhead), shared_size );
+                
+                shared_mem_local=MAP_FAILED;
+            }
         }
         
-    private:
-        // Disable the implicit constructors
-        process_memory( const process_memory &rhs );
-        process_memory &operator=( const process_memory &rhs );
-
-    public:
         void set_local_addr(void *addr, size_t size, size_t overhead)
         {
-            assert(shared_mem_local==NULL);
-            shared_mem_local=(void *)(((int_ptr)addr)+overhead);
-            shared_overhead=overhead;
+            assert(shared_mem_local==MAP_FAILED);
+            if( addr!=MAP_FAILED && addr!=NULL ) {
+                shared_mem_local=(void *)(((int_ptr)addr)+overhead);
+                shared_overhead=overhead;
+                dlog("process_memory::local this=%p addr=%p\n", this, shared_mem_local );
+            }
         }
-        void set_remote_static(void *addr)
+        void set_remote_static(int_ptr addr)
         {
-            assert(memory==NULL);
+            assert(memory==0);
             memory=addr;
         }
-        void set_remote_shared(void *addr)
+        void set_remote_shared(int_ptr addr)
         {
-            assert(shared_memory==NULL);
             shared_memory=addr;
         }
 
         // Accessors
         void *get_loc() const
         {
-            return shared_mem_local;
+            return shared_mem_local!=MAP_FAILED ? shared_mem_local : NULL;
         }
         char *get_loc_c() const
         {
-            return (char *)shared_mem_local;
+            return (char *)get_loc();
+        }
+
+        int_ptr get_mem() const
+        {
+            return memory;
+        }
+
+        int_ptr get_shared() const
+        {
+            return shared_memory;
         }
     };
 
@@ -182,6 +198,12 @@ struct pid_state {
         uid(ROOT_UID), euid(ROOT_UID), suid(ROOT_UID), fsuid(ROOT_UID), gid(ROOT_GID), egid(ROOT_GID), sgid(ROOT_GID), fsgid(ROOT_GID)
     {
         groups.insert(ROOT_GID);
+        dlog("pid_state constructed this=%p\n", this );
+    }
+
+    ~pid_state()
+    {
+        dlog("pid_state destructed this=%p\n", this );
     }
 };
 

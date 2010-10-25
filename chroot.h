@@ -20,7 +20,7 @@ bool chroot_is_chrooted( const pid_state *state );
 std::string chroot_parse_path( const pid_state *state, char *path, const std::string &wd, struct stat *stat, bool resolve_last_link );
 
 // Same as above, only grab the work directory and file name from the process' state
-std::string chroot_translate_addr( pid_t pid, const pid_state *state, struct stat *stat, int dirfd, void *addr, bool resolve_last_link );
+std::string chroot_translate_addr( pid_t pid, const pid_state *state, struct stat *stat, int dirfd, int_ptr addr, bool resolve_last_link );
 // If dirfd is CHROOT_PWD, everything is relative to the current work dir for the process
 
 // Grab the original path from the process space, translate the path (if chrooted) write the

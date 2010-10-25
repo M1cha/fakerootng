@@ -111,7 +111,7 @@ int ptlib_linux_reinterpret( enum PTLIB_WAIT_RET prevstate, pid_t pid, int statu
     return prevstate;
 }
 
-int ptlib_linux_get_mem( pid_t pid, void *process_ptr, void *local_ptr, size_t len )
+int ptlib_linux_get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
 {
     errno=0;
 
@@ -145,7 +145,7 @@ int ptlib_linux_get_mem( pid_t pid, void *process_ptr, void *local_ptr, size_t l
     return errno==0;
 }
 
-int ptlib_linux_set_mem( pid_t pid, const void *local_ptr, void *process_ptr, size_t len )
+int ptlib_linux_set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len )
 {
     long buffer;
     size_t offset=((int_ptr)process_ptr)%sizeof(long);
@@ -190,7 +190,7 @@ int ptlib_linux_set_mem( pid_t pid, const void *local_ptr, void *process_ptr, si
     return errno==0;
 }
 
-int ptlib_linux_get_string( pid_t pid, void *process_ptr, char *local_ptr, size_t maxlen )
+int ptlib_linux_get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen )
 {
     /* Are we aligned on the "start" front? */
     unsigned int offset=((unsigned long)process_ptr)%sizeof(long);
@@ -217,7 +217,7 @@ int ptlib_linux_get_string( pid_t pid, void *process_ptr, char *local_ptr, size_
     return i;
 } 
 
-int ptlib_linux_set_string( pid_t pid, const char *local_ptr, void *process_ptr )
+int ptlib_linux_set_string( pid_t pid, const char *local_ptr, int_ptr process_ptr )
 {
     size_t len=strlen(local_ptr)+1;
 
@@ -285,7 +285,7 @@ pid_t ptlib_linux_get_parent( pid_t pid )
     return ret;
 }
 
-int ptlib_linux_fork_enter( pid_t pid, int orig_sc, void *process_mem, void *our_mem, void *registers[PTLIB_STATE_SIZE],
+int ptlib_linux_fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[PTLIB_STATE_SIZE],
         int_ptr context[FORK_CONTEXT_SIZE] )
 {
     /* Turn the fork/vfork into a clone */

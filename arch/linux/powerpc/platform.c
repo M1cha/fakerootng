@@ -83,7 +83,7 @@ int ptlib_set_syscall( pid_t pid, int sc_num )
     return ptrace( PTRACE_POKEUSER, pid, 4*PT_R0, sc_num );
 }
 
-int ptlib_generate_syscall( pid_t pid, int sc_num, void *base_memory )
+int ptlib_generate_syscall( pid_t pid, int sc_num, int_ptr base_memory )
 {
     /* Cannot generate a syscall per-se. Instead, set program counter to an instruction known to generate one */
     ptrace( PTRACE_POKEUSER, pid, 4*PT_R0, sc_num );
@@ -153,22 +153,22 @@ int ptlib_success( pid_t pid, int sc_num )
     return (cr&SO_MASK)==0;
 }
 
-int ptlib_get_mem( pid_t pid, void *process_ptr, void *local_ptr, size_t len )
+int ptlib_get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
 {
     return ptlib_linux_get_mem( pid, process_ptr, local_ptr, len );
 }
 
-int ptlib_set_mem( pid_t pid, const void *local_ptr, void *process_ptr, size_t len )
+int ptlib_set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len )
 {
     return ptlib_linux_set_mem( pid, local_ptr, process_ptr, len );
 }
 
-int ptlib_get_string( pid_t pid, void *process_ptr, char *local_ptr, size_t maxlen )
+int ptlib_get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen )
 {
     return ptlib_linux_get_string( pid, process_ptr, local_ptr, maxlen );
 }
 
-int ptlib_set_string( pid_t pid, const char *local_ptr, void *process_ptr )
+int ptlib_set_string( pid_t pid, const char *local_ptr, int_ptr process_ptr )
 {
     return ptlib_linux_set_string( pid, local_ptr, process_ptr );
 }
@@ -204,7 +204,7 @@ pid_t ptlib_get_parent( pid_t pid )
     return ptlib_linux_get_parent(pid);
 }
 
-int ptlib_fork_enter( pid_t pid, int orig_sc, void *process_mem, void *our_mem, void *registers[PTLIB_STATE_SIZE],
+int ptlib_fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[PTLIB_STATE_SIZE],
         int_ptr context[FORK_CONTEXT_SIZE] )
 {
     return ptlib_linux_fork_enter( pid, orig_sc, process_mem, our_mem, registers, context );

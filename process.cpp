@@ -40,7 +40,7 @@
 bool sys_fork( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        if( ptlib_fork_enter( pid, sc_num, state->mem->shared_memory, state->mem->get_loc(), state->saved_state,
+        if( ptlib_fork_enter( pid, sc_num, state->mem->get_shared(), state->mem->get_loc(), state->saved_state,
                     state->context_state+1 ) )
         {
             state->state=pid_state::RETURN;
@@ -132,7 +132,7 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state, bool &trap_after_call 
 
         if( log_level>0 ) {
             char cmd[PATH_MAX];
-            ptlib_get_string( pid, (void *)ptlib_get_argument( pid, 1 ), cmd, sizeof(cmd) );
+            ptlib_get_string( pid, ptlib_get_argument( pid, 1 ), cmd, sizeof(cmd) );
             dlog("execve: "PID_F" calling execve for executing %s\n", pid, cmd );
             dlog(NULL);
         }
@@ -334,7 +334,7 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
                 
                 // Fill in the rusage
                 if( ((void *)state->context_state[3])!=NULL )
-                    ptlib_set_mem( pid, &child->usage(), (void *)state->context_state[3], sizeof(child->usage()) );
+                    ptlib_set_mem( pid, &child->usage(), state->context_state[3], sizeof(child->usage()) );
 
                 // Is this a report about a terminated program?
                 if( !child->debugonly() )
@@ -354,7 +354,7 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
                 } else {
                     // We need to explicitly set all the arguments
                     if( ((void *)state->context_state[1])!=NULL )
-                        ptlib_set_mem( pid, &child->status(), (void *)state->context_state[1], sizeof(child->status()) );
+                        ptlib_set_mem( pid, &child->status(), state->context_state[1], sizeof(child->status()) );
 
                     ptlib_set_syscall( pid, PREF_NOP );
 

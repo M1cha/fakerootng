@@ -197,7 +197,7 @@ std::string chroot_parse_path( const pid_state *state, char *path, const std::st
     }
 }
 
-std::string chroot_translate_addr( pid_t pid, const pid_state *state, struct stat *stat, int dirfd, void *addr, bool resolve_last_link )
+std::string chroot_translate_addr( pid_t pid, const pid_state *state, struct stat *stat, int dirfd, int_ptr addr, bool resolve_last_link )
 {
     char filename[PATH_MAX], wd[PATH_MAX];
     ptlib_get_string( pid, addr, filename, sizeof(filename) );
@@ -226,7 +226,7 @@ bool chroot_translate_paramat( pid_t pid, const pid_state *state, int dirfd, int
     if( !chroot_is_chrooted(state) )
         return true;
 
-    void *path_addr=(void *)ptlib_get_argument( pid, param_num );
+    int_ptr path_addr=ptlib_get_argument( pid, param_num );
     if( path_addr==NULL ) {
         // The process asked to work directly on the file descriptor - do not touch the path
         return true;
@@ -238,7 +238,7 @@ bool chroot_translate_paramat( pid_t pid, const pid_state *state, int dirfd, int
 
     if( stat.st_ino!=(ino_t)-1 || !abort_error ) {
         strcpy( state->mem->get_loc_c()+offset, newpath.c_str() );
-        ptlib_set_argument( pid, param_num, ((int_ptr)state->mem->shared_memory)+offset );
+        ptlib_set_argument( pid, param_num, state->mem->get_shared()+offset );
     }
 
     return stat.st_ino!=(ino_t)-1;
@@ -255,7 +255,7 @@ bool sys_chroot( int sc_num, pid_t pid, pid_state *state )
         // We may already be chrooted - need to translate the path
         struct stat stat;
         ref_count<std::string> newroot(new std::string(
-                    chroot_translate_addr( pid, state, &stat, CHROOT_PWD, (void *)state->context_state[0], true )));
+                    chroot_translate_addr( pid, state, &stat, CHROOT_PWD, state->context_state[0], true )));
 
         if( (int)stat.st_ino!=-1 ) {
             // The call succeeded
