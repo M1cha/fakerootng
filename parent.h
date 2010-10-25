@@ -93,15 +93,7 @@ struct pid_state {
         {
         }
 
-        ~process_memory()
-        {
-            if( shared_mem_local!=MAP_FAILED ) {
-                dlog("%s: freeing mmap this=%p at %p\n", __func__, this, shared_mem_local );
-                munmap( (void*)(((int_ptr)shared_mem_local)-shared_overhead), shared_size );
-                
-                shared_mem_local=MAP_FAILED;
-            }
-        }
+        ~process_memory();
         
         void set_local_addr(void *addr, size_t size, size_t overhead)
         {
@@ -109,7 +101,7 @@ struct pid_state {
             if( addr!=MAP_FAILED && addr!=NULL ) {
                 shared_mem_local=(void *)(((int_ptr)addr)+overhead);
                 shared_overhead=overhead;
-                dlog("process_memory::local this=%p addr=%p\n", this, shared_mem_local );
+                shared_size=size;
             }
         }
         void set_remote_static(int_ptr addr)
@@ -198,12 +190,6 @@ struct pid_state {
         uid(ROOT_UID), euid(ROOT_UID), suid(ROOT_UID), fsuid(ROOT_UID), gid(ROOT_GID), egid(ROOT_GID), sgid(ROOT_GID), fsgid(ROOT_GID)
     {
         groups.insert(ROOT_GID);
-        dlog("pid_state constructed this=%p\n", this );
-    }
-
-    ~pid_state()
-    {
-        dlog("pid_state destructed this=%p\n", this );
     }
 };
 

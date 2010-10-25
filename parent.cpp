@@ -76,6 +76,23 @@ static MAP_CLASS<pid_t, int> root_children; // Map of all root children
 
 static int num_processes; // Number of running processes
 
+// Definitions of some methods
+pid_state::process_memory::~process_memory()
+{
+    if( shared_mem_local!=MAP_FAILED ) {
+        if( munmap( (void*)(((int_ptr)shared_mem_local)-shared_overhead), shared_size )<0 ) {
+            // Log the error, but do not otherwise do anything interesting ...
+            dlog("~process_memory: munmap( %p, %lu ) failed with %s\n", (void*)(((int_ptr)shared_mem_local)-shared_overhead),
+                    (unsigned long)shared_size, strerror(errno) );
+            // ... unless we're in debug mode :-)
+            dlog(NULL);
+            assert(false);
+        }
+
+        shared_mem_local=MAP_FAILED;
+    }
+}
+
 static void init_handlers()
 {
     // A macro for defining a system call with different syscall and handler names
