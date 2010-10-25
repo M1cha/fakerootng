@@ -1001,7 +1001,7 @@ static bool allocate_shared_mem( pid_t pid, pid_state *state )
     close(fd);
 
     // Set the shared memory class to know who we are
-    state->mem->set_local_addr(memory, ptlib_prepare_memory_len());
+    state->mem->set_local_addr(memory, shared_mem_size, ptlib_prepare_memory_len());
 
     // The local shared memory is mapped. Now we need to map the remote end
     // Generate a new system call

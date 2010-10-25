@@ -3,6 +3,7 @@
 
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <sys/mman.h>
 
 #include <list>
 #include <set>
@@ -81,9 +82,15 @@ struct pid_state {
         void *shared_memory; // Process address of shared memory
         void *shared_mem_local; // local pointers to the shared memory
         size_t shared_overhead; // Size of the overhead the shared memory has
+        size_t shared_size; // Total size of mapping
 
-        process_memory() : memory(NULL), shared_memory(NULL), shared_overhead(0)
+        process_memory() : memory(NULL), shared_memory(NULL), shared_overhead(0), shared_size(0)
         {
+        }
+
+        ~process_memory()
+        {
+            munmap( (void*)(((int_ptr)shared_mem_local)-shared_overhead), shared_size );
         }
         
     private:
@@ -92,7 +99,7 @@ struct pid_state {
         process_memory &operator=( const process_memory &rhs );
 
     public:
-        void set_local_addr(void *addr, size_t overhead)
+        void set_local_addr(void *addr, size_t size, size_t overhead)
         {
             assert(shared_mem_local==NULL);
             shared_mem_local=(void *)(((int_ptr)addr)+overhead);
