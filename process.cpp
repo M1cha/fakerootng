@@ -40,6 +40,8 @@
 bool sys_fork( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        // XXX It is not clear whether we should lock the shared memory while in this call.
+        // PROC_MEM_LOCK();
         if( ptlib_fork_enter( pid, sc_num, state->mem->get_shared(), state->mem->get_loc(), state->saved_state,
                     state->context_state+1 ) )
         {
@@ -128,6 +130,8 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state, bool &trap_after_call 
     trap_after_call=false;
 
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         state->context_state[1]=0; // Don't force error by default
 
         if( log_level>0 ) {

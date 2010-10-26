@@ -50,6 +50,8 @@ static void stat_override_copy( const ptlib_stat *stat, stat_override *override 
 bool sys_stat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         // Entering the syscall
         state->state=pid_state::RETURN;
         state->context_state[0]=ptlib_get_argument( pid, 2 ); // Store the pointer to the stat struct
@@ -124,6 +126,8 @@ bool sys_stat( int sc_num, pid_t pid, pid_state *state )
 bool sys_fstatat64( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         // Entering the syscall
         state->state=pid_state::RETURN;
         chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, (ptlib_get_argument(pid, 4)&AT_SYMLINK_NOFOLLOW)!=0 );
@@ -141,6 +145,8 @@ bool sys_fstatat64( int sc_num, pid_t pid, pid_state *state )
 static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset, int stat_function, int extra_flags=-1 )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         // First we stat the file to find out what we are up against (dev/inode etc.)
         state->state=pid_state::REDIRECT2;
         state->orig_sc=sc_num;
@@ -254,6 +260,8 @@ static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset
 bool sys_chmod( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         chroot_translate_param( pid, state, 1, true );
 
         state->context_state[2]=ptlib_get_argument( pid, 1 ); // Store the file name
@@ -275,6 +283,8 @@ bool sys_fchmod( int sc_num, pid_t pid, pid_state *state )
 bool sys_fchmodat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         // XXX At some potential future date, Linux may implement AT_SYMLINK_NOFOLLOW, at which point
         // this chroot translation will need to be reconsidered
         chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1), 2, true ); 
@@ -339,6 +349,8 @@ static bool real_chown( int sc_num, pid_t pid, pid_state *state, int own_offset,
 bool sys_chown( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         state->context_state[0]=ptlib_get_argument(pid, 2);
         state->context_state[1]=ptlib_get_argument(pid, 3);
 
@@ -351,6 +363,8 @@ bool sys_chown( int sc_num, pid_t pid, pid_state *state )
 bool sys_fchown( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         state->context_state[0]=ptlib_get_argument(pid, 2);
         state->context_state[1]=ptlib_get_argument(pid, 3);
     }
@@ -361,6 +375,8 @@ bool sys_fchown( int sc_num, pid_t pid, pid_state *state )
 bool sys_lchown( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         state->context_state[0]=ptlib_get_argument(pid, 2);
         state->context_state[1]=ptlib_get_argument(pid, 3);
 
@@ -374,6 +390,8 @@ bool sys_lchown( int sc_num, pid_t pid, pid_state *state )
 bool sys_fchownat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         state->context_state[0]=ptlib_get_argument(pid, 3);
         state->context_state[1]=ptlib_get_argument(pid, 4);
         state->context_state[2]=ptlib_get_argument(pid, 5);
@@ -471,6 +489,8 @@ static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset
 bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         chroot_translate_param( pid, state, 1, false );
 
         state->context_state[0]=ptlib_get_argument( pid, 2 ); // Mode
@@ -485,6 +505,8 @@ bool sys_mknod( int sc_num, pid_t pid, pid_state *state )
 bool sys_mknodat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, false );
 
         state->context_state[0]=ptlib_get_argument( pid, 3 ); // Mode
@@ -573,6 +595,8 @@ static bool real_open( int sc_num, pid_t pid, pid_state *state, int mode_argnum 
 bool sys_open( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         chroot_translate_param( pid, state, 1, true );
 
         state->context_state[0]=ptlib_get_argument( pid, 2 ); //flags
@@ -585,6 +609,8 @@ bool sys_open( int sc_num, pid_t pid, pid_state *state )
 bool sys_openat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, true );
 
         state->context_state[0]=ptlib_get_argument( pid, 3 ); //flags
@@ -668,6 +694,8 @@ static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset
 bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         chroot_translate_param( pid, state, 1, true );
 
         state->context_state[1]=ptlib_get_argument( pid, 1 ); // Directory name
@@ -688,6 +716,8 @@ bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
 bool sys_mkdirat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, true );
 
         state->context_state[1]=ptlib_get_argument( pid, 1 ); // File descriptor
@@ -770,6 +800,8 @@ static bool real_symlink( int sc_num, pid_t pid, pid_state *state, int mode_offs
 bool sys_symlink( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         chroot_translate_param( pid, state, 2, false );
 
         state->context_state[0]=ptlib_get_argument( pid, 2 ); // new path
@@ -782,6 +814,8 @@ bool sys_symlink( int sc_num, pid_t pid, pid_state *state )
 bool sys_symlinkat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 2 ), 3, false );
 
         state->context_state[0]=ptlib_get_argument( pid, 2 ); // dirfd
@@ -795,6 +829,8 @@ bool sys_symlinkat( int sc_num, pid_t pid, pid_state *state )
 bool sys_getcwd( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         state->state=pid_state::RETURN;
 
         // If the process is chrooted, we need to translate the directory name
@@ -975,6 +1011,8 @@ bool sys_link( int sc_num, pid_t pid, pid_state *state )
 {
     // XXX lock memory
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         state->state=pid_state::RETURN;
 
         // Translate the "oldpath"
@@ -992,8 +1030,9 @@ bool sys_link( int sc_num, pid_t pid, pid_state *state )
 #if HAVE_OPENAT
 bool sys_linkat( int sc_num, pid_t pid, pid_state *state )
 {
-    // XXX lock memory
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         state->state=pid_state::RETURN;
 
         // Translate the "oldpath"
@@ -1019,8 +1058,8 @@ bool sys_linkat( int sc_num, pid_t pid, pid_state *state )
 // 2 - 0: just delete. 1: need to mark for deletion from the override db as well
 bool sys_unlink( int sc_num, pid_t pid, pid_state *state )
 {
-    // XXX lock memory
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
 
         state->context_state[0]=0; // Beginning of syscall
         state->context_state[1]=0; // No forced error
@@ -1151,8 +1190,8 @@ bool sys_unlink( int sc_num, pid_t pid, pid_state *state )
 // XXX Some code duplication with above function
 bool sys_unlinkat( int sc_num, pid_t pid, pid_state *state )
 {
-    // XXX lock memory
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
 
         state->context_state[0]=(ptlib_get_argument(pid, 3)&AT_REMOVEDIR)==0 ? 0 : 10; // Beginning of syscall
         state->context_state[1]=0; // No forced error
@@ -1283,11 +1322,11 @@ bool sys_unlinkat( int sc_num, pid_t pid, pid_state *state )
 }
 #endif // HAVE_OPENAT
 
-// XXX BUG Since it is possible that the file is renamed across a device boundry, we really need to make sure we properly copy
-// the override attributes with the file. We also possibly need to erase the old override entry
 bool sys_rename( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         state->state=pid_state::RETURN;
 
         chroot_translate_param( pid, state, 1, false, false, 0 );
@@ -1303,6 +1342,8 @@ bool sys_rename( int sc_num, pid_t pid, pid_state *state )
 bool sys_renameat( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         state->state=pid_state::RETURN;
 
         chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1), 2, false, false, 0 );
@@ -1318,6 +1359,8 @@ bool sys_renameat( int sc_num, pid_t pid, pid_state *state )
 bool sys_rmdir( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         chroot_translate_param( pid, state, 1, false );
 
         // Keep a copy of the directory name to erase
@@ -1386,6 +1429,8 @@ bool sys_rmdir( int sc_num, pid_t pid, pid_state *state )
 bool sys_generic_chroot_at( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         state->state=pid_state::RETURN;
 
         chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, true );
@@ -1399,6 +1444,8 @@ bool sys_generic_chroot_at( int sc_num, pid_t pid, pid_state *state )
 bool sys_generic_chroot_link_at( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         state->state=pid_state::RETURN;
 
         chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, false );
@@ -1413,6 +1460,8 @@ bool sys_generic_chroot_link_at( int sc_num, pid_t pid, pid_state *state )
 bool sys_generic_chroot_at_link4( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         state->state=pid_state::RETURN;
 
         chroot_translate_paramat( pid, state, ptlib_get_argument( pid, 1 ), 2, (ptlib_get_argument( pid, 4)&AT_SYMLINK_NOFOLLOW)==0 );

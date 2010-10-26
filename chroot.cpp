@@ -277,6 +277,8 @@ bool sys_chroot( int sc_num, pid_t pid, pid_state *state )
 bool sys_generic_chroot_support_param1( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         state->state=pid_state::RETURN;
 
         chroot_translate_param( pid, state, 1, true );
@@ -291,6 +293,8 @@ bool sys_generic_chroot_support_param1( int sc_num, pid_t pid, pid_state *state 
 bool sys_generic_chroot_support_link_param1( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         state->state=pid_state::RETURN;
 
         chroot_translate_param( pid, state, 1, false );
@@ -304,6 +308,8 @@ bool sys_generic_chroot_support_link_param1( int sc_num, pid_t pid, pid_state *s
 bool sys_generic_chroot_support_param2( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
+        PROC_MEM_LOCK();
+
         state->state=pid_state::RETURN;
 
         chroot_translate_param( pid, state, 2, true );

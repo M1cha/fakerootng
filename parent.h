@@ -218,4 +218,6 @@ bool allocate_process_mem( pid_t pid, pid_state *state, int sc_num );
 
 void dump_registers( pid_t pid );
 
+#define PROC_MEM_LOCK()
+
 #endif /* PARENT_H */
