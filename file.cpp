@@ -141,10 +141,6 @@ bool sys_fstatat64( int sc_num, pid_t pid, pid_state *state )
 static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset, int stat_function, int extra_flags=-1 )
 {
     if( state->state==pid_state::NONE ) {
-        if( state->mem->get_mem()==NULL ) {
-            return allocate_process_mem( pid, state, sc_num );
-        }
-
         // First we stat the file to find out what we are up against (dev/inode etc.)
         state->state=pid_state::REDIRECT2;
         state->orig_sc=sc_num;
@@ -297,11 +293,6 @@ static bool real_chown( int sc_num, pid_t pid, pid_state *state, int own_offset,
 {
     // XXX Do we handle the mode change following a chown (file and directory) correctly?
     if( state->state==pid_state::NONE ) {
-        // We're going to need memory
-        if( state->mem->get_mem()==NULL ) {
-            return allocate_process_mem( pid, state, sc_num );
-        }
-
         // Map this to a stat operation
         ptlib_set_argument( pid, own_offset+1, state->mem->get_mem() );
 
@@ -347,7 +338,7 @@ static bool real_chown( int sc_num, pid_t pid, pid_state *state, int own_offset,
 
 bool sys_chown( int sc_num, pid_t pid, pid_state *state )
 {
-    if( state->state==pid_state::NONE && state->mem->get_mem()!=NULL ) {
+    if( state->state==pid_state::NONE ) {
         state->context_state[0]=ptlib_get_argument(pid, 2);
         state->context_state[1]=ptlib_get_argument(pid, 3);
 
@@ -369,7 +360,7 @@ bool sys_fchown( int sc_num, pid_t pid, pid_state *state )
 
 bool sys_lchown( int sc_num, pid_t pid, pid_state *state )
 {
-    if( state->state==pid_state::NONE && state->mem->get_mem()!=NULL ) {
+    if( state->state==pid_state::NONE ) {
         state->context_state[0]=ptlib_get_argument(pid, 2);
         state->context_state[1]=ptlib_get_argument(pid, 3);
 
@@ -397,11 +388,6 @@ bool sys_fchownat( int sc_num, pid_t pid, pid_state *state )
 static bool real_mknod( int sc_num, pid_t pid, pid_state *state, int mode_offset, int stat_function, int extra_flags=-1 )
 {
     if( state->state==pid_state::NONE ) {
-        // Will need memory
-        if( state->mem->get_mem()==NULL ) {
-            return allocate_process_mem(pid, state, sc_num);
-        }
-
         mode_t mode=(mode_t)state->context_state[0];
 
         // Remove SUID and add user read and write
@@ -611,10 +597,6 @@ bool sys_openat( int sc_num, pid_t pid, pid_state *state )
 static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset, int stat_function, int extra_flags=-1 )
 {
     if( state->state==pid_state::NONE ) {
-        // Will need memory
-        if( state->mem->get_mem()==NULL )
-            return allocate_process_mem( pid, state, sc_num );
-
         // Make sure user has rwx on the created directory
         state->context_state[0]=ptlib_get_argument( pid, mode_offset+1 );
 
@@ -685,7 +667,7 @@ static bool real_mkdir( int sc_num, pid_t pid, pid_state *state, int mode_offset
 
 bool sys_mkdir( int sc_num, pid_t pid, pid_state *state )
 {
-    if( state->state==pid_state::NONE && state->mem->get_mem()!=NULL ) {
+    if( state->state==pid_state::NONE ) {
         chroot_translate_param( pid, state, 1, true );
 
         state->context_state[1]=ptlib_get_argument( pid, 1 ); // Directory name
@@ -787,7 +769,7 @@ static bool real_symlink( int sc_num, pid_t pid, pid_state *state, int mode_offs
 
 bool sys_symlink( int sc_num, pid_t pid, pid_state *state )
 {
-    if( state->state==pid_state::NONE && state->mem->get_mem()!=NULL ) {
+    if( state->state==pid_state::NONE ) {
         chroot_translate_param( pid, state, 2, false );
 
         state->context_state[0]=ptlib_get_argument( pid, 2 ); // new path
@@ -813,10 +795,6 @@ bool sys_symlinkat( int sc_num, pid_t pid, pid_state *state )
 bool sys_getcwd( int sc_num, pid_t pid, pid_state *state )
 {
     if( state->state==pid_state::NONE ) {
-        // Will need memory
-        if( state->mem->get_mem()==NULL )
-            return allocate_process_mem( pid, state, sc_num );
-
         state->state=pid_state::RETURN;
 
         // If the process is chrooted, we need to translate the directory name
@@ -891,6 +869,7 @@ bool sys_munmap( int sc_num, pid_t pid, pid_state *state )
         // If end wraps around then the kernel will fail this anyways
         // Same goes if the page size is not aligned or the length is zero
         if( start>end || (start%sysconf(_SC_PAGESIZE))!=0 || start==end )
+            // XXX We still need to fail this ourselves, just to make sure
             return true;
 
         // Put the lower of the two addreses in addr1
