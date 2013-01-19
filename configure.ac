@@ -71,9 +71,9 @@ dnl Check which std::map variant to use
 AC_LANG_PUSH(C++)
 #AC_LANG_WERROR
 
-AC_MSG_CHECKING([whether compiler supports the upcoming ISO C++ standard])
+AC_MSG_CHECKING([whether compiler supports the ISO C++11 standard])
 saved_CXXFLAGS=$CXXFLAGS
-CXXFLAGS="$CXXFLAGS -std=c++0x"
+CXXFLAGS="$CXXFLAGS -std=c++11"
 AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
         #include <stdio.h>
         ],
@@ -82,8 +82,19 @@ AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
         AC_MSG_RESULT([yes])
     ],
     [
-        AC_MSG_RESULT([no])
-        CXXFLAGS="$saved_CXXFLAGS"
+        CXXFLAGS="$saved_CXXFLAGS -std=c++0x"
+        AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
+                #include <stdio.h>
+                ],
+                [ printf("Hello, world\n"); ])],
+            [
+                AC_MSG_RESULT([yes])
+            ],
+            [
+                AC_MSG_RESULT([no])
+                CXXFLAGS="$saved_CXXFLAGS"
+            ]
+        )
     ]
 )
 

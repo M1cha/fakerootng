@@ -64,7 +64,7 @@ void load_map( FILE *file )
     stat_override override;
     int params;
 
-    while( (params=fscanf(file, "dev="DEV_F", ino="INODE_F", mode=%o, uid=%d, gid=%d, rdev="DEV_F" \n", &override.dev, &override.inode,
+    while( (params=fscanf(file, "dev=" DEV_F ", ino=" INODE_F ", mode=%o, uid=%d, gid=%d, rdev=" DEV_F " \n", &override.dev, &override.inode,
             &override.mode, &override.uid, &override.gid, &override.dev_id ))==6 )
     {
         set_map( &override );
@@ -78,7 +78,7 @@ void save_map( FILE *file )
 
         override=&(i->second);
         if( !override->transient ) {
-            fprintf( file, "dev="DEV_F",ino="INODE_F",mode=%o,uid=%d,gid=%d,rdev="DEV_F"\n", override->dev, override->inode,
+            fprintf( file, "dev=" DEV_F ",ino=" INODE_F ",mode=%o,uid=%d,gid=%d,rdev=" DEV_F "\n", override->dev, override->inode,
                     override->mode, override->uid, override->gid, override->dev_id );
         }
     }

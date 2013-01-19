@@ -22,6 +22,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+
 #include <errno.h>
 #include <limits.h>
 #include <string.h>
@@ -102,6 +103,7 @@ bool sys_clone( int sc_num, pid_t pid, pid_state *state )
         // Whatever it originally was, add a CLONE_PTRACE to the flags so that we remain in control
         flags|=CLONE_PTRACE;
         flags&=~CLONE_UNTRACED; // Reset the UNTRACED flag
+
         ptlib_set_argument( pid, 1, flags );
     } else if( state->state==pid_state::RETURN ) {
         // Was the call successful?
@@ -109,7 +111,7 @@ bool sys_clone( int sc_num, pid_t pid, pid_state *state )
 
         if( ptlib_success( pid, state->orig_sc ) ) {
             pid_t newpid=(pid_t)ptlib_get_retval( pid );
-            dlog(PID_F": clone succeeded, new process "PID_F"\n", pid, newpid );
+            dlog(PID_F": clone succeeded, new process " PID_F "\n", pid, newpid );
             handle_new_process( pid, newpid );
         } else {
             dlog(PID_F": clone failed: %s\n", pid, strerror( ptlib_get_error( pid, state->orig_sc ) ) );
@@ -137,7 +139,7 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state, bool &trap_after_call 
         if( log_level>0 ) {
             char cmd[PATH_MAX];
             ptlib_get_string( pid, ptlib_get_argument( pid, 1 ), cmd, sizeof(cmd) );
-            dlog("execve: "PID_F" calling execve for executing %s\n", pid, cmd );
+            dlog("execve: " PID_F " calling execve for executing %s\n", pid, cmd );
             dlog(NULL);
         }
 
@@ -160,7 +162,7 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state, bool &trap_after_call 
             state->state=pid_state::NONE;
 
             if( ptlib_success( pid, sc_num ) && state->context_state[1]==0 ) {
-                dlog("execve: "PID_F" successfully execed a new command\n", pid );
+                dlog("execve: " PID_F " successfully execed a new command\n", pid );
 
                 // All memory allocations performed before the exec are now null and void
                 state->mem=ref_count<pid_state::process_memory>(new pid_state::process_memory);
@@ -177,15 +179,15 @@ bool sys_execve( int sc_num, pid_t pid, pid_state *state, bool &trap_after_call 
                 }
 #endif
             } else if( state->context_state[1]!=0 ) {
-                dlog("execve: "PID_F" chroot translation forced error on us: %s\n", pid, strerror(state->context_state[1]) );
+                dlog("execve: " PID_F " chroot translation forced error on us: %s\n", pid, strerror(state->context_state[1]) );
 
                 ptlib_set_error( pid, state->orig_sc, state->context_state[1] );
             } else {
-                dlog("execve: "PID_F" failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)) );
+                dlog("execve: " PID_F " failed with error %s\n", pid, strerror(ptlib_get_error(pid, sc_num)) );
             }
         } else {
             state->state=pid_state::NONE;
-            dlog("execve: "PID_F" absorbed dummy SIGTRAP after successful execve\n", pid );
+            dlog("execve: " PID_F " absorbed dummy SIGTRAP after successful execve\n", pid );
             
             // If the trace mode is not SYSCALL, the post handling will not generate a TRACE. If PTLIB_TRAP_AFTER_EXEC is set,
             // a trace is required, however, even if not in TRACE_SYSCALL
@@ -330,7 +332,7 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
                 if( child_state->state==pid_state::ZOMBIE ) {
                     // We can dispense with the pid entry
                     delete_state(child->pid());
-                    dlog("%s: Child "PID_F" removed from process table\n", __func__, child->pid() );
+                    dlog("%s: Child " PID_F " removed from process table\n", __func__, child->pid() );
                     child_state=NULL;
                 }
 
@@ -369,7 +371,7 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
 
                 state->state=pid_state::REDIRECT2;
             } else {
-                dlog("wait4: "PID_F" hanged in wait for %d\n", pid, wait_pid );
+                dlog("wait4: " PID_F " hanged in wait for %d\n", pid, wait_pid );
             }
         }
         
