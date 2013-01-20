@@ -29,7 +29,7 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 
-#include MAP_INCLUDE
+#include <unordered_map>
 #include <set>
 
 #include <stdio.h>
@@ -52,20 +52,20 @@
 static bool handle_memory_allocation( int sc_num, pid_t pid, pid_state *state );
 
 // Keep track of handled syscalls
-static MAP_CLASS<int, syscall_hook> syscalls;
+static std::unordered_map<int, syscall_hook> syscalls;
 
 // Keep track of the states for the various processes
-template <class key, class data> class map_class : public  MAP_CLASS<key, data> 
+template <class key, class data> class map_class : public  std::unordered_map<key, data> 
 {
     // Inherit everything, just disable the dangerous operator[]
 public:
     data &operator[] (const key &k)
     {
-        return MAP_CLASS<key,data>::operator[] (k);
+        return std::unordered_map<key,data>::operator[] (k);
     }
     const data &operator[] ( const key &k) const
     {
-        return MAP_CLASS<key,data>::operator[] (k);
+        return std::unordered_map<key,data>::operator[] (k);
     }
 };
 
@@ -73,7 +73,7 @@ static map_class<pid_t, pid_state> state;
 
 size_t static_mem_size, shared_mem_size;
 
-static MAP_CLASS<pid_t, int> root_children; // Map of all root children
+static std::unordered_map<pid_t, int> root_children; // Map of all root children
 
 static int num_processes; // Number of running processes
 
@@ -473,7 +473,7 @@ static void handle_exit( pid_t pid, int status, const struct rusage &usage )
     // We need to delete all child zombie processes. This means changing the list while scanning it.
     // Instead, create a list of pids to delete
     std::set<pid_t> need_delete;
-    for( MAP_CLASS<pid_t, pid_state>::iterator i=state.begin(); i!=state.end(); ++i ) {
+    for( std::unordered_map<pid_t, pid_state>::iterator i=state.begin(); i!=state.end(); ++i ) {
         if( i->second.parent==pid ) {
             dlog("Reparenting process %d to init from %d\n", i->first, pid);
             i->second.parent=1;
@@ -748,7 +748,7 @@ int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long
             handle_exit(pid, status, rusage );
             
             // If this was a root child, we may need to perform notification of exit status
-            MAP_CLASS<pid_t, int>::iterator root_child=root_children.find(pid);
+            std::unordered_map<pid_t, int>::iterator root_child=root_children.find(pid);
             if( root_child!=root_children.end() ) {
                 if( root_child->second!=-1 ) {
                     write( root_child->second, &status, sizeof(status) );
@@ -1264,7 +1264,7 @@ bool sys_mmap( int sc_num, pid_t pid, pid_state *state )
 }
 
 pid_state *lookup_state( pid_t pid ) {
-    MAP_CLASS<pid_t, pid_state>::iterator process=state.find(pid);
+    std::unordered_map<pid_t, pid_state>::iterator process=state.find(pid);
 
     if( process!=state.end() ) {
         return &process->second;

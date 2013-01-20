@@ -19,7 +19,7 @@
 */
 #include "config.h"
 
-#include MAP_INCLUDE
+#include <unordered_map>
 
 #include <sys/types.h>
 #include <unistd.h>
@@ -30,7 +30,7 @@ struct db_key_hash {
     size_t operator()(const override_key &key) const { return key.inode; };
 };
 
-typedef MAP_CLASS<override_key, stat_override, db_key_hash> file_hash;
+typedef std::unordered_map<override_key, stat_override, db_key_hash> file_hash;
 
 static file_hash map_hash;
 
