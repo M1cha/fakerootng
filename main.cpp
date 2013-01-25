@@ -40,26 +40,7 @@
 #include "arch/platform.h"
 #include "parent.h"
 #include "file_lie.h"
-
-static FILE *debug_log;
-int log_level;
-bool log_flush=false;
-
-void __dlog_( const char *format, ... )
-{
-    if( debug_log!=NULL ) {
-        if( format!=NULL ) {
-            va_list params;
-
-            va_start(params, format);
-            vfprintf(debug_log, format, params);
-            va_end(params);
-        }
-        if( format==NULL || log_flush ) {
-            fflush( debug_log );
-        }
-    }
-}
+#include "log.h"
 
 static void print_version(void)
 {
@@ -90,6 +71,8 @@ static char orig_wd[PATH_MAX];
 int parse_options( int argc, char *argv[] )
 {
     int opt;
+    const char * logfile=NULL;
+    bool log_flush=false;
 
     while( (opt=getopt(argc, argv, "+p:l:dvfh" ))!=-1 ) {
         switch( opt ) {
@@ -101,16 +84,8 @@ int parse_options( int argc, char *argv[] )
             }
             break;
         case 'l':
-            if( debug_log==NULL ) {
-                debug_log=fopen(optarg, "wt");
-
-                if( debug_log==NULL ) {
-                    perror("fakeroot-ng: Could not open debug log");
-
-                    return -1;
-                } else {
-                    log_level=1;
-                }
+            if( logfile==NULL ) {
+                logfile=optarg;
             } else {
                 fprintf(stderr, "-l option given twice\n");
 
@@ -139,6 +114,18 @@ int parse_options( int argc, char *argv[] )
             break;
         }
     }
+
+    if( log_flush && logfile==NULL ) {
+        fprintf( stderr, "%s: -f makes no sense if -l is not also given\n", argv[0] );
+        return -1;
+    }
+
+    if( logfile && ! init_log( logfile, log_flush ) ) {
+        perror( "Failed to create log file" );
+
+        return -1;
+    }
+
     return optind;
 }
 
@@ -229,9 +216,7 @@ static void perform_debugger( int child_socket, int master_socket )
         // Close all open file descriptors except child_socket, parent_socket and the debug_log (if it exists)
         // Do not close the file handles, nor chdir to root, if in debug mode. This is so that more debug info
         // come out and that core can be dumped
-        int fd=-1;
-        if( debug_log!=NULL )
-            fd=fileno(debug_log);
+        int fd=get_log_fd();
 
         for( int i=0; i<getdtablesize(); ++i ) {
             if( i!=child_socket && i!=master_socket && i!=fd )
@@ -289,8 +274,7 @@ static void perform_debugger( int child_socket, int master_socket )
 static int real_perform_child( int child_socket, char *argv[], int internal_pipe )
 {
     // Don't leave the log file open for the program to come
-    if( debug_log!=NULL )
-        fclose(debug_log);
+    close_log();
 
     // Send the debugger who we are
     pid_t us=getpid();
