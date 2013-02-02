@@ -22,6 +22,8 @@ bool init_log( const char * file_name, bool flush )
         } else {
             log_level=1;
         }
+
+        log_flush=flush;
     }
 
     return true;
