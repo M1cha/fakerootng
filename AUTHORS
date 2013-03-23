@@ -1,4 +1,4 @@
-fakeroot-ng is copyright (c) 2007-2009 by Shachar Shemesh
+fakeroot-ng is copyright (c) 2007-2009,2013 by Shachar Shemesh
 
 Project's home page is at http://fakeroot-ng.lingnu.com
 
@@ -48,5 +48,4 @@ main limitation - its inability to catch the open(2) system call, and therefor
 its inability to emulate the "chroot" environment. It does not, however, change
 the core technology used, and therefor has limitations over how complete the
 environment is. It is hoped that as fakeroot-ng progresses, we can eliminate
-all of the limitations libchroot lists in its home page except this one:
- * /lib/ld-linux.so.2 is always loaded from real environment.
+all of the limitations.
