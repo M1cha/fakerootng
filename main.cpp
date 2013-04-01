@@ -19,26 +19,17 @@
 */
 #include "config.h"
 
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/mman.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <errno.h>
-
-#include <limits.h>
-#include <string.h>
-
+#include <string>
 #include <memory>
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <limits.h>
+
+#include <sys/mman.h>
+#include <unistd.h>
+
 #include "arch/platform.h"
-#include "parent.h"
-#include "file_lie.h"
 #include "log.h"
 #include "daemon.h"
 

@@ -19,33 +19,19 @@
 */
 #include "config.h"
 
-#include <sys/types.h>
-#include <sys/time.h>
-#include <sys/resource.h>
-#include <sys/wait.h>
-#include <sys/ptrace.h>
-#include <sys/syscall.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <sys/socket.h>
-
 #include <unordered_map>
-#include <set>
 
-#include <stdio.h>
-#include <assert.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <unistd.h>
-
-#include <limits.h>
 #include <string.h>
-#include <stdlib.h>
+#include <limits.h>
+
+#include <sys/types.h>
+#include <sys/ptrace.h>
+#include <signal.h>
+#include <fcntl.h>
 
 #include "arch/platform.h"
-
-#include "syscalls.h"
 #include "parent.h"
+#include "syscalls.h"
 #include "process.h"
 #include "daemon.h"
 
