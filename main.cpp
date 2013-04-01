@@ -21,7 +21,6 @@
 
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <sys/ptrace.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -41,6 +40,7 @@
 #include "parent.h"
 #include "file_lie.h"
 #include "log.h"
+#include "daemon.h"
 
 static void print_version(void)
 {
@@ -191,128 +191,35 @@ static bool sanity_check()
     return true;
 }
 
-static void perform_debugger( int child_socket, int master_socket )
-{
-    // Daemonize ourselves
-    setsid();
-    dlog("Debugger started\n");
-
-    // Fill in the file_lie database from persistent file (if relevant)
-    if( persistent_file ) {
-        FILE *file=fopen(persistent_file, "rt");
-
-        if( file!=NULL ) {
-            dlog("Opened persistent file %s\n", persistent_file );
-
-            load_map( file );
-
-            fclose(file);
-        } else {
-            dlog("Couldn't open persistent file %s - %s\n", persistent_file, strerror(errno) );
-        }
-    }
-
-    if( !nodetach ) {
-        // Close all open file descriptors except child_socket, parent_socket and the debug_log (if it exists)
-        // Do not close the file handles, nor chdir to root, if in debug mode. This is so that more debug info
-        // come out and that core can be dumped
-        int fd=get_log_fd();
-
-        for( int i=0; i<getdtablesize(); ++i ) {
-            if( i!=child_socket && i!=master_socket && i!=fd )
-                close(i);
-        }
-
-        // Re-open the std{in,out,err}
-        fd=open("/dev/null", O_RDWR);
-        if( fd==0 ) { // Otherwise we somehow failed to close everything
-            dup(fd);
-            dup(fd);
-        }
-
-        // Chdir out of the way of everyone
-        chdir("/");
-    }
-
-    errno=0;
-    pid_t child;
-    if( read( child_socket, &child, sizeof(child) )==sizeof(child) ) {
-        attach_debugger( child, child_socket );
-        process_children( master_socket );
-    } else {
-        // Oops - no data?
-        dlog("Process ID not sent correctly - debugger received error on read: %s\n", strerror(errno) );
-
-        exit(2);
-    }
-
-    if( persistent_file ) {
-        // Switch to the original work directory, so all relative paths work
-        if( chdir( orig_wd )==0 ) {
-            FILE *file=fopen(persistent_file, "w");
-
-            if( file!=NULL ) {
-                dlog("Saving persitent state to %s\n", persistent_file );
-                save_map( file );
-
-                fclose(file);
-            } else {
-                dlog("Failed to open persistent file %s for saving - %s\n", persistent_file, strerror(errno) );
-            }
-
-            // Remove the unix socket
-            struct sockaddr_un sa;
-
-            snprintf( sa.sun_path, sizeof(sa.sun_path), "%s.run", persistent_file );
-            unlink( sa.sun_path );
-        }
-    }
-
-    exit(0);
-}
-
-static int real_perform_child( int child_socket, char *argv[], int internal_pipe )
+static int real_perform_child( daemonCtrl &daemon_ctrl, char *argv[] )
 {
     // Don't leave the log file open for the program to come
     close_log();
 
-    // Send the debugger who we are
-    pid_t us=getpid();
-    if( write( child_socket, &us, sizeof(us) )<0 ) {
-        perror("Couldn't send the process ID to the debugger");
-
-        return 2;
-    }
-
-    // Halt until the pipe tells us we can perform the exec
-    char buffer;
-    if( read( child_socket, &buffer, 1 )==1 ) {
-        close( child_socket );
-
-        // We may have a parent that also needs the socket. Mark to it that it is now ok to read from it
-        if( internal_pipe>=0 ) {
-            close( internal_pipe );
-        }
-
-        // Mark the fact that we are ready to the debugger
-        kill( getpid(), SIGUSR1 );
+    try {
+        daemon_ctrl.cmd_attach();
 
         execvp(argv[0], argv);
 
-        perror("Exec failed");
+        perror("Fakeroot-ng exec failed");
+    } catch( const errno_exception &exception ) {
+        fprintf(stderr, "%s: %s\n", exception.what(), exception.get_error_message() );
+    } catch( const std::exception &exception ) {
+        fprintf(stderr, "Fatal error: %s\n", exception.what() );
     }
 
     return 2;
 }
 
 #if PTLIB_PARENT_CAN_WAIT
-static int perform_child( int child_socket, char *argv[] )
+static int perform_child( daemonCtrl & daemon_ctrl, char *argv[] )
 {
-    return real_perform_child( child_socket, argv, -1 );
+    return real_perform_child( daemon_ctrl, argv );
 }
 #else
 // Parent cannot wait on debugged child
-static int perform_child( int child_socket, char *argv[] )
+#error Stale code
+static int perform_child( daemonCtrl & daemon_ctrl, char *argv[] )
 {
     int pipes[2];
     pipe(pipes);
@@ -326,7 +233,7 @@ static int perform_child( int child_socket, char *argv[] )
     } else if( child==0 ) {
         // We are the child
         close( pipes[0] );
-        return real_perform_child( child_socket, argv, pipes[1] );
+        return real_perform_child( daemon_ctrl, argv, pipes[1] );
     }
 
     // We are the parent.
@@ -392,98 +299,11 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    int master_socket=-1; // Socket fd needs to persist outside the creation location
-    bool launch_debugger=true; // Whether to start a debugger process
-    sockaddr_un sa;
+    try {
+        daemonCtrl daemon_ctrl(persistent_file, nodetach);
 
-    if( persistent_file ) {
-        // We have a state to keep
-        // Another thing we do if a persistent file was specified is to create a communication socket
-        master_socket=socket(PF_UNIX, SOCK_SEQPACKET, 0);
-        if( master_socket==-1 ) {
-            // Couldn't create a socket
-            perror("Unix socket creation error");
-            exit(1);
-        }
-
-        sa.sun_family=AF_UNIX;
-        snprintf( sa.sun_path, sizeof(sa.sun_path), "%s.run", persistent_file );
-
-        // For all we know, the socket may already exist, which means we need not be the debugger
-        if( connect(master_socket, (const struct sockaddr *) &sa, sizeof(sa) )<0 ) {
-            // The socket doesn't exist - create it
-            unlink( sa.sun_path ); // Erase it if it already existed
-            if( bind( master_socket, (const struct sockaddr *) &sa, sizeof(sa) )<0 ) {
-                // Binding failed
-                perror("Couldn't bind state socket");
-                exit(1);
-            }
-
-            listen( master_socket, 10 );
-        } else {
-            // The socket already exist - another process is the debugger
-            launch_debugger=false;
-        }
+        return perform_child( daemon_ctrl, argv+opt_offset );
+    } catch( const std::exception &exception ) {
+        fprintf( stderr, "Execution failed with error %s\n", exception.what() );
     }
-
-    // We create an extra child to do the actual debugging, while the parent waits for the running child to exit.
-    // No state to keep
-    int sockets[2]={-1, -1}; 
-
-    if( launch_debugger ) {
-        if( socketpair( PF_UNIX, SOCK_SEQPACKET, 0, sockets )<0 ) {
-            perror("Child socket creation error");
-
-            return 2;
-        }
-
-        pid_t debugger=fork();
-
-        if( debugger<0 ) {
-            perror("Failed to create debugger process");
-
-            exit(1);
-        }
-
-        if( debugger==0 ) {
-            close(sockets[0]);
-
-            // We are the child, but we want to be the grandchild
-            debugger=fork();
-
-            if( debugger<0 ) {
-                perror("Failed to create debugger sub-process");
-
-                exit(1);
-            }
-
-            if( debugger==0 ) {
-                perform_debugger( sockets[1], master_socket );
-            }
-
-            exit(0);
-        }
-
-        // Wait for our child to exit
-        int status;
-
-        wait(&status);
-
-        if( !WIFEXITED(status) || WEXITSTATUS(status)!=0 ) {
-            fprintf(stderr, "Exiting without running process\n");
-
-            exit(1);
-        }
-
-        close( sockets[1] );
-    } else {
-        // We are not launching the debugger. master_socket contains our connected socket to the real debugger
-        sockets[0]=dup(master_socket);
-    }
-
-    // We are the parent. We no longer need the listening socket
-    close(master_socket);
-    master_socket=-1;
-
-    return perform_child( sockets[0], argv+opt_offset );
 }

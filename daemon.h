@@ -1,0 +1,107 @@
+#ifndef DAEMON_H
+#define DAEMON_H
+
+#include "exceptions.h"
+
+#include <list>
+
+#include <sys/select.h>
+
+class daemonProcess;
+template <class T> class ipcMessage;
+
+// Connect to the daemon, launching it if necessary, and return the connection fd
+class daemonCtrl {
+    daemonCtrl( const daemonCtrl & )=delete;
+    daemonCtrl & operator=( const daemonCtrl & )=delete;
+
+    friend class daemonProcess;
+
+    enum commands {
+        CMD_RESERVE,
+        CMD_ATTACH
+    };
+
+    struct request {
+        enum commands command;
+    };
+
+    struct response {
+        enum commands command;
+        int result;
+    };
+public:
+    class terminal_error : public detailed_exception {
+    public:
+        terminal_error( const char * msg ) : detailed_exception(msg)
+        {
+        }
+    };
+
+    class remote_hangup_exception : public terminal_error {
+    public:
+        remote_hangup_exception() : terminal_error( "Remote hung up" )
+        {}
+    };
+
+    class short_msg_exception : public terminal_error {
+    public:
+        short_msg_exception() : terminal_error( "Remote sent short message" )
+        {}
+    };
+
+private:
+    int daemon_socket;
+public:
+    daemonCtrl(const char *state_file_path, bool nodetach);
+    ~daemonCtrl();
+
+    void cmd_attach();
+private:
+    void connect( const char * state_file_path );
+    // Standard commands are commands with no reply other than "ACK"
+    void send_std_cmd( commands command, ipcMessage<response> &response ) const;
+
+    static void set_client_sock_options( int fd );
+
+    void cmd_reserve();
+};
+
+class daemonProcess {
+    daemonProcess( const daemonProcess & )=delete;
+    daemonProcess & operator=( const daemonProcess & )=delete;
+
+    std::list<int> session_fds;
+    int master_socket;
+    fd_set file_set;
+    int max_fd;
+
+    static bool daemonize( int skip_fd, bool nodetach );
+
+    explicit daemonProcess( int session_fd ); // Constructor for non-persistent daemon
+    explicit daemonProcess( const char *path ); // Constructor for persistent daemon
+
+public:
+    // XXX ~daemonProcess();
+
+    // Create an anonymous daemon process, returning the connection file descriptor
+    static int create( bool nodetach );
+    static void create( const char *state_file_path, bool nodetach );
+
+    bool handle_request( const sigset_t *sigmask );
+    static void set_client_sock_options( int fd );
+
+private:
+    void start();
+    void register_session( int fd );
+    void unregister_Session( int fd );
+    void handle_new_connection();
+    void recalc_select_mask();
+    void close_session( std::list<int>::iterator & element );
+
+    void handle_connection_request( std::list<int>::iterator & element );
+    void handle_cmd_reserve( std::list<int>::iterator & element, const ipcMessage<daemonCtrl::request> &message );
+    void handle_cmd_attach( std::list<int>::iterator & element, const ipcMessage<daemonCtrl::request> &message );
+};
+
+#endif // DAEMON_H

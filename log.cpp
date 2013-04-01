@@ -13,7 +13,7 @@ static FILE *debug_log;
 bool init_log( const char * file_name, bool flush )
 {
     if( debug_log==NULL ) {
-        debug_log=fopen(file_name, "wt");
+        debug_log=fopen(file_name, "at");
 
         if( debug_log==NULL ) {
             perror("fakeroot-ng: Could not open debug log");

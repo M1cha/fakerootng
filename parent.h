@@ -19,8 +19,9 @@
 
 extern size_t static_mem_size, shared_mem_size;
 
-bool attach_debugger( pid_t child, int socket );
-int process_children( int master_socket );
+bool attach_debugger( pid_t child );
+class daemonProcess;
+int process_children( daemonProcess *daemon );
 int process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long ret );
 
 // Called whenever a new process is created

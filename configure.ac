@@ -28,7 +28,7 @@ AC_LANG(C)
 # Checks for header files.
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
-AC_CHECK_HEADERS([fcntl.h limits.h stdlib.h string.h sys/time.h unistd.h])
+AC_CHECK_HEADERS([fcntl.h limits.h stdlib.h string.h sys/time.h unistd.h sys/socket.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDBOOL
@@ -146,7 +146,8 @@ AC_FUNC_FORK
 AC_FUNC_LSTAT
 AC_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK
 AC_FUNC_VPRINTF
-AC_CHECK_FUNCS([getcwd mkdir strchr strerror])
+AC_FUNC_MMAP
+AC_CHECK_FUNCS([ftruncate getcwd memset mkdir munmap socket strchr strerror strtoul])
 
 AC_MSG_CHECKING([whether openat class functions are supported])
 AC_COMPILE_IFELSE(
@@ -220,5 +221,9 @@ fi
 ]
 
 dnl We generate all Makefiles for all platforms, and then only invoke those for the platforms we need
-AC_CONFIG_FILES([Makefile tests/Makefile arch/Makefile arch/$target_os/Makefile.template arch/$target_os/$target_cpu/Makefile])
+AC_CONFIG_FILES([Makefile
+        tests/Makefile
+        arch/Makefile
+        arch/$target_os/Makefile.template
+        arch/$target_os/$target_cpu/Makefile])
 AC_OUTPUT
