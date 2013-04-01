@@ -9,7 +9,7 @@ int main( int argc, char *argv[] )
     int numchildren=1;
 
     if( argc==2 ) {
-        numchildren=strtoul( argv[1], 0, NULL );
+        numchildren=strtoul( argv[1], NULL, 0 );
     }
 
     for( int i=0; i<numchildren; ++i ) {

@@ -227,7 +227,7 @@ bool chroot_translate_paramat( pid_t pid, const pid_state *state, int dirfd, int
         return true;
 
     int_ptr path_addr=ptlib_get_argument( pid, param_num );
-    if( path_addr==NULL ) {
+    if( path_addr==(int_ptr)NULL ) {
         // The process asked to work directly on the file descriptor - do not touch the path
         return true;
     }

@@ -24,6 +24,8 @@
 
 #include <memory>
 
+#include <stdio.h>
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -32,7 +34,7 @@
 #include <sys/select.h>
 #include <sys/ptrace.h>
 #include <fcntl.h>
-#include <stdio.h>
+#include <unistd.h>
 
 #include "exceptions.h"
 #include "arch/platform.h"

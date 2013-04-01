@@ -28,6 +28,7 @@
 #include <sys/ptrace.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #include "arch/platform.h"
 #include "parent.h"
