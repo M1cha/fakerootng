@@ -81,11 +81,11 @@ class daemonProcess {
     unique_fd master_socket;
     unique_fd state_fd;
 
-    static bool daemonize( bool nodetach, bool chdir_root, int skip_fd1=-1, int skip_fd2=-1 );
+    static bool daemonize( bool nodetach, int skip_fd1=-1, int skip_fd2=-1 );
 
     explicit daemonProcess( int session_fd ); // Constructor for non-persistent daemon
     // Constructor for persistent daemon
-    daemonProcess( const char *path, unique_fd &state_file, unique_fd &master_fd );
+    daemonProcess( const std::string &path, unique_fd &state_file, unique_fd &master_fd );
 
 public:
     ~daemonProcess();

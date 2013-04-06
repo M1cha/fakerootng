@@ -241,7 +241,7 @@ daemonProcess::daemonProcess( int session_fd ) : max_fd(0)
     register_session( session );
 }
 
-daemonProcess::daemonProcess( const char *path, unique_fd &state_file, unique_fd &master_fd ) :
+daemonProcess::daemonProcess( const std::string &path, unique_fd &state_file, unique_fd &master_fd ) :
     state_path( path ), master_socket( std::move(master_fd) ), state_fd( std::move(state_file) )
 {
     FILE *state_file_handle=fdopen( dup(state_fd.get()), "rt" );
@@ -286,7 +286,7 @@ int daemonProcess::create( bool nodetach )
         throw errno_exception("Child socket creation error");
 
     try {
-        if( daemonize( nodetach, true, sockets[0] ) ) {
+        if( daemonize( nodetach, sockets[0] ) ) {
             // We are the daemon
             daemon_process=std::unique_ptr<daemonProcess>(new daemonProcess(sockets[0]));
             daemon_process->start();
@@ -323,9 +323,14 @@ void daemonProcess::create( const char *state_file_path, bool nodetach )
     // We want to return from this function only after the listening socket already exists and is bound, to avoid a race
     unique_fd master_socket( ::socket( PF_UNIX, SOCK_SEQPACKET, 0 ), "Failed to create master socket" );
 
+    // Make the path canonical
+    char *state_realpath=realpath(state_file_path, NULL);
+    std::string absolute_state_path(state_realpath);
+    free( state_realpath );
+
     sockaddr_un sa;
     sa.sun_family=AF_UNIX;
-    snprintf( sa.sun_path, sizeof(sa.sun_path), "%s.run", state_file_path );
+    snprintf( sa.sun_path, sizeof(sa.sun_path), "%s.run", absolute_state_path.c_str() );
 
     // Since we are holding the lock, we know no one else is listening
     unlink( sa.sun_path );
@@ -337,9 +342,9 @@ void daemonProcess::create( const char *state_file_path, bool nodetach )
     // At this point the socket is bound to the correct path on the file system, and is listening. We can safely
     // fork the daemon and return control to the debugee
 
-    if( daemonize( nodetach, false, state_file.get(), master_socket.get() ) ) {
+    if( daemonize( nodetach, state_file.get(), master_socket.get() ) ) {
         // We are the daemon
-        daemon_process=std::unique_ptr<daemonProcess>(new daemonProcess( state_file_path, state_file, master_socket ));
+        daemon_process=std::unique_ptr<daemonProcess>(new daemonProcess( absolute_state_path, state_file, master_socket ));
         daemon_process->start();
         daemon_process.reset();
         exit(0);
@@ -348,7 +353,7 @@ void daemonProcess::create( const char *state_file_path, bool nodetach )
     // We are the "child" (technically - parent) - nothing more to do
 }
 
-bool daemonProcess::daemonize( bool nodetach, bool chdir_root, int skip_fd1, int skip_fd2 )
+bool daemonProcess::daemonize( bool nodetach, int skip_fd1, int skip_fd2 )
 {
     pid_t debugger=fork();
     if( debugger<0 )
@@ -403,10 +408,8 @@ bool daemonProcess::daemonize( bool nodetach, bool chdir_root, int skip_fd1, int
             dup(fd);
         }
 
-        // Chdir out of the way only makes sense if we are non-persistent, as otherwise we are holding open file
-        // descriptors in the directory anyways
-        if( chdir_root )
-            chdir("/");
+        // Chdir out of the way
+        chdir("/");
     }
 
     return true;
