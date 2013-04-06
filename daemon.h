@@ -2,6 +2,7 @@
 #define DAEMON_H
 
 #include "exceptions.h"
+#include "unique_fd.h"
 
 #include <list>
 
@@ -71,8 +72,8 @@ class daemonProcess {
     daemonProcess( const daemonProcess & )=delete;
     daemonProcess & operator=( const daemonProcess & )=delete;
 
-    std::list<int> session_fds;
-    int master_socket;
+    std::list<unique_fd> session_fds;
+    unique_fd master_socket;
     fd_set file_set;
     int max_fd;
 
@@ -93,15 +94,15 @@ public:
 
 private:
     void start();
-    void register_session( int fd );
+    void register_session( unique_fd &fd );
     void unregister_Session( int fd );
     void handle_new_connection();
     void recalc_select_mask();
-    void close_session( std::list<int>::iterator & element );
+    void close_session( decltype(session_fds)::iterator & element );
 
-    void handle_connection_request( std::list<int>::iterator & element );
-    void handle_cmd_reserve( std::list<int>::iterator & element, const ipcMessage<daemonCtrl::request> &message );
-    void handle_cmd_attach( std::list<int>::iterator & element, const ipcMessage<daemonCtrl::request> &message );
+    void handle_connection_request( decltype(session_fds)::iterator & element );
+    void handle_cmd_reserve( decltype(session_fds)::iterator &element, const ipcMessage<daemonCtrl::request> &message );
+    void handle_cmd_attach( decltype(session_fds)::iterator &element, const ipcMessage<daemonCtrl::request> &message );
 };
 
 #endif // DAEMON_H

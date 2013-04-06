@@ -134,11 +134,11 @@ daemonCtrl::daemonCtrl(const char *state_file_path, bool nodetach) : daemon_sock
     if( state_file_path==NULL ) {
         // Anonymous daemon. Always needs to start
         daemon_socket = daemonProcess::create( nodetach );
+        set_client_sock_options(daemon_socket);
     } else {
-        // XXX Need to complete the code path
         connect( state_file_path );
         while( daemon_socket<0 ) {
-            daemonProcess::create( state_file_path );
+            daemonProcess::create( state_file_path, nodetach );
             connect( state_file_path );
         }
     }
@@ -232,17 +232,18 @@ void daemonCtrl::cmd_attach()
     }
 }
 
-daemonProcess::daemonProcess( int session_fd ) : master_socket(-1), max_fd(0)
+daemonProcess::daemonProcess( int session_fd ) : master_socket(), max_fd(0)
 {
+    unique_fd session(session_fd);
     set_client_sock_options(session_fd);
     FD_ZERO( &file_set );
-    register_session( session_fd );
+    register_session( session );
 }
 
-void daemonProcess::register_session( int fd )
+void daemonProcess::register_session( unique_fd &fd )
 {
-    dlog("Added session %d\n", fd);
-    session_fds.push_back( fd );
+    dlog("Added session %d\n", fd.get());
+    session_fds.push_back( std::move(fd) );
     recalc_select_mask();
 }
 
@@ -256,7 +257,6 @@ int daemonProcess::create( bool nodetach )
         if( daemonize( sockets[0], nodetach ) ) {
             // We are the daemon
             daemon_process=std::unique_ptr<daemonProcess>(new daemonProcess(sockets[0]));
-            close(sockets[1]);
             daemon_process->start();
             daemon_process.reset();
             exit(0);
@@ -278,6 +278,11 @@ int daemonProcess::create( bool nodetach )
     }
 
     return sockets[1];
+}
+
+void daemonProcess::create( const char *state_file_path, bool nodetach )
+{
+    // XXX Needs implementation
 }
 
 bool daemonProcess::daemonize( int skip_fd, bool nodetach )
@@ -322,7 +327,8 @@ bool daemonProcess::daemonize( int skip_fd, bool nodetach )
         // come out and that core can be dumped
         int fd=get_log_fd();
 
-        for( int i=0; i<getdtablesize(); ++i ) {
+        int fd_limit=getdtablesize();
+        for( int i=0; i<fd_limit; ++i ) {
             if( i!=skip_fd && i!=fd )
                 close(i);
         }
@@ -364,7 +370,7 @@ bool daemonProcess::handle_request( const sigset_t *sigmask )
     if( result<0 )
         return ret;
 
-    if( master_socket>=0 && FD_ISSET( master_socket, &read_set ) ) {
+    if( master_socket && FD_ISSET( master_socket.get(), &read_set ) ) {
         result--;
         handle_new_connection();
     }
@@ -377,10 +383,10 @@ bool daemonProcess::handle_request( const sigset_t *sigmask )
             ++i;
 
             try {
-                if( FD_ISSET( *current, &read_set ) || FD_ISSET( *current, &except_set ) )
+                if( FD_ISSET( current->get(), &read_set ) || FD_ISSET( current->get(), &except_set ) )
                     handle_connection_request( current );
             } catch( const errno_exception &except ) {
-                dlog("Read from session socket %d failed: %s (%s)", *current, except.what(),
+                dlog("Read from session socket %d failed: %s (%s)", current->get(), except.what(),
                         except.get_error_message());
             } catch( const daemonCtrl::terminal_error &except ) {
                 close_session(current);
@@ -399,26 +405,26 @@ void daemonProcess::set_client_sock_options( int fd )
 
 void daemonProcess::handle_new_connection()
 {
-    assert(master_socket>=0);
-    int connection_fd = ::accept( master_socket, NULL, NULL );
-    if( connection_fd<0 ) {
+    assert(master_socket);
+    unique_fd connection_fd( ::accept( master_socket.get(), NULL, NULL ) );
+    if( !connection_fd ) {
         dlog( "Accept failed: %s", strerror(errno) );
         return;
     }
 
-    set_client_sock_options( connection_fd );
+    set_client_sock_options( connection_fd.get() );
 
-    session_fds.push_back(connection_fd);
-    dlog("Received new session, socket #%d", connection_fd);
+    session_fds.push_back(std::move(connection_fd));
+    dlog("Received new session, socket #%d", connection_fd.get());
     recalc_select_mask();
 }
 
-void daemonProcess::handle_connection_request( std::list<int>::iterator & element )
+void daemonProcess::handle_connection_request( decltype(session_fds)::iterator & element )
 {
     ipcMessage<daemonCtrl::request> request;
 
     try {
-        request.recv( *element );
+        request.recv( element->get() );
 
         switch( request->command ) {
         case daemonCtrl::CMD_RESERVE:
@@ -428,25 +434,25 @@ void daemonProcess::handle_connection_request( std::list<int>::iterator & elemen
             handle_cmd_attach( element, request );
             break;
         default:
-            dlog("Session %d sent unknown command %d\n", *element, request->command);
+            dlog("Session %d sent unknown command %d\n", element->get(), request->command);
             close_session(element);
         };
     } catch( const daemonCtrl::remote_hangup_exception &exception ) {
-        dlog("Session %d hung up\n", *element);
+        dlog("Session %d hung up\n", element->get());
         close_session(element);
     }
 }
 
-void daemonProcess::handle_cmd_reserve( std::list<int>::iterator & element,
+void daemonProcess::handle_cmd_reserve( decltype(session_fds)::iterator & element,
         const ipcMessage<daemonCtrl::request> &message )
 {
     ipcMessage<daemonCtrl::response> response;
     response->command=daemonCtrl::CMD_RESERVE;
     response->result=0;
-    response.send(*element);
+    response.send(element->get());
 }
 
-void daemonProcess::handle_cmd_attach( std::list<int>::iterator & element,
+void daemonProcess::handle_cmd_attach( decltype(session_fds)::iterator & element,
         const ipcMessage<daemonCtrl::request> &message )
 {
     ipcMessage<daemonCtrl::response> response;
@@ -458,7 +464,7 @@ void daemonProcess::handle_cmd_attach( std::list<int>::iterator & element,
         response->result=exception.get_error();
     }
 
-    response.send(*element);
+    response.send(element->get());
 }
 
 void daemonProcess::recalc_select_mask()
@@ -467,18 +473,17 @@ void daemonProcess::recalc_select_mask()
     max_fd=-1;
 
     for( auto i=session_fds.begin(); i!=session_fds.end(); ++i ) {
-        FD_SET(*i, &file_set);
-        if( *i>max_fd )
-            max_fd=*i;
+        FD_SET(i->get(), &file_set);
+        if( i->get()>max_fd )
+            max_fd=i->get();
     }
 
     max_fd++;
 }
 
-void daemonProcess::close_session( std::list<int>::iterator & element )
+void daemonProcess::close_session( decltype(session_fds)::iterator & element )
 {
-    dlog("Session %d closed\n", *element);
-    close(*element);
+    dlog("Session %d closed\n", element->get());
     session_fds.erase(element);
 
     recalc_select_mask();
