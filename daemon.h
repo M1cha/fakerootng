@@ -5,6 +5,7 @@
 #include "unique_fd.h"
 
 #include <list>
+#include <string>
 
 #include <sys/select.h>
 
@@ -73,17 +74,21 @@ class daemonProcess {
     daemonProcess & operator=( const daemonProcess & )=delete;
 
     std::list<unique_fd> session_fds;
-    unique_fd master_socket;
     fd_set file_set;
     int max_fd;
 
-    static bool daemonize( int skip_fd, bool nodetach );
+    std::string state_path;
+    unique_fd master_socket;
+    unique_fd state_fd;
+
+    static bool daemonize( bool nodetach, bool chdir_root, int skip_fd1=-1, int skip_fd2=-1 );
 
     explicit daemonProcess( int session_fd ); // Constructor for non-persistent daemon
-    explicit daemonProcess( const char *path ); // Constructor for persistent daemon
+    // Constructor for persistent daemon
+    daemonProcess( const char *path, unique_fd &state_file, unique_fd &master_fd );
 
 public:
-    // XXX ~daemonProcess();
+    ~daemonProcess();
 
     // Create an anonymous daemon process, returning the connection file descriptor
     static int create( bool nodetach );

@@ -40,6 +40,7 @@
 #include "arch/platform.h"
 #include "log.h"
 #include "parent.h"
+#include "file_lie.h"
 
 template <class T>
 class ipcMessage {
@@ -232,12 +233,43 @@ void daemonCtrl::cmd_attach()
     }
 }
 
-daemonProcess::daemonProcess( int session_fd ) : master_socket(), max_fd(0)
+daemonProcess::daemonProcess( int session_fd ) : max_fd(0)
 {
     unique_fd session(session_fd);
     set_client_sock_options(session_fd);
     FD_ZERO( &file_set );
     register_session( session );
+}
+
+daemonProcess::daemonProcess( const char *path, unique_fd &state_file, unique_fd &master_fd ) :
+    state_path( path ), master_socket( std::move(master_fd) ), state_fd( std::move(state_file) )
+{
+    FILE *state_file_handle=fdopen( dup(state_fd.get()), "rt" );
+    load_map( state_file_handle );
+    fclose(state_file_handle);
+    recalc_select_mask();
+}
+
+daemonProcess::~daemonProcess()
+{
+    if( state_path.length()>0 ) {
+        std::string tmp_path( state_path );
+        tmp_path+=".tmp";
+
+        FILE * new_state = fopen( tmp_path.c_str(), "wt" );
+        if( new_state==NULL ) {
+            dlog("Failed to open state file for saving: %s\n", strerror(errno) );
+
+            return;
+        }
+        save_map( new_state );
+        fclose( new_state );
+
+        if( rename( tmp_path.c_str(), state_path.c_str() )<0 ) {
+            dlog("Rename of temporary file failed: %s\n", strerror(errno) );
+        }
+        unlink((state_path+".run").c_str());
+    }
 }
 
 void daemonProcess::register_session( unique_fd &fd )
@@ -254,7 +286,7 @@ int daemonProcess::create( bool nodetach )
         throw errno_exception("Child socket creation error");
 
     try {
-        if( daemonize( sockets[0], nodetach ) ) {
+        if( daemonize( nodetach, true, sockets[0] ) ) {
             // We are the daemon
             daemon_process=std::unique_ptr<daemonProcess>(new daemonProcess(sockets[0]));
             daemon_process->start();
@@ -282,10 +314,41 @@ int daemonProcess::create( bool nodetach )
 
 void daemonProcess::create( const char *state_file_path, bool nodetach )
 {
-    // XXX Needs implementation
+    // Try to obtain the lock
+    unique_fd state_file( ::open( state_file_path, O_CREAT|O_RDWR, 0666 ), "State file open failed" );
+    if( !state_file.flock( LOCK_EX|LOCK_NB ) )
+        // Someone else is holding the lock
+        return;
+
+    // We want to return from this function only after the listening socket already exists and is bound, to avoid a race
+    unique_fd master_socket( ::socket( PF_UNIX, SOCK_SEQPACKET, 0 ), "Failed to create master socket" );
+
+    sockaddr_un sa;
+    sa.sun_family=AF_UNIX;
+    snprintf( sa.sun_path, sizeof(sa.sun_path), "%s.run", state_file_path );
+
+    // Since we are holding the lock, we know no one else is listening
+    unlink( sa.sun_path );
+    if( bind( master_socket.get(), (const struct sockaddr *) &sa, sizeof(sa) )<0 )
+        throw errno_exception( "Failed to bind master socket" );
+
+    listen( master_socket.get(), 10 );
+
+    // At this point the socket is bound to the correct path on the file system, and is listening. We can safely
+    // fork the daemon and return control to the debugee
+
+    if( daemonize( nodetach, false, state_file.get(), master_socket.get() ) ) {
+        // We are the daemon
+        daemon_process=std::unique_ptr<daemonProcess>(new daemonProcess( state_file_path, state_file, master_socket ));
+        daemon_process->start();
+        daemon_process.reset();
+        exit(0);
+    }
+
+    // We are the "child" (technically - parent) - nothing more to do
 }
 
-bool daemonProcess::daemonize( int skip_fd, bool nodetach )
+bool daemonProcess::daemonize( bool nodetach, bool chdir_root, int skip_fd1, int skip_fd2 )
 {
     pid_t debugger=fork();
     if( debugger<0 )
@@ -322,14 +385,14 @@ bool daemonProcess::daemonize( int skip_fd, bool nodetach )
     dlog("Debugger started\n");
 
     if( !nodetach ) {
-        // Close all open file descriptors except our skip_fd and the debug_log (if it exists)
+        // Close all open file descriptors except our skip_fds and the debug_log (if it exists)
         // Do not close the file handles, nor chdir to root, if in debug mode. This is so that more debug info
         // come out and that core can be dumped
         int fd=get_log_fd();
 
         int fd_limit=getdtablesize();
         for( int i=0; i<fd_limit; ++i ) {
-            if( i!=skip_fd && i!=fd )
+            if( i!=skip_fd1 && i!=skip_fd2 && i!=fd )
                 close(i);
         }
 
@@ -340,8 +403,10 @@ bool daemonProcess::daemonize( int skip_fd, bool nodetach )
             dup(fd);
         }
 
-        // Chdir out of the way of everyone
-        chdir("/");
+        // Chdir out of the way only makes sense if we are non-persistent, as otherwise we are holding open file
+        // descriptors in the directory anyways
+        if( chdir_root )
+            chdir("/");
     }
 
     return true;
@@ -476,6 +541,12 @@ void daemonProcess::recalc_select_mask()
         FD_SET(i->get(), &file_set);
         if( i->get()>max_fd )
             max_fd=i->get();
+    }
+
+    if( master_socket ) {
+        FD_SET(master_socket.get(), &file_set);
+        if( master_socket.get()>max_fd )
+            max_fd=master_socket.get();
     }
 
     max_fd++;
