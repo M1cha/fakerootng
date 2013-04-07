@@ -28,7 +28,7 @@ AC_LANG(C)
 # Checks for header files.
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
-AC_CHECK_HEADERS([fcntl.h limits.h stdlib.h string.h sys/time.h unistd.h sys/socket.h])
+AC_CHECK_HEADERS([fcntl.h limits.h stdlib.h string.h sys/time.h unistd.h sys/socket.h sys/prctl.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDBOOL
@@ -38,6 +38,8 @@ AC_TYPE_MODE_T
 AC_TYPE_PID_T
 AC_TYPE_SIZE_T
 AC_TYPE_SSIZE_T
+
+AC_CHECK_DECLS([PR_SET_PTRACER],[],[],[#include <sys/prctl.h>])
 
 dnl Globally define the root UID
 AC_DEFINE([ROOT_UID],[0],[UID for root])

@@ -36,6 +36,10 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#if HAVE_SYS_PRCTL_H
+#include <sys/prctl.h>
+#endif
+
 #include "exceptions.h"
 #include "arch/platform.h"
 #include "log.h"
@@ -130,12 +134,13 @@ public:
 
 static std::unique_ptr<daemonProcess> daemon_process;
 
-daemonCtrl::daemonCtrl(const char *state_file_path, bool nodetach) : daemon_socket(-1)
+daemonCtrl::daemonCtrl(const char *state_file_path, bool nodetach) : daemon_socket(-1), daemon_pid(0)
 {
     if( state_file_path==NULL ) {
         // Anonymous daemon. Always needs to start
         daemon_socket = daemonProcess::create( nodetach );
         set_client_sock_options(daemon_socket);
+        cmd_reserve();
     } else {
         connect( state_file_path );
         while( daemon_socket<0 ) {
@@ -220,12 +225,18 @@ void daemonCtrl::cmd_reserve()
 {
     ipcMessage<response> response;
     send_std_cmd( CMD_RESERVE, response );
+    daemon_pid=response.credentials()->pid;
 }
 
 void daemonCtrl::cmd_attach()
 {
     ipcMessage<response> response;
     try {
+#if HAVE_DECL_PR_SET_PTRACER
+        // We need to tell the kernel it is okay for the debugger to attach to us
+        assert( daemon_pid!=0 );
+        prctl( PR_SET_PTRACER, daemon_pid, 0, 0, 0 );
+#endif // HAVE_DECL_PR_SET_PTRACER
         send_std_cmd( CMD_ATTACH, response );
     } catch( const errno_exception &exception ) {
         errno=exception.get_error();

@@ -54,6 +54,8 @@ public:
 
 private:
     int daemon_socket;
+    pid_t daemon_pid;
+
 public:
     daemonCtrl(const char *state_file_path, bool nodetach);
     ~daemonCtrl();
