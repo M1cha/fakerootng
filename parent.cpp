@@ -856,7 +856,7 @@ int process_children( daemonProcess *daemon )
         enum PTLIB_WAIT_RET wait_state;
         if( !ptlib_wait( &pid, &status, &data, true ) ) {
             if( errno==EAGAIN || (errno==ECHILD && num_processes==0) ) {
-                clientsockets=daemon->handle_request( &orig_signals );
+                clientsockets=daemon->handle_request( &orig_signals, num_processes>0 );
 
                 // Did an alarm signal arrive?
                 if( alarm_happened ) {

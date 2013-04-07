@@ -96,7 +96,7 @@ public:
     static int create( bool nodetach );
     static void create( const char *state_file_path, bool nodetach );
 
-    bool handle_request( const sigset_t *sigmask );
+    bool handle_request( const sigset_t *sigmask, bool existing_children );
     static void set_client_sock_options( int fd );
 
 private:

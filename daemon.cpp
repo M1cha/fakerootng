@@ -426,32 +426,49 @@ bool daemonProcess::daemonize( bool nodetach, int skip_fd1, int skip_fd2 )
     return true;
 }
 
+#define GRACE_NEW_CONNECTION_TIMEOUT 3
 void daemonProcess::start()
 {
+    bool repeat;
     do {
-        // XXX Logic needs to include timeout on last disconnect
+        repeat=false;
+
         dlog("Debugger init loop\n");
         process_children( this );
-    } while(session_fds.size()>0);
-    dlog("Debugger done\n");
+        dlog("Debugger done\n");
+
+        struct timeval timeout;
+        timeout.tv_sec=GRACE_NEW_CONNECTION_TIMEOUT;
+        timeout.tv_usec=0;
+
+        fd_set read_set=file_set;
+        fd_set except_set=file_set;
+
+        int result=select( max_fd, &read_set, NULL, &except_set, &timeout );
+        repeat=(result>0);
+    } while(repeat);
+
+    dlog("Daemon done\n");
 }
 
-#define RECONNECT_GRACE 3 // Number of seconds to wait for a reconnection after all sockets ended
-bool daemonProcess::handle_request( const sigset_t *sigmask )
+bool daemonProcess::handle_request( const sigset_t *sigmask, bool existing_children )
 {
     bool ret=session_fds.size()>0;
     fd_set read_set=file_set;
     fd_set except_set=file_set;
     struct timespec timeout;
-    timeout.tv_sec=RECONNECT_GRACE;
+    timeout.tv_sec=0;
     timeout.tv_nsec=0;
-    int result=pselect( max_fd, &read_set, NULL, &except_set, &timeout, sigmask );
+
+    // Wait nothing if we are about to exit, indefinitely if we have reason to stay
+    int result=pselect( max_fd, &read_set, NULL, &except_set, (ret || existing_children) ? NULL : &timeout, sigmask );
     if( result<0 )
         return ret;
 
     if( master_socket && FD_ISSET( master_socket.get(), &read_set ) ) {
         result--;
         handle_new_connection();
+        ret=true;
     }
 
     if( result>=0 ) {
