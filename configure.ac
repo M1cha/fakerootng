@@ -112,7 +112,8 @@ AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
             ],
             [
                 AC_MSG_RESULT([not supported])
-                AC_ERROR([Fakeroot-ng needs a compiler that supports C++11])
+                AC_ERROR([Fakeroot-ng needs a compiler that supports C++11. If you are using gcc, that
+                  means version 4.7 or higher.])
             ]
         )
     ]
