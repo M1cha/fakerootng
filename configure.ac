@@ -80,6 +80,11 @@ AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
         ],
         [
             std::unordered_map<int, int> test;
+            decltype(test)::iterator iterator;
+            int *nullable=nullptr;
+            int i;
+            if( nullable!=0 )
+                nullable=&i;
         ])],
     [
         AC_MSG_RESULT([none])
@@ -93,30 +98,19 @@ AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
                 ],
                 [
                     std::unordered_map<int, int> test;
+                    decltype(test)::iterator iterator;
+                    int *nullable=nullptr;
+                    int i;
+                    if( nullable!=0 )
+                        nullable=&i;
                 ])],
             [
                 AC_MSG_RESULT([-std=c++11])
                 CXXFLAGS="$saved_CXXFLAGS -std=c++11"
             ],
             [
-                CXXFLAGS="$saved_CXXFLAGS -std=c++0x -Werror"
-                AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
-                        #include <unordered_map>
-                        class testcpp11 { public: testcpp11() = default; };
-                        ],
-                        [
-                            std::unordered_map<int, int> test;
-                        ])
-                    ],
-                    [
-                        AC_MSG_RESULT([-std=c++0x])
-                        CXXFLAGS="$saved_CXXFLAGS -std=c++0x"
-                    ],
-                    [
-                        AC_MSG_RESULT([not supported])
-                        AC_ERROR([Fakeroot-ng needs a compiler that supports C++11])
-                    ]
-                )
+                AC_MSG_RESULT([not supported])
+                AC_ERROR([Fakeroot-ng needs a compiler that supports C++11])
             ]
         )
     ]
