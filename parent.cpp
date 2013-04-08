@@ -206,6 +206,9 @@ static void init_handlers()
 #ifdef SYS_lstat64
     DEF_SYS2(lstat64, stat);
 #endif
+#if defined(SYS_newfstatat) && HAVE_OPENAT
+    DEF_SYS2(newfstatat, fstatat64);
+#endif
 #if defined(SYS_fstatat64) && HAVE_OPENAT
     DEF_SYS1(fstatat64);
 #endif

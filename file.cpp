@@ -156,6 +156,12 @@ static bool real_chmod( int sc_num, pid_t pid, pid_state *state, int mode_offset
         state->context_state[0]=0; // syscall parts progress
 
         ptlib_set_argument( pid, mode_offset+1, state->mem->get_mem() ); // where to store the stat result
+        // one anomaly handled with special case. ugly, but not worth the interface complication
+        if( extra_flags!=-1 ) {
+            // some of the functions require an extra flag after the usual parameters
+            dlog("real_chmod: set arg2 to %d\n", extra_flags);
+            ptlib_set_argument( pid, mode_offset+2, extra_flags );
+        }
 
         ptlib_set_syscall( pid, stat_function );
 
