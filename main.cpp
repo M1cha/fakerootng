@@ -97,6 +97,7 @@ int parse_options( int argc, char *argv[] )
             return -2;
         case '?':
             /* Error in parsing */
+            fprintf(stderr, "Try running with \"-h\" for options help\n");
             return -1;
             break;
         default:
