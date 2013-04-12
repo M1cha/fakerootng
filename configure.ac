@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.61)
-AC_INIT([fakeroot-ng], [0.17], [shachar@debian.org])
+AC_INIT([fakeroot-ng], [0.18], [shachar@debian.org])
 AC_CANONICAL_TARGET()
 AM_INIT_AUTOMAKE([no-dist])
 AC_CONFIG_SRCDIR([parent.h])
@@ -28,7 +28,7 @@ AC_LANG(C)
 # Checks for header files.
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
-AC_CHECK_HEADERS([fcntl.h limits.h stdlib.h string.h sys/time.h unistd.h sys/socket.h sys/prctl.h])
+AC_CHECK_HEADERS([fcntl.h limits.h stdlib.h string.h sys/file.h sys/socket.h sys/time.h unistd.h sys/prctl.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDBOOL
@@ -144,7 +144,7 @@ AC_FUNC_LSTAT
 AC_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK
 AC_FUNC_VPRINTF
 AC_FUNC_MMAP
-AC_CHECK_FUNCS([ftruncate getcwd memset mkdir munmap socket strchr strerror strtoul])
+AC_CHECK_FUNCS([ftruncate getcwd memset mkdir munmap realpath select socket strchr strerror strtoul])
 
 AC_MSG_CHECKING([whether openat class functions are supported])
 AC_COMPILE_IFELSE(
