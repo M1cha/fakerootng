@@ -10,3 +10,7 @@ versions. Since the basic command line is the same for fakeroot and fakeroot-ng
 it is possible to use that system to give the user the option to use
 fakeroot-ng when running plain "fakeroot". For most cases, that will work as
 is.
+
+Please note that the only platforms supported by fakeroot-ng at the moment are
+x86_64, i386 and ppc (32 bit only). Further platform support is conditioned on
+the developer getting access to such a platform.

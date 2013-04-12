@@ -1,3 +1,15 @@
+As of version 0.18, a persistent daemon will hang around for a few seconds
+after the last client has exit, in case a new client comes along for the same
+database. This makes the performance penalty for using repeated fakeroot-ng
+commands in a script much lower.
+
+The following is now both safe and has reasonable performance:
+#!/bin/sh -e
+fakeroot-ng command1
+fakeroot-ng command2
+fakeroot-ng command3
+fakeroot-ng command4
+
 As of version 0.15, fakeroot-ng makes sure that it has complete access
 to files and directories it creates, even if they "have" no uid read
 permission.
@@ -5,7 +17,7 @@ permission.
 Fakeroot-ng now supports running two independent instances using the same
 state file, and have the fake image both instances see be synchronized.
 
-As of version 1.10, fakeroot-ng now supports the "chroot" system call. Once
+As of version 0.10, fakeroot-ng now supports the "chroot" system call. Once
 called, a process will be restriced to a subtree of the entire file system.
 This applies to almost all system calls.
 

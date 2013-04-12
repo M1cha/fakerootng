@@ -1,3 +1,9 @@
+Version 0.18
+    * Fix a problem with fchmodat
+    * Fix a race in case of new client attaching just as the daemon is
+      shutting down.    
+    * Rennovate the entire startup sequence.
+    * Resolve the threading problem
     * Solve crash when run without a persitent state file
     * Performance changes
     * Update the home page
