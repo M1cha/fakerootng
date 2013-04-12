@@ -263,7 +263,7 @@ static int perform_child( daemonCtrl & daemon_ctrl, char *argv[] )
         return WTERMSIG(buffer);
     }
 
-    fprintf(stderr, "Child "PID_F" terminated with unknown termination status %x\n", child, buffer );
+    fprintf(stderr, "Child " PID_F " terminated with unknown termination status %x\n", child, buffer );
 
     return 3;
 }
