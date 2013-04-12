@@ -1,6 +1,8 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
+#include <sys/types.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

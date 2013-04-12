@@ -83,7 +83,8 @@ public:
         }
 
         if( static_cast<unsigned>(num_read)<sizeof(T) ) {
-            dlog("Session %d produced short read (expected %lu, got %ld)", fd, sizeof(T), num_read);
+            dlog("Session %d produced short read (expected %lu, got %ld)", fd, (long unsigned int) sizeof(T),
+                    (long int) num_read);
             throw daemonCtrl::short_msg_exception();
         }
 
@@ -115,7 +116,8 @@ public:
             throw errno_exception("Send failed");
 
         if( static_cast<unsigned>(num_written)<sizeof(T) ) {
-            dlog("Session %d produced short send (expected %lu, got %ld)", fd, sizeof(T), num_written);
+            dlog("Session %d produced short send (expected %lu, got %ld)", fd, (long unsigned int) sizeof(T),
+                    (long int) num_written);
             throw daemonCtrl::short_msg_exception();
         }
     }
