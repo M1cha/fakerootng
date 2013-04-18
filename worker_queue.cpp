@@ -59,3 +59,11 @@ void worker_queue::worker()
         m_queue_condition.wait(queue_lock);
     }
 }
+
+void worker_queue::register_task( worker_task * task )
+{
+    std::unique_lock<std::mutex> queue_lock( m_queue_lock );
+    m_queue.push_back( std::unique_ptr<worker_task>(task) );
+
+    m_queue_condition.notify_one();
+}
