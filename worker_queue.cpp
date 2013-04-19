@@ -21,6 +21,8 @@
 
 #include "worker_queue.h"
 
+#include <assert.h>
+
 worker_queue::worker_task::~worker_task()
 {
 }
@@ -48,6 +50,8 @@ worker_queue::worker_queue() : m_terminate(false)
 worker_queue::~worker_queue()
 {
     std::unique_lock<std::mutex> queue_lock( m_queue_lock );
+
+    assert(m_queue.empty());
 
     m_terminate=true;
     m_queue_condition.notify_all();
