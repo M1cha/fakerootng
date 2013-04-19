@@ -1,6 +1,6 @@
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS=arch tests 
+SUBDIRS=arch tests . unit_tests
 
 clean-local:
 	$(MAKE) -C arch/$(target_os)/$(target_cpu) clean

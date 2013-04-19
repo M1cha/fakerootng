@@ -21,6 +21,10 @@
 
 #include "worker_queue.h"
 
+worker_queue::worker_task::~worker_task()
+{
+}
+
 worker_queue::worker_queue() : m_terminate(false)
 {
     // Run a thread per CPU
@@ -36,7 +40,23 @@ worker_queue::worker_queue() : m_terminate(false)
     m_threads.reserve( num_threads );
     while( num_threads>0 ) {
         m_threads.push_back( std::unique_ptr<std::thread>( new std::thread( &worker_queue::worker, this ) ) );
+
+        num_threads--;
     }
+}
+
+worker_queue::~worker_queue()
+{
+    std::unique_lock<std::mutex> queue_lock( m_queue_lock );
+
+    m_terminate=true;
+    m_queue_condition.notify_all();
+
+    queue_lock.unlock();
+
+    // Wait for all threads to actually finish
+    for( auto &i: m_threads )
+        i->join();
 }
 
 void worker_queue::worker()
@@ -56,11 +76,12 @@ void worker_queue::worker()
         }
         
         // Wait for more tasks
-        m_queue_condition.wait(queue_lock);
+        if( !m_terminate )
+            m_queue_condition.wait(queue_lock);
     }
 }
 
-void worker_queue::register_task( worker_task * task )
+void worker_queue::schedule_task( worker_task * task )
 {
     std::unique_lock<std::mutex> queue_lock( m_queue_lock );
     m_queue.push_back( std::unique_ptr<worker_task>(task) );

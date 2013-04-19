@@ -232,6 +232,7 @@ dnl We generate all Makefiles for all platforms, and then only invoke those for 
 AC_CONFIG_FILES([Makefile
         tests/Makefile
         arch/Makefile
+        unit_tests/Makefile
         arch/$target_os/Makefile.template
         arch/$target_os/$target_cpu/Makefile])
 AC_OUTPUT

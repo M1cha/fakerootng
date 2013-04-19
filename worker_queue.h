@@ -29,8 +29,9 @@ private:
 
 public:
     worker_queue();
+    ~worker_queue();
 
-    void register_task( worker_task * task ); // register_task will free the task when it is done
+    void schedule_task( worker_task * task ); // register_task will free the task when it is done
 
 private:
     void worker();
