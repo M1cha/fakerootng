@@ -1,7 +1,7 @@
 #ifndef SYSCALLS_H
 #define SYSCALLS_H
 
-#include "parent.h"
+class pid_state;
 
 #define DECLARE_SYSFUNC(name) bool sys_##name( int sc_num, pid_t pid, pid_state *state )
 

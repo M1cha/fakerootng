@@ -25,6 +25,7 @@
 #include <memory>
 
 #include <stdio.h>
+#include <assert.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -431,6 +432,8 @@ bool daemonProcess::daemonize( bool nodetach, int skip_fd1, int skip_fd2 )
 #define GRACE_NEW_CONNECTION_TIMEOUT 3
 void daemonProcess::start()
 {
+    init_debugger();
+
     bool repeat;
     do {
         repeat=false;
@@ -449,6 +452,8 @@ void daemonProcess::start()
         int result=select( max_fd, &read_set, NULL, &except_set, &timeout );
         repeat=(result>0);
     } while(repeat);
+
+    shutdown_debugger();
 
     dlog("Daemon done\n");
 }
