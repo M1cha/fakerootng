@@ -29,9 +29,13 @@ private:
 
 public:
     worker_queue();
-    ~worker_queue();
+    virtual ~worker_queue();
 
     void schedule_task( worker_task * task ); // register_task will free the task when it is done
+
+protected:
+    virtual void setup_thread( const std::thread *thread );
+    virtual void tear_down_thread( const std::thread *thread );
 
 private:
     void worker();

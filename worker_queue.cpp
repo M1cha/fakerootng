@@ -41,7 +41,10 @@ worker_queue::worker_queue() : m_terminate(false)
     // Start up the correct number of threads
     m_threads.reserve( num_threads );
     while( num_threads>0 ) {
-        m_threads.push_back( std::unique_ptr<std::thread>( new std::thread( &worker_queue::worker, this ) ) );
+        std::thread *thread = new std::thread( &worker_queue::worker, this );
+        m_threads.push_back( std::unique_ptr<std::thread>( thread ) );
+
+        setup_thread( thread );
 
         num_threads--;
     }
@@ -59,8 +62,18 @@ worker_queue::~worker_queue()
     queue_lock.unlock();
 
     // Wait for all threads to actually finish
-    for( auto &i: m_threads )
+    for( auto &i: m_threads ) {
         i->join();
+        tear_down_thread( i.get() );
+    }
+}
+
+void worker_queue::setup_thread( const std::thread *thread )
+{
+}
+
+void worker_queue::tear_down_thread( const std::thread *thread )
+{
 }
 
 void worker_queue::worker()
