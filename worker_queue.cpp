@@ -44,7 +44,7 @@ worker_queue::worker_queue() : m_terminate(false)
         std::thread *thread = new std::thread( &worker_queue::worker, this );
         m_threads.push_back( std::unique_ptr<std::thread>( thread ) );
 
-        setup_thread( thread );
+        setup_thread( thread->get_id() );
 
         num_threads--;
     }
@@ -64,20 +64,30 @@ worker_queue::~worker_queue()
     // Wait for all threads to actually finish
     for( auto &i: m_threads ) {
         i->join();
-        tear_down_thread( i.get() );
+        tear_down_thread( i->get_id() );
     }
 }
 
-void worker_queue::setup_thread( const std::thread *thread )
+void worker_queue::setup_thread( const std::thread::id thread )
 {
 }
 
-void worker_queue::tear_down_thread( const std::thread *thread )
+void worker_queue::tear_down_thread( const std::thread::id thread )
+{
+}
+
+void worker_queue::thread_init()
+{
+}
+
+void worker_queue::thread_shutdown()
 {
 }
 
 void worker_queue::worker()
 {
+    thread_init();
+
     while( !m_terminate ) {
         // Handle all tasks already in the queue
         std::unique_lock<std::mutex> queue_lock( m_queue_lock );
@@ -96,6 +106,8 @@ void worker_queue::worker()
         if( !m_terminate )
             m_queue_condition.wait(queue_lock);
     }
+
+    thread_shutdown();
 }
 
 void worker_queue::schedule_task( worker_task * task )
