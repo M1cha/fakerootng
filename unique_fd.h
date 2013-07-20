@@ -5,11 +5,15 @@
 #include <unistd.h>
 #include "exceptions.h"
 
-struct unique_fd {
+class unique_fd {
     int _fd;
 
     unique_fd( const unique_fd &rhs )=delete;
     unique_fd & operator=( const unique_fd &rhs )=delete;
+
+    // Since we have an implicit  cast to bool, it can be used to trick the compiler into thinking we have an implicit
+    // cast into int. We therefor explicitly declare (but not define) the int cast as private
+    operator int() const;
 public:
     explicit unique_fd( int fd=-1, const char *exception_message=nullptr ) : _fd( fd>=0 ? fd : -1 )
     {

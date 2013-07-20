@@ -6,6 +6,8 @@
 
 #include <list>
 #include <string>
+#include <set>
+#include <mutex>
 
 #include <sys/select.h>
 
@@ -77,6 +79,8 @@ class daemonProcess {
 
     std::list<unique_fd> session_fds;
     fd_set file_set;
+    std::set<int> thread_fds;
+    std::mutex thread_fds_mutex;
     int max_fd;
 
     std::string state_path;
@@ -99,6 +103,8 @@ public:
     bool handle_request( const sigset_t *sigmask, bool existing_children );
     static void set_client_sock_options( int fd );
 
+    void register_thread_socket( int fd );
+    void unregister_thread_socket( int fd );
 private:
     void start();
     void register_session( unique_fd &fd );

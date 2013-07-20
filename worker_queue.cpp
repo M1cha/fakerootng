@@ -28,6 +28,9 @@ worker_queue::worker_task::~worker_task()
 }
 
 worker_queue::worker_queue() : m_terminate(false)
+{}
+
+void worker_queue::start()
 {
     // Run a thread per CPU
     unsigned num_threads=std::thread::hardware_concurrency();
@@ -43,8 +46,6 @@ worker_queue::worker_queue() : m_terminate(false)
     while( num_threads>0 ) {
         std::thread *thread = new std::thread( &worker_queue::worker, this );
         m_threads.push_back( std::unique_ptr<std::thread>( thread ) );
-
-        setup_thread( thread->get_id() );
 
         num_threads--;
     }
@@ -64,16 +65,7 @@ worker_queue::~worker_queue()
     // Wait for all threads to actually finish
     for( auto &i: m_threads ) {
         i->join();
-        tear_down_thread( i->get_id() );
     }
-}
-
-void worker_queue::setup_thread( const std::thread::id thread )
-{
-}
-
-void worker_queue::tear_down_thread( const std::thread::id thread )
-{
 }
 
 void worker_queue::thread_init()
@@ -112,6 +104,8 @@ void worker_queue::worker()
 
 void worker_queue::schedule_task( worker_task * task )
 {
+    // If the following assert fails, we created the queue but did not call "start".
+    assert(m_threads.size()!=0);
     std::unique_lock<std::mutex> queue_lock( m_queue_lock );
     m_queue.push_back( std::unique_ptr<worker_task>(task) );
 

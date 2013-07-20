@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <sys/syscall.h>
 #include <asm/ptrace.h>
+#include <sys/resource.h>
 
 /* Specially defined 32 bit syscalls that don't have a 64 syscall, but need to be handled */
 #define __NR_waitpid -3

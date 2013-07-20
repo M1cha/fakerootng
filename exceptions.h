@@ -4,19 +4,23 @@
 #include <exception>
 #include <errno.h>
 #include <string.h>
+#include <string>
 
 class errno_exception : public std::exception 
 {
     int _errno;
-    const char * _context;
+    std::string _context;
 public:
     errno_exception( const char * context ) :
         _errno( errno ), _context( context )
-    {}
+    {
+        _context+=": ";
+        _context+=strerror( _errno );
+    }
 
     const char * what() const throw()
     {
-        return _context;
+        return _context.c_str();
     }
 
     int get_error() const throw()

@@ -31,14 +31,12 @@ public:
     worker_queue();
     virtual ~worker_queue();
 
+    void start();
+
     void schedule_task( worker_task * task ); // register_task will free the task when it is done
 
 protected:
-    // Custom code to run in the main thread's context
-    virtual void setup_thread( const std::thread::id thread );
-    virtual void tear_down_thread( const std::thread::id thread );
-
-    // Custom code to run in the new thread's context
+    // Custom code to run in the new thread's context before the work queue's code begins/after it ends
     virtual void thread_init();
     virtual void thread_shutdown();
 

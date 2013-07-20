@@ -24,8 +24,11 @@
 #include <limits.h>
 #include <assert.h>
 
+#include <unordered_map>
+
 #include <sys/ptrace.h>
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <wait.h>
 #include <unistd.h>
 #include <signal.h>
@@ -37,35 +40,7 @@
 
 #include "parent.h"
 
-class NewProcessTask : public SyscallHandlerTask
-{
-public:
-    // XXX Constructor inheritence would make more sense here, but these are only supported starting with gcc 4.8
-    NewProcessTask(pid_t pid, pid_state *proc_state, enum PTLIB_WAIT_RET ptlib_status, int wait_status,
-            long parsed_status ) :
-        SyscallHandlerTask( pid, proc_state, ptlib_status, wait_status, parsed_status )
-    {
-    }
-
-    void run()
-    {
-    }
-};
-
-class GenericSyscallTask : public SyscallHandlerTask
-{
-public:
-    // XXX Constructor inheritence would make more sense here, but these are only supported starting with gcc 4.8
-    GenericSyscallTask(pid_t pid, pid_state *proc_state, enum PTLIB_WAIT_RET ptlib_status, int wait_status,
-            long parsed_status ) :
-        SyscallHandlerTask( pid, proc_state, ptlib_status, wait_status, parsed_status )
-    {
-    }
-
-    void run()
-    {
-    }
-};
+static std::unordered_map<pid_t,std::unique_ptr<pid_state>> children;
 
 // Globally visible sizes of in process memory regions
 size_t static_mem_size, shared_mem_size;
@@ -76,7 +51,214 @@ static int num_processes;
 // Signify whether an alarm was received while we were waiting
 static bool alarm_happened=false;
 
-static std::unique_ptr<worker_queue> workQ;
+class DebuggerThreads : public worker_queue {
+private:
+    class socketpair {
+    private:
+        unique_fd m_mainSocket, m_threadSocket;
+    public:
+        socketpair( int mainSocket, int threadSocket ) :
+            m_mainSocket( mainSocket ), m_threadSocket( threadSocket )
+        {
+            fcntl( m_mainSocket.get(), F_SETFL, O_NONBLOCK );
+        }
+
+        int getThreadSocket() const
+        {
+            return m_threadSocket.get();
+        }
+
+        int getMainSocket() const
+        {
+            return m_mainSocket.get();
+        }
+    };
+    std::mutex m_pthreadRequestSocketsLock;
+    std::unordered_map< std::thread::id, socketpair > m_pthreadRequestSockets;
+    daemonProcess *m_daemonProcess;
+public:
+    DebuggerThreads( daemonProcess *daemonProcess ) :
+        m_daemonProcess( daemonProcess )
+    {}
+
+protected:
+    virtual void thread_init();
+    virtual void thread_shutdown();
+};
+
+thread_local int t_threadSocket = -1;
+
+void DebuggerThreads::thread_init()
+{
+    int sockets[2];
+
+    if( ::socketpair( PF_UNIX, SOCK_SEQPACKET, 0, sockets )<0 )
+        throw errno_exception( "Failed to create intra-thread socket pair" );
+
+    m_pthreadRequestSocketsLock.lock();
+    auto insertResult = m_pthreadRequestSockets.insert(
+            decltype(m_pthreadRequestSockets)::value_type(
+                std::this_thread::get_id(), socketpair( sockets[0], sockets[1] )
+                )
+            );
+    m_pthreadRequestSocketsLock.unlock();
+    if( ! insertResult.second )
+        throw detailed_exception( "Failed to add intra-thread socket pair to hash: already exists" );
+
+    m_daemonProcess->register_thread_socket( insertResult.first->second.getMainSocket() );
+    t_threadSocket=insertResult.first->second.getThreadSocket();
+}
+
+void DebuggerThreads::thread_shutdown()
+{
+    m_pthreadRequestSocketsLock.lock();
+    auto sockpair = m_pthreadRequestSockets.find( std::this_thread::get_id() );
+    m_pthreadRequestSocketsLock.unlock();
+    assert( sockpair!=m_pthreadRequestSockets.end() );
+    
+    m_daemonProcess->unregister_thread_socket( sockpair->second.getMainSocket() );
+    m_pthreadRequestSockets.erase( sockpair );
+}
+
+static std::unique_ptr<DebuggerThreads> workQ;
+
+struct thread_request {
+    enum request_type {
+        THREADREQ_PTRACE,
+    } request;
+
+    union {
+        struct {
+            __ptrace_request request;
+            pid_t pid;
+            void *addr;
+            void *data;
+        } ptrace;
+    } u;
+};
+
+struct result_ptrace {
+    long ret;
+    int error;
+};
+
+
+class SyscallHandlerTask : public worker_queue::worker_task
+{
+public:
+    SyscallHandlerTask( pid_t pid, pid_state *proc_state, enum PTLIB_WAIT_RET ptlib_status, int wait_status,
+            long parsed_status ) :
+        m_pid( pid ),
+        m_proc_state( proc_state ),
+        m_ptlib_status( ptlib_status ),
+        m_wait_status( wait_status ),
+        m_parsed_status( parsed_status )
+    {
+    }
+
+private:
+    pid_t m_pid;
+    pid_state *m_proc_state;
+    PTLIB_WAIT_RET m_ptlib_status;
+    int m_wait_status;
+    long m_parsed_status;
+public:
+    virtual void run()
+    {
+        if( m_proc_state->get_state()==pid_state::INIT ) {
+            if( ! process_initial_signal() )
+                return;
+        }
+
+        switch( m_wait_status ) {
+        case SIGNAL:
+            process_signal();
+            break;
+        case EXIT:
+        case SIGEXIT:
+            process_exit();
+            break;
+        case SYSCALL:
+            process_syscall();
+            break;
+        case NEWPROCESS:
+            dlog("Should never happen\n");
+            dlog(NULL);
+            assert(false);
+            break;
+        }
+    }
+
+private:
+    bool process_initial_signal()
+    {
+        if( m_ptlib_status==SIGNAL && m_parsed_status==SIGSTOP ) {
+            dlog("Received initial SIGSTOP on process " PID_F "\n", m_pid);
+            m_proc_state->setStateNone();
+            ptrace_continue( 0 );
+            return false;
+        }
+
+        dlog("Process " PID_F " reports with something other than SIGSTOP!\n", m_pid);
+        assert(false);
+        return true;
+    }
+
+    void process_signal()
+    {
+        assert( m_ptlib_status==SIGNAL );
+        ptrace_continue( m_parsed_status );
+    }
+
+    void process_syscall()
+    {
+        dlog("pid " PID_F " system call %d\n", m_pid, ptlib_get_syscall( m_pid ) );
+        ptrace_continue( 0 );
+    }
+    void process_exit()
+    {
+        // TODO
+    }
+
+    void ptrace_continue( int signal )
+    {
+        if( ptrace( PTRACE_SYSCALL, m_pid, 0, signal )<0 )
+            dlog("pid " PID_F " failed to perform ptrace: %s\n", m_pid, strerror(errno));
+        // TODO Proper error checking
+    }
+
+    long ptrace( __ptrace_request request, pid_t pid, void *addr, void *data )
+    {
+        thread_request req;
+        req.request = thread_request::THREADREQ_PTRACE;
+        req.u.ptrace.request = request;
+        req.u.ptrace.pid = pid;
+        req.u.ptrace.addr = addr;
+        req.u.ptrace.data = data;
+
+        ssize_t len = send( t_threadSocket, &req, sizeof(req), 0 );
+        if( len<0 )
+            throw errno_exception( "Send ptrace to master thread failed" );
+
+        result_ptrace res;
+        len = recv( t_threadSocket, &res, sizeof(res), 0 );
+
+        if( len<0 )
+            throw errno_exception( "Recv ptrace from master thread failed" );
+
+        if( static_cast<size_t>(len)<sizeof(res) )
+            throw detailed_exception( "Short ptrace response from master thread" );
+
+        errno = res.error;
+        return res.ret;
+    }
+
+    long ptrace( __ptrace_request request, pid_t pid, void *addr, long signal )
+    {
+        return ptrace( request, pid, addr, (void *)signal );
+    }
+};
+
 
 // Do nothing signal handler for sigchld
 static void sigchld_handler(int signum)
@@ -126,10 +308,21 @@ void init_globals()
 // Lookup a pid. Create the state if not found
 pid_state *lookup_state_create( pid_t pid )
 {
-    // TODO implement
+    auto retIterator( children.find(pid) );
+    
+    if( retIterator!=children.end() )
+        return retIterator->second.get();
+
+    dlog("Creating state for new child " PID_F "\n", pid);
+    ptlib_prepare( pid );
+
+    pid_state *ret = new pid_state;
+    children.insert( std::make_pair( pid, std::unique_ptr<pid_state>( ret ) ) );
+
+    return ret;
 }
 
-void init_debugger()
+void init_debugger( daemonProcess *daemonProcess )
 {
     // Initialize the ptlib library
     ptlib_init();
@@ -137,7 +330,8 @@ void init_debugger()
     register_handlers();
     init_globals();
 
-    workQ=std::unique_ptr<worker_queue>( new worker_queue() );
+    workQ=std::unique_ptr<DebuggerThreads>( new DebuggerThreads(daemonProcess) );
+    workQ->start();
 }
 
 void shutdown_debugger()
@@ -145,42 +339,23 @@ void shutdown_debugger()
     workQ=nullptr;
 }
 
-static void process_syscall( pid_t pid, pid_state *proc_state, enum PTLIB_WAIT_RET wait_state, int status, long ret )
-{
-    workQ->schedule_task( new GenericSyscallTask( pid, proc_state, wait_state, status, ret ) );
-}
-
-static void process_signal( pid_t pid, pid_state *proc_state, enum PTLIB_WAIT_RET wait_state, int status, long ret )
-{
-}
-
-static void process_exit( pid_t pid, pid_state *proc_state, enum PTLIB_WAIT_RET wait_state, int status, long ret )
-{
-}
-
 // ret is the signal (if applicable) or status (if a child exit)
 static void process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long ret )
 {
+    dlog("%s:%d pid " PID_F " wait_state %d status %08x ret %08lx\n", __FUNCTION__, __LINE__, pid, wait_state, status,
+            ret );
     pid_state *proc_state=lookup_state_create(pid);
 
-    if( proc_state->get_state()==pid_state::INIT )
-        workQ->schedule_task( new NewProcessTask( pid, proc_state, wait_state, status, ret ) );
-
-    switch( wait_state ) {
-    case SIGNAL:
-        process_signal( pid, proc_state, wait_state, status, ret );
+    switch( proc_state->get_state() ) {
+    case pid_state::INIT:
+    case pid_state::NONE:
+        workQ->schedule_task( new SyscallHandlerTask( pid, proc_state, wait_state, status, ret ) );
         break;
-    case EXIT:
-    case SIGEXIT:
-        process_exit( pid, proc_state, wait_state, status, ret );
+    case pid_state::KERNEL:
+        // TODO
         break;
-    case SYSCALL:
-        process_syscall( pid, proc_state, wait_state, status, ret );
-        break;
-    case NEWPROCESS:
-        dlog("Should never happen\n");
-        dlog(NULL);
-        assert(false);
+    case pid_state::WAITING:
+        // TODO
         break;
     }
 }
@@ -248,4 +423,48 @@ int process_children( daemonProcess *daemon )
     }
 
     return 0;
+}
+
+static void handle_threadreq_ptrace( int fd, const thread_request *req )
+{
+    errno=0;
+    long res = ptrace( req->u.ptrace.request, req->u.ptrace.pid, req->u.ptrace.addr, req->u.ptrace.data );
+
+    result_ptrace reply = {
+        res,
+        errno
+    };
+
+    if( send( fd, &reply, sizeof(reply), 0 )<0 ) {
+        dlog( "Writing to socket %d failed: %s\n", fd, strerror(errno) );
+        assert(false);
+    }
+}
+
+void handle_thread_request( int fd )
+{
+    thread_request request;
+
+    ssize_t size = recv( fd, &request, sizeof(request), 0 );
+    if( size<0 ) {
+        dlog("thread request recv failed on fd %d: %s\n", fd, strerror(errno) );
+
+        return;
+    }
+
+    assert( size==sizeof(request) );
+
+    switch( request.request ) {
+    case thread_request::THREADREQ_PTRACE:
+        handle_threadreq_ptrace( fd, &request );
+        break;
+    default:
+        dlog("Unknown thread request %d on fd %d\n", request.request, fd );
+    };
+}
+
+pid_state::pid_state() :
+    m_uid(0), m_euid(0), m_suid(0), m_fsuid(0),
+    m_gid(0), m_egid(0), m_sgid(0), m_fsgid(0)
+{
 }

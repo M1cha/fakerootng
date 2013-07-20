@@ -84,6 +84,17 @@ dnl Check which std::map variant to use
 AC_LANG_PUSH(C++)
 #AC_LANG_WERROR
 
+    dnl Test program to make sure compiler supports all relevant C++11 features
+read -d '' testprog <<"EOP"
+std::unordered_map<int, int> test;
+static thread_local decltype(test)::iterator iterator;
+for( auto &i: test )
+    i.second++;
+    int *nullable=nullptr;
+    int i;
+if( nullable!=0 )
+    nullable=&i;
+EOP
 AC_MSG_CHECKING([what flags are needed for compiler support of the ISO C++11 standard])
 saved_CXXFLAGS=$CXXFLAGS
 CXXFLAGS="$saved_CXXFLAGS -Werror"
@@ -92,12 +103,7 @@ AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
             class testcpp11 { public: testcpp11() = default; };
         ],
         [
-            std::unordered_map<int, int> test;
-            decltype(test)::iterator iterator;
-            int *nullable=nullptr;
-            int i;
-            if( nullable!=0 )
-                nullable=&i;
+            $testprog
         ])],
     [
         AC_MSG_RESULT([none])
@@ -110,12 +116,7 @@ AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
                     class testcpp11 { public: testcpp11() = default; };
                 ],
                 [
-                    std::unordered_map<int, int> test;
-                    decltype(test)::iterator iterator;
-                    int *nullable=nullptr;
-                    int i;
-                    if( nullable!=0 )
-                        nullable=&i;
+                    $testprog
                 ])],
             [
                 AC_MSG_RESULT([-std=c++11])
@@ -124,7 +125,7 @@ AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
             [
                 AC_MSG_RESULT([not supported])
                 AC_ERROR([Fakeroot-ng needs a compiler that supports C++11. If you are using gcc, that
-                  means version 4.7 or higher.])
+                  means version 4.8 or higher.])
             ]
         )
     ]

@@ -432,7 +432,7 @@ bool daemonProcess::daemonize( bool nodetach, int skip_fd1, int skip_fd2 )
 #define GRACE_NEW_CONNECTION_TIMEOUT 3
 void daemonProcess::start()
 {
-    init_debugger();
+    init_debugger( this );
 
     bool repeat;
     do {
@@ -495,6 +495,16 @@ bool daemonProcess::handle_request( const sigset_t *sigmask, bool existing_child
                 close_session(current);
             }
         }
+
+        for( auto i : thread_fds ) {
+            try {
+                if( FD_ISSET( i, &read_set ) )
+                    handle_thread_request( i );
+            } catch( const errno_exception &except ) {
+                dlog("Read from thread socket %d failed: %s (%s)", i, except.what(),
+                        except.get_error_message());
+            }
+        }
     }
 
     return ret;
@@ -504,6 +514,28 @@ void daemonProcess::set_client_sock_options( int fd )
 {
     daemonCtrl::set_client_sock_options(fd);
     fcntl( fd, F_SETFL, O_NONBLOCK );
+}
+
+void daemonProcess::register_thread_socket( int fd )
+{
+    {
+        std::lock_guard<std::mutex> lockGuard( thread_fds_mutex );
+        dlog("Registering fd %d\n", fd);
+        std::pair< decltype(thread_fds)::iterator, bool > result = thread_fds.insert( fd );
+        assert(result.second);
+    }
+
+    recalc_select_mask();
+}
+
+void daemonProcess::unregister_thread_socket( int fd )
+{
+    {
+        std::lock_guard<std::mutex> lockGuard( thread_fds_mutex );
+        thread_fds.erase( fd );
+    }
+
+    recalc_select_mask();
 }
 
 void daemonProcess::handle_new_connection()
@@ -572,6 +604,8 @@ void daemonProcess::handle_cmd_attach( decltype(session_fds)::iterator & element
 
 void daemonProcess::recalc_select_mask()
 {
+    std::unique_lock<std::mutex> lockGuard(thread_fds_mutex);
+
     FD_ZERO(&file_set);
     max_fd=-1;
 
@@ -579,6 +613,12 @@ void daemonProcess::recalc_select_mask()
         FD_SET(i->get(), &file_set);
         if( i->get()>max_fd )
             max_fd=i->get();
+    }
+
+    for( auto i=thread_fds.begin(); i!=thread_fds.end(); ++i ) {
+        FD_SET(*i, &file_set);
+        if( *i>max_fd )
+            max_fd=*i;
     }
 
     if( master_socket ) {
