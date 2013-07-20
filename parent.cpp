@@ -170,7 +170,7 @@ public:
                 return;
         }
 
-        switch( m_wait_status ) {
+        switch( m_ptlib_status ) {
         case SIGNAL:
             process_signal();
             break;
