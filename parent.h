@@ -24,7 +24,7 @@ class SyscallHandlerTask;
 
 class pid_state {
 public:
-    enum state { INIT, NONE, KERNEL, WAITING };
+    enum state { INIT, NEW_INSTANCE, NONE, KERNEL, WAITING, WAKEUP };
     
 private:
     // The credentials (including the Linux specific file system UID)
@@ -34,6 +34,11 @@ private:
 
     enum state m_state = INIT;
     SyscallHandlerTask *m_task = nullptr;
+    std::mutex m_wait_lock;
+    std::condition_variable m_wait_condition;
+    PTLIB_WAIT_RET m_wait_state;
+    int m_wait_status;
+    long m_wait_parsed_status;
 
 public:
     pid_state();
@@ -48,6 +53,18 @@ public:
         m_state=NONE;
     }
 
+    void setStateNewInstance()
+    {
+        assert(m_state==INIT);
+        m_state=NEW_INSTANCE;
+    }
+
+    void wait( void (*callback)( void * ), void *opaq );
+    void wakeup( PTLIB_WAIT_RET wait_state, int status, long parsed_status );
+
+    PTLIB_WAIT_RET get_wait_state() const { return m_wait_state; }
+    int get_wait_status() const { return m_wait_status; }
+    long get_wait_parsed_status() const { return m_wait_parsed_status; }
 private:
     pid_state( const pid_state &rhs ) = delete;
     pid_state &operator=( const pid_state &rhs ) = delete;

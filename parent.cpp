@@ -40,6 +40,9 @@
 
 #include "parent.h"
 
+// Static function declarations
+static pid_state *lookup_state_create( pid_t pid );
+
 static std::unordered_map<pid_t,std::unique_ptr<pid_state>> children;
 
 // Globally visible sizes of in process memory regions
@@ -91,6 +94,13 @@ thread_local int t_threadSocket = -1;
 void DebuggerThreads::thread_init()
 {
     int sockets[2];
+
+    // Only the main thread should receive the interesting signals
+    sigset_t child_signals;
+    sigemptyset( &child_signals );
+    sigaddset( &child_signals, SIGCHLD );
+    sigaddset( &child_signals, SIGALRM );
+    pthread_sigmask( SIG_BLOCK, &child_signals, NULL );
 
     if( ::socketpair( PF_UNIX, SOCK_SEQPACKET, 0, sockets )<0 )
         throw errno_exception( "Failed to create intra-thread socket pair" );
@@ -165,7 +175,7 @@ private:
 public:
     virtual void run()
     {
-        if( m_proc_state->get_state()==pid_state::INIT ) {
+        if( m_proc_state->get_state()==pid_state::INIT || m_proc_state->get_state()==pid_state::NEW_INSTANCE ) {
             if( ! process_initial_signal() )
                 return;
         }
@@ -192,27 +202,44 @@ public:
 private:
     bool process_initial_signal()
     {
-        if( m_ptlib_status==SIGNAL && m_parsed_status==SIGSTOP ) {
-            dlog("Received initial SIGSTOP on process " PID_F "\n", m_pid);
-            m_proc_state->setStateNone();
-            ptrace_continue( 0 );
-            return false;
+        if( m_ptlib_status!=SIGNAL || m_parsed_status!=SIGSTOP ) {
+            dlog("Process " PID_F " reports with something other than SIGSTOP!\n", m_pid);
+            assert(false);
+            return true;
         }
 
-        dlog("Process " PID_F " reports with something other than SIGSTOP!\n", m_pid);
-        assert(false);
-        return true;
+        dlog("Received initial SIGSTOP on process " PID_F "\n", m_pid);
+
+        if( m_proc_state->get_state()==pid_state::INIT ) {
+            // New organic process
+            m_proc_state->setStateNone();
+            ptrace_continue( 0 );
+        } else {
+            // New root process
+            m_proc_state->setStateNone();
+            // Let the fakeroot-ng code run. The process will receive a bogus TRAP after execve
+            m_proc_state->wait( []( void *opaq )
+                    {
+                        SyscallHandlerTask *_this=static_cast<SyscallHandlerTask*>(opaq);
+                        _this->ptrace( PTRACE_CONT, _this->m_pid, nullptr, nullptr );
+                    }, this );
+            // The process is not running the client's code - let it run
+            ptrace_continue(0);
+        }
+
+        return false;
     }
 
     void process_signal()
     {
         assert( m_ptlib_status==SIGNAL );
+        dlog("pid " PID_F " received signal %ld\n", m_pid, m_parsed_status);
         ptrace_continue( m_parsed_status );
     }
 
     void process_syscall()
     {
-        dlog("pid " PID_F " system call %d\n", m_pid, ptlib_get_syscall( m_pid ) );
+        dlog("pid " PID_F " system call %ld\n", m_pid, m_parsed_status);
         ptrace_continue( 0 );
     }
     void process_exit()
@@ -272,6 +299,17 @@ static void sigalrm_handler(int signum)
 }
 
 
+static void handle_new_process( pid_t parent_id, pid_t child_id )
+{
+    pid_state *child = lookup_state_create( child_id );
+
+    if( parent_id==-1 ) {
+        child->setStateNewInstance();
+    } else {
+        assert( false ); // TODO implement the other case
+    }
+}
+
 bool attach_debugger( pid_t child )
 {
     dlog(NULL);
@@ -284,7 +322,7 @@ bool attach_debugger( pid_t child )
     }
     dlog("Debugger successfully attached to process " PID_F "\n", child );
 
-    // TODO handle_new_process( -1, child ); // No parent - a root process
+    handle_new_process( -1, child ); // No parent - a root process
 
     return true;
 }
@@ -305,18 +343,28 @@ void init_globals()
     shared_mem_size-=shared_mem_size%page_size;
 }
 
-// Lookup a pid. Create the state if not found
-pid_state *lookup_state_create( pid_t pid )
+pid_state *lookup_state( pid_t pid )
 {
     auto retIterator( children.find(pid) );
     
     if( retIterator!=children.end() )
         return retIterator->second.get();
+    
+    return nullptr;
+}
+
+// Lookup a pid. Create the state if not found
+static pid_state *lookup_state_create( pid_t pid )
+{
+    pid_state *ret = lookup_state( pid );
+    
+    if( ret!=nullptr )
+        return ret;
 
     dlog("Creating state for new child " PID_F "\n", pid);
     ptlib_prepare( pid );
 
-    pid_state *ret = new pid_state;
+    ret = new pid_state;
     children.insert( std::make_pair( pid, std::unique_ptr<pid_state>( ret ) ) );
 
     return ret;
@@ -348,14 +396,22 @@ static void process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int stat
 
     switch( proc_state->get_state() ) {
     case pid_state::INIT:
+    case pid_state::NEW_INSTANCE:
     case pid_state::NONE:
         workQ->schedule_task( new SyscallHandlerTask( pid, proc_state, wait_state, status, ret ) );
         break;
     case pid_state::KERNEL:
-        // TODO
+        if( wait_state==SYSCALL ) {
+            ptrace( PTRACE_SYSCALL, pid, 0, 0 );
+            proc_state->setStateNone();
+        } else
+            workQ->schedule_task( new SyscallHandlerTask( pid, proc_state, wait_state, status, ret ) );
         break;
     case pid_state::WAITING:
-        // TODO
+        proc_state->wakeup( wait_state, status, ret );
+        break;
+    case pid_state::WAKEUP:
+        assert(false);
         break;
     }
 }
@@ -467,4 +523,32 @@ pid_state::pid_state() :
     m_uid(0), m_euid(0), m_suid(0), m_fsuid(0),
     m_gid(0), m_egid(0), m_sgid(0), m_fsgid(0)
 {
+}
+
+void pid_state::wait( void (*callback)( void * ), void *opaq )
+{
+    std::unique_lock<decltype(m_wait_lock)> lock(m_wait_lock);
+
+    state oldstate=m_state;
+    m_state=WAITING;
+
+    callback( opaq );
+
+    m_wait_condition.wait( lock, [ this ]{ return m_state==WAKEUP; } );
+
+    m_state=oldstate;
+}
+
+void pid_state::wakeup( PTLIB_WAIT_RET wait_state, int status, long parsed_status )
+{
+    std::unique_lock<decltype(m_wait_lock)> lock(m_wait_lock);
+
+    assert( m_state==WAITING );
+    m_state=WAKEUP;
+
+    m_wait_state=wait_state;
+    m_wait_status=status;
+    m_wait_parsed_status=parsed_status;
+
+    m_wait_condition.notify_one();
 }

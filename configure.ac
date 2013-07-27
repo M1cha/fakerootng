@@ -85,16 +85,19 @@ AC_LANG_PUSH(C++)
 #AC_LANG_WERROR
 
     dnl Test program to make sure compiler supports all relevant C++11 features
-read -d '' testprog <<"EOP"
+[
+testprog="`cat <<"EOP"
 std::unordered_map<int, int> test;
 static thread_local decltype(test)::iterator iterator;
 for( auto &i: test )
     i.second++;
     int *nullable=nullptr;
     int i;
+[&i](){i=3;}();
 if( nullable!=0 )
     nullable=&i;
-EOP
+EOP`"
+]
 AC_MSG_CHECKING([what flags are needed for compiler support of the ISO C++11 standard])
 saved_CXXFLAGS=$CXXFLAGS
 CXXFLAGS="$saved_CXXFLAGS -Werror"
