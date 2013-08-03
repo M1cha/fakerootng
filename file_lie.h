@@ -9,7 +9,7 @@
 
 struct stat_override {
     dev_t dev;
-    ptlib_inode_t inode;
+    ptlib::inode_t inode;
     mode_t mode;
     uid_t uid;
     gid_t gid;
@@ -23,7 +23,7 @@ struct stat_override {
 
 struct override_key {
     dev_t dev;
-    ptlib_inode_t inode;
+    ptlib::inode_t inode;
 
     override_key() : dev(0), inode(0)
     {
@@ -37,11 +37,11 @@ struct override_key {
 
 // Returns the information inside the database about a file with the given dev and inode
 // returns "false" if no such file exists
-bool get_map( dev_t dev, ptlib_inode_t inode, struct stat_override *stat );
+bool get_map( dev_t dev, ptlib::inode_t inode, struct stat_override *stat );
 
 void set_map( const struct stat_override *stat );
 
-void remove_map( dev_t dev, ptlib_inode_t inode );
+void remove_map( dev_t dev, ptlib::inode_t inode );
 
 void load_map( FILE *file );
 void save_map( FILE *file );

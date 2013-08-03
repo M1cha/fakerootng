@@ -36,7 +36,7 @@ private:
     SyscallHandlerTask *m_task = nullptr;
     std::mutex m_wait_lock;
     std::condition_variable m_wait_condition;
-    PTLIB_WAIT_RET m_wait_state;
+    ptlib::WAIT_RET m_wait_state;
     int m_wait_status;
     long m_wait_parsed_status;
 
@@ -60,9 +60,9 @@ public:
     }
 
     void wait( void (*callback)( void * ), void *opaq );
-    void wakeup( PTLIB_WAIT_RET wait_state, int status, long parsed_status );
+    void wakeup( ptlib::WAIT_RET wait_state, int status, long parsed_status );
 
-    PTLIB_WAIT_RET get_wait_state() const { return m_wait_state; }
+    ptlib::WAIT_RET get_wait_state() const { return m_wait_state; }
     int get_wait_status() const { return m_wait_status; }
     long get_wait_parsed_status() const { return m_wait_parsed_status; }
 private:

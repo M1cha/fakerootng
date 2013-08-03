@@ -203,16 +203,14 @@ static int real_perform_child( daemonCtrl &daemon_ctrl, char *argv[] )
     return 2;
 }
 
-#if PTLIB_PARENT_CAN_WAIT
 static int perform_child( daemonCtrl & daemon_ctrl, char *argv[] )
 {
-    return real_perform_child( daemon_ctrl, argv );
-}
-#else
-// Parent cannot wait on debugged child
-#error Stale code
-static int perform_child( daemonCtrl & daemon_ctrl, char *argv[] )
-{
+    if( ptlib::PARENT_CAN_WAIT )
+        return real_perform_child( daemon_ctrl, argv );
+    
+    abort(); // Stale code
+
+#if 0
     int pipes[2];
     pipe(pipes);
 
@@ -267,8 +265,8 @@ static int perform_child( daemonCtrl & daemon_ctrl, char *argv[] )
     fprintf(stderr, "Child " PID_F " terminated with unknown termination status %x\n", child, buffer );
 
     return 3;
-}
 #endif
+}
 
 int main(int argc, char *argv[])
 {

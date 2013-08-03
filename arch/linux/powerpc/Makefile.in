@@ -1,4 +1,0 @@
-
-libarch_a_OBJECTS=platform.lo ../os.lo
-
-include ../Makefile.template

@@ -1,9 +1,8 @@
 #ifndef PLATFORM_SPECIFIC_H
 #define PLATFORM_SPECIFIC_H
 
-#include <sys/types.h>
 #include <sys/syscall.h>
-#include <asm/ptrace.h>
+//#include <asm/ptrace.h>
 #include <sys/resource.h>
 
 /* Specially defined 32 bit syscalls that don't have a 64 syscall, but need to be handled */
@@ -68,21 +67,23 @@
 
 #define SYS_X86_32_OFFSET 31
 
+namespace ptlib {
+
 /* Marks the library as supporting debugging children */
-#define PTLIB_SUPPORTS_FORK 1
-#define PTLIB_SUPPORTS_VFORK 1
-#define PTLIB_SUPPORTS_CLONE 1
+static const bool SUPPORTS_FORK=true;
+static const bool SUPPORTS_VFORK=true;
+static const bool SUPPORTS_CLONE=true;
 
-#define PTLIB_PARENT_CAN_WAIT 1
+static const bool PARENT_CAN_WAIT=true;
 
-#define PTLIB_STATE_SIZE (27)
+static const size_t STATE_SIZE=27;
 
 /* This is defined to 1 if the platform sends a SIGTRAP to the process after a successful execve if it's being traced */
-#define PTLIB_TRAP_AFTER_EXEC 1
+static const bool TRAP_AFTER_EXEC=true;
 
-typedef unsigned long ptlib_inode_t;
+typedef unsigned long inode_t;
 
-struct ptlib_stat {
+struct stat {
     unsigned long   dev;
     unsigned long   ino;
     unsigned long   nlink;
@@ -105,7 +106,9 @@ struct ptlib_stat {
     long            __unused[3];
 };
 
-typedef struct rusage ptlib_extra_data;
+typedef struct rusage extra_data;
+
+}; // End of namespace ptlib
 
 /* Platform specific format specifiers for printing pid, dev and inode */
 #define PID_F "%d"

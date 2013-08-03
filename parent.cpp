@@ -156,7 +156,7 @@ struct result_ptrace {
 class SyscallHandlerTask : public worker_queue::worker_task
 {
 public:
-    SyscallHandlerTask( pid_t pid, pid_state *proc_state, enum PTLIB_WAIT_RET ptlib_status, int wait_status,
+    SyscallHandlerTask( pid_t pid, pid_state *proc_state, enum ptlib::WAIT_RET ptlib_status, int wait_status,
             long parsed_status ) :
         m_pid( pid ),
         m_proc_state( proc_state ),
@@ -169,7 +169,7 @@ public:
 private:
     pid_t m_pid;
     pid_state *m_proc_state;
-    PTLIB_WAIT_RET m_ptlib_status;
+    ptlib::WAIT_RET m_ptlib_status;
     int m_wait_status;
     long m_parsed_status;
 public:
@@ -181,17 +181,17 @@ public:
         }
 
         switch( m_ptlib_status ) {
-        case SIGNAL:
+        case ptlib::SIGNAL:
             process_signal();
             break;
-        case EXIT:
-        case SIGEXIT:
+        case ptlib::EXIT:
+        case ptlib::SIGEXIT:
             process_exit();
             break;
-        case SYSCALL:
+        case ptlib::SYSCALL:
             process_syscall();
             break;
-        case NEWPROCESS:
+        case ptlib::NEWPROCESS:
             dlog("Should never happen\n");
             dlog(NULL);
             assert(false);
@@ -202,7 +202,7 @@ public:
 private:
     bool process_initial_signal()
     {
-        if( m_ptlib_status!=SIGNAL || m_parsed_status!=SIGSTOP ) {
+        if( m_ptlib_status!=ptlib::SIGNAL || m_parsed_status!=SIGSTOP ) {
             dlog("Process " PID_F " reports with something other than SIGSTOP!\n", m_pid);
             assert(false);
             return true;
@@ -210,7 +210,7 @@ private:
 
         dlog("Received initial SIGSTOP on process " PID_F "\n", m_pid);
 
-        if( m_proc_state->get_state()==pid_state::INIT ) {
+        if( m_proc_state->get_state()==pid_state::INIT || !ptlib::TRAP_AFTER_EXEC ) {
             // New organic process
             m_proc_state->setStateNone();
             ptrace_continue( 0 );
@@ -232,7 +232,7 @@ private:
 
     void process_signal()
     {
-        assert( m_ptlib_status==SIGNAL );
+        assert( m_ptlib_status==ptlib::SIGNAL );
         dlog("pid " PID_F " received signal %ld\n", m_pid, m_parsed_status);
         ptrace_continue( m_parsed_status );
     }
@@ -337,7 +337,7 @@ void init_globals()
     size_t page_size=sysconf(_SC_PAGESIZE);
 
     static_mem_size=page_size;
-    shared_mem_size=2*PATH_MAX+ptlib_prepare_memory_len();
+    shared_mem_size=2*PATH_MAX+ptlib::prepare_memory_len();
     // Round this to the higher page size
     shared_mem_size+=page_size-1;
     shared_mem_size-=shared_mem_size%page_size;
@@ -362,7 +362,7 @@ static pid_state *lookup_state_create( pid_t pid )
         return ret;
 
     dlog("Creating state for new child " PID_F "\n", pid);
-    ptlib_prepare( pid );
+    ptlib::prepare( pid );
 
     ret = new pid_state;
     children.insert( std::make_pair( pid, std::unique_ptr<pid_state>( ret ) ) );
@@ -373,7 +373,7 @@ static pid_state *lookup_state_create( pid_t pid )
 void init_debugger( daemonProcess *daemonProcess )
 {
     // Initialize the ptlib library
-    ptlib_init();
+    ptlib::init();
 
     register_handlers();
     init_globals();
@@ -388,7 +388,7 @@ void shutdown_debugger()
 }
 
 // ret is the signal (if applicable) or status (if a child exit)
-static void process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int status, long ret )
+static void process_sigchld( pid_t pid, enum ptlib::WAIT_RET wait_state, int status, long ret )
 {
     dlog("%s:%d pid " PID_F " wait_state %d status %08x ret %08lx\n", __FUNCTION__, __LINE__, pid, wait_state, status,
             ret );
@@ -401,7 +401,7 @@ static void process_sigchld( pid_t pid, enum PTLIB_WAIT_RET wait_state, int stat
         workQ->schedule_task( new SyscallHandlerTask( pid, proc_state, wait_state, status, ret ) );
         break;
     case pid_state::KERNEL:
-        if( wait_state==SYSCALL ) {
+        if( wait_state==ptlib::SYSCALL ) {
             ptrace( PTRACE_SYSCALL, pid, 0, 0 );
             proc_state->setStateNone();
         } else
@@ -450,12 +450,12 @@ int process_children( daemonProcess *daemon )
         int status;
         pid_t pid;
         long ret;
-        ptlib_extra_data data;
+        ptlib::extra_data data;
 
-        enum PTLIB_WAIT_RET wait_state;
-        if( ptlib_wait( &pid, &status, &data, true ) ) {
+        enum ptlib::WAIT_RET wait_state;
+        if( ptlib::wait( &pid, &status, &data, true ) ) {
             // A child had something to say
-            ret=ptlib_parse_wait( pid, status, &wait_state );
+            ret=ptlib::parse_wait( pid, status, &wait_state );
 
             process_sigchld( pid, wait_state, status, ret );
         } else {
@@ -471,7 +471,7 @@ int process_children( daemonProcess *daemon )
 
             } else if( errno==ECHILD ) {
                 // We should never get here. If we have no more children, we should have known about it already
-                dlog( "BUG - ptlib_wait failed with %s while numchildren is still %d\n", strerror(errno), num_processes );
+                dlog( "BUG - ptlib wait failed with %s while numchildren is still %d\n", strerror(errno), num_processes );
                 dlog(NULL);
                 num_processes=0;
             }
@@ -539,7 +539,7 @@ void pid_state::wait( void (*callback)( void * ), void *opaq )
     m_state=oldstate;
 }
 
-void pid_state::wakeup( PTLIB_WAIT_RET wait_state, int status, long parsed_status )
+void pid_state::wakeup( ptlib::WAIT_RET wait_state, int status, long parsed_status )
 {
     std::unique_lock<decltype(m_wait_lock)> lock(m_wait_lock);
 

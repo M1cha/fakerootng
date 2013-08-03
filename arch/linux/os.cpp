@@ -36,19 +36,29 @@
 #include "../platform.h"
 #include "os.h"
 
-int ptlib_linux_continue( int request, pid_t pid, int signal )
+// Some ptrace command enums are doubly defined, once as enums and once as preprocessor. Type safety requires we use
+// the later
+#undef PTRACE_GETREGS
+#undef PTRACE_GETSIGINFO
+#undef PTRACE_GETEVENTMSG
+#undef PTRACE_PEEKDATA
+#undef PTRACE_POKEDATA
+
+namespace ptlib {
+
+int linux_continue( __ptrace_request request, pid_t pid, int signal )
 {
     return ptrace( request, pid, 0, signal );
 }
 
-void ptlib_linux_prepare( pid_t pid )
+void linux_prepare( pid_t pid )
 {
     // These cause more harm than good
     //if( ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_TRACEFORK|PTRACE_O_TRACEVFORK|PTRACE_O_TRACECLONE)!=0 )
     //    perror("PTRACE_SETOPTIONS failed");
 }
 
-int ptlib_linux_wait( pid_t *pid, int *status, ptlib_extra_data *data, int async )
+int linux_wait( pid_t *pid, int *status, extra_data *data, int async )
 {
     *pid=wait4(-1, status, (async?WNOHANG:0)|__WALL, data );
 
@@ -61,7 +71,7 @@ int ptlib_linux_wait( pid_t *pid, int *status, ptlib_extra_data *data, int async
 }
 
 
-long ptlib_linux_parse_wait( pid_t pid, int status, enum PTLIB_WAIT_RET *type )
+long linux_parse_wait( pid_t pid, int status, enum WAIT_RET *type )
 {
     long ret;
 
@@ -87,7 +97,7 @@ long ptlib_linux_parse_wait( pid_t pid, int status, enum PTLIB_WAIT_RET *type )
             } else {
                 /* Since we cannot reliably know when PTRACE_O_TRACESYSGOOD is supported, we always assume that's the reason for a
                  * SIGTRACE */
-                ret=ptlib_get_syscall(pid);
+                ret=get_syscall(pid);
                 *type=SYSCALL;
             }
         } else {
@@ -104,14 +114,14 @@ long ptlib_linux_parse_wait( pid_t pid, int status, enum PTLIB_WAIT_RET *type )
     return ret;
 }
 
-int ptlib_linux_reinterpret( enum PTLIB_WAIT_RET prevstate, pid_t pid, int status, long *ret )
+int linux_reinterpret( enum WAIT_RET prevstate, pid_t pid, int status, long *ret )
 {
     // Previous state does not affect us
     // XXX if the first thing the child does is a "fork", is this statement still true?
     return prevstate;
 }
 
-int ptlib_linux_get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
+int linux_get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
 {
     errno=0;
 
@@ -145,7 +155,7 @@ int ptlib_linux_get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t
     return errno==0;
 }
 
-int ptlib_linux_set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len )
+int linux_set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len )
 {
     long buffer;
     size_t offset=((int_ptr)process_ptr)%sizeof(long);
@@ -158,7 +168,7 @@ int ptlib_linux_set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, 
         buffer=ptrace( PTRACE_PEEKDATA, pid, process_ptr, 0 );
     }
 
-    const char *src=local_ptr;
+    const char *src=static_cast<const char *>(local_ptr);
 
     while( len>0 && errno==0 ) {
         ((char *)&buffer)[offset]=*src;
@@ -190,7 +200,7 @@ int ptlib_linux_set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, 
     return errno==0;
 }
 
-int ptlib_linux_get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen )
+int linux_get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen )
 {
     /* Are we aligned on the "start" front? */
     unsigned int offset=((unsigned long)process_ptr)%sizeof(long);
@@ -217,17 +227,17 @@ int ptlib_linux_get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, siz
     return i;
 } 
 
-int ptlib_linux_set_string( pid_t pid, const char *local_ptr, int_ptr process_ptr )
+int linux_set_string( pid_t pid, const char *local_ptr, int_ptr process_ptr )
 {
     size_t len=strlen(local_ptr)+1;
 
-    return ptlib_set_mem( pid, local_ptr, process_ptr, len );
+    return set_mem( pid, local_ptr, process_ptr, len );
 }
 
-ssize_t ptlib_linux_get_cwd( pid_t pid, char *buffer, size_t buff_size )
+ssize_t linux_get_cwd( pid_t pid, char *buffer, size_t buff_size )
 {
     char tmpbuff[20]; /* Leave enough chars for the digits */
-    sprintf(tmpbuff, "/proc/"PID_F"/cwd", pid );
+    sprintf(tmpbuff, "/proc/" PID_F "/cwd", pid );
 
     ssize_t ret=readlink( tmpbuff, buffer, buff_size>0 ? buff_size-1 : 0 );
 
@@ -237,10 +247,10 @@ ssize_t ptlib_linux_get_cwd( pid_t pid, char *buffer, size_t buff_size )
     return ret;
 }
 
-ssize_t ptlib_linux_get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
+ssize_t linux_get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
 {
     char tmpbuff[40];
-    sprintf(tmpbuff, "/proc/"PID_F"/fd/%d", pid, fd );
+    sprintf(tmpbuff, "/proc/" PID_F "/fd/%d", pid, fd );
 
     ssize_t ret=readlink( tmpbuff, buffer, buff_size>0 ? buff_size-1 : 0 );
 
@@ -250,11 +260,11 @@ ssize_t ptlib_linux_get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
     return ret;
 }
 
-pid_t ptlib_linux_get_parent( pid_t pid )
+pid_t linux_get_parent( pid_t pid )
 {
     /* Query the proc filesystem to figure out who the process' parent is */
     char filename[100];
-    sprintf(filename, "/proc/"PID_F"/status", pid);
+    sprintf(filename, "/proc/" PID_F "/status", pid);
 
     FILE *stat_file=fopen(filename, "r");
     if( stat_file==NULL ) {
@@ -276,7 +286,7 @@ pid_t ptlib_linux_get_parent( pid_t pid )
                 ;
         }
 
-        if( sscanf( line, "PPid: "PID_F, &ret)!=1 )
+        if( sscanf( line, "PPid: " PID_F, &ret)!=1 )
             ret=-1;
     }
 
@@ -285,7 +295,7 @@ pid_t ptlib_linux_get_parent( pid_t pid )
     return ret;
 }
 
-int ptlib_linux_fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[PTLIB_STATE_SIZE],
+int linux_fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[STATE_SIZE],
         int_ptr context[FORK_CONTEXT_SIZE] )
 {
     /* Turn the fork/vfork into a clone */
@@ -297,32 +307,34 @@ int ptlib_linux_fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *o
 
     // Store a copy of the arguments we change, in case they held something important
     int_ptr *save_state=(int_ptr *)registers;
-    save_state[0]=ptlib_get_syscall( pid );
-    save_state[1]=ptlib_get_argument( pid, 1 );
-    save_state[2]=ptlib_get_argument( pid, 2 );
+    save_state[0]=get_syscall( pid );
+    save_state[1]=get_argument( pid, 1 );
+    save_state[2]=get_argument( pid, 2 );
 
-    ptlib_set_syscall( pid, SYS_clone );
-    ptlib_set_argument( pid, 1, clone_flags ); /* Flags */
-    ptlib_set_argument( pid, 2, 0 ); /* Stack base (keep the same) */
+    set_syscall( pid, SYS_clone );
+    set_argument( pid, 1, clone_flags ); /* Flags */
+    set_argument( pid, 2, 0 ); /* Stack base (keep the same) */
 
     /* We did change the system call in use */
     return 0;
 }
 
-int ptlib_linux_fork_exit( pid_t pid, pid_t *newpid, void *registers[PTLIB_STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] )
+int linux_fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] )
 {
     int ret=0;
 
-    if( ptlib_success( pid, SYS_clone ) ) {
+    if( success( pid, SYS_clone ) ) {
         ret=1;
-        *newpid=ptlib_get_retval( pid );
+        *newpid=get_retval( pid );
     }
 
     /* Restore the clobbered registers */
     const int_ptr *save_state=(const int_ptr *)registers;
-    ptlib_set_syscall( pid, save_state[0] );
-    ptlib_set_argument( pid, 1, save_state[1] );
-    ptlib_set_argument( pid, 2, save_state[2] );
+    set_syscall( pid, save_state[0] );
+    set_argument( pid, 1, save_state[1] );
+    set_argument( pid, 2, save_state[2] );
 
     return ret;
 }
+
+}; // End of namespace ptlib

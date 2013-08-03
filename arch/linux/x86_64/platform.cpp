@@ -29,8 +29,10 @@
 #include "../../platform.h"
 #include "../os.h"
 
+namespace ptlib {
+
 #define mem_offset 8
-static const char memory_image[mem_offset]=
+static const unsigned char memory_image[mem_offset]=
 {
     0xcd, 0x80, /* int 0x80 - syscall for 32 bit */
     0x00, 0x00, /* Pad */
@@ -376,7 +378,7 @@ static int syscall_32_to_64[]={
 static int syscall_64_to_32[MAP_SIZE_32_64];
 
 /* We init the reverse map when the library loads */
-void ptlib_init()
+void init()
 {
     unsigned int i;
     for( i=0; i<ARRAY_SIZE(syscall_64_to_32); ++i )
@@ -411,7 +413,7 @@ static int is_64( pid_t pid )
                 cache_64=0; // 32 bit mode
                 break;
             default:
-                dlog("is_64: "PID_F" unknown usbsystem 0x%lx\n", pid, cs );
+                dlog("is_64: " PID_F " unknown usbsystem 0x%lx\n", pid, cs );
                 break;
         }
 
@@ -420,45 +422,45 @@ static int is_64( pid_t pid )
     return cache_64;
 }
 
-int ptlib_continue( int request, pid_t pid, int signal )
+int cont( int request, pid_t pid, int signal )
 {
     /* Invalidate the cache */
     cache_process=0;
 
-    return ptlib_linux_continue( request, pid, signal );
+    return linux_continue( __ptrace_request(request), pid, signal );
 }
 
-void ptlib_prepare( pid_t pid )
+void prepare( pid_t pid )
 {
-    ptlib_linux_prepare(pid);
+    linux_prepare(pid);
 }
 
-int ptlib_wait( pid_t *pid, int *status, ptlib_extra_data *data, int async )
+int wait( pid_t *pid, int *status, extra_data *data, int async )
 {
-    return ptlib_linux_wait( pid, status, data, async );
+    return linux_wait( pid, status, data, async );
 }
 
-long ptlib_parse_wait( pid_t pid, int status, enum PTLIB_WAIT_RET *type )
+long parse_wait( pid_t pid, int status, enum WAIT_RET *type )
 {
-    return ptlib_linux_parse_wait( pid, status, type );
+    return linux_parse_wait( pid, status, type );
 }
 
-int ptlib_reinterpret( enum PTLIB_WAIT_RET prestate, pid_t pid, int status, long *ret )
+int reinterpret( enum WAIT_RET prestate, pid_t pid, int status, long *ret )
 {
-    return ptlib_linux_reinterpret( prestate, pid, status, ret );
+    return linux_reinterpret( prestate, pid, status, ret );
 }
 
-void *ptlib_get_pc( pid_t pid )
+void *get_pc( pid_t pid )
 {
     return (void *)ptrace( PTRACE_PEEKUSER, pid, RIP, 0 );
 }
 
-int ptlib_set_pc( pid_t pid, int_ptr location )
+int set_pc( pid_t pid, int_ptr location )
 {
     return ptrace( PTRACE_POKEUSER, pid, RIP, location );
 }
 
-int ptlib_get_syscall( pid_t pid )
+int get_syscall( pid_t pid )
 {
     int syscall=ptrace( PTRACE_PEEKUSER, pid, ORIG_RAX, 0 );
 
@@ -467,7 +469,7 @@ int ptlib_get_syscall( pid_t pid )
         if( syscall>=0 && (unsigned int)syscall<ARRAY_SIZE(syscall_32_to_64) ) {
             syscall=syscall_32_to_64[syscall];
         } else {
-            dlog("ptlib_get_syscall: "PID_F" syscall out of range %d\n", pid, syscall);
+            dlog("ptlib_get_syscall: " PID_F " syscall out of range %d\n", pid, syscall);
 
             syscall=-1;
         }
@@ -485,7 +487,7 @@ static int translate_syscall( pid_t pid, int sc_num )
             sc=syscall_64_to_32[sc];
         } else {
             sc=-1;
-            dlog("ptlib_set_syscall: "PID_F" invalid 64 to 32 bit translation for syscall %d\n", pid, sc_num );
+            dlog("ptlib_set_syscall: " PID_F " invalid 64 to 32 bit translation for syscall %d\n", pid, sc_num );
         }
 
         sc_num=sc;
@@ -494,7 +496,7 @@ static int translate_syscall( pid_t pid, int sc_num )
     return sc_num;
 }
 
-int ptlib_set_syscall( pid_t pid, int sc_num )
+int set_syscall( pid_t pid, int sc_num )
 {
     sc_num=translate_syscall( pid, sc_num );
 
@@ -506,17 +508,17 @@ int ptlib_set_syscall( pid_t pid, int sc_num )
     return ptrace(PTRACE_POKEUSER, pid, ORIG_RAX, sc_num);
 }
 
-int ptlib_generate_syscall( pid_t pid, int sc_num, int_ptr base_memory )
+int generate_syscall( pid_t pid, int sc_num, int_ptr base_memory )
 {
     sc_num=translate_syscall( pid, sc_num );
 
     if( sc_num!=-1 && ptrace(PTRACE_POKEUSER, pid, RAX, sc_num)==0 ) {
         if( is_64(pid) ) {
             /* 64 bit syscall instruction */
-            return ptlib_set_pc( pid, base_memory-mem_offset+syscall_instr64_offset )==0;
+            return set_pc( pid, base_memory-mem_offset+syscall_instr64_offset )==0;
         } else {
             /* 32 bit syscall instruction */
-            return ptlib_set_pc( pid, base_memory-mem_offset )==0;
+            return set_pc( pid, base_memory-mem_offset )==0;
         }
     } else
         return 0;
@@ -529,11 +531,11 @@ static int arg_offset_64bit[]={
     RDI, RSI, RDX, R10, R8, R9
 };
 
-int_ptr ptlib_get_argument( pid_t pid, int argnum )
+int_ptr get_argument( pid_t pid, int argnum )
 {
     /* Check for error condition */
     if( argnum<1 || argnum>6 ) {
-        dlog("ptlib_get_argument: "PID_F" invalid argument number %d\n", pid, argnum);
+        dlog("ptlib_get_argument: " PID_F " invalid argument number %d\n", pid, argnum);
         errno=EINVAL;
 
         return -1;
@@ -548,10 +550,10 @@ int_ptr ptlib_get_argument( pid_t pid, int argnum )
     }
 }
 
-int ptlib_set_argument( pid_t pid, int argnum, int_ptr value )
+int set_argument( pid_t pid, int argnum, int_ptr value )
 {
     if( argnum<1 || argnum>6 ) {
-        dlog("ptlib_set_argument: "PID_F" invalid argument number %d\n", pid, argnum);
+        dlog("ptlib_set_argument: " PID_F " invalid argument number %d\n", pid, argnum);
         errno=EINVAL;
 
         return -1;
@@ -566,14 +568,14 @@ int ptlib_set_argument( pid_t pid, int argnum, int_ptr value )
     }
 }
 
-int_ptr ptlib_get_retval( pid_t pid )
+int_ptr get_retval( pid_t pid )
 {
     return ptrace( PTRACE_PEEKUSER, pid, RAX );
 }
 
-int ptlib_success( pid_t pid, int sc_num )
+int success( pid_t pid, int sc_num )
 {
-    unsigned long ret=ptlib_get_retval( pid );
+    unsigned long ret=get_retval( pid );
 
     /* This heuristic is good for all syscalls we found. It may not be good for all of them */
     return ret<0xfffffffffffff000u;
@@ -591,83 +593,85 @@ int ptlib_success( pid_t pid, int sc_num )
 
 }
 
-void ptlib_set_retval( pid_t pid, int_ptr val )
+void set_retval( pid_t pid, int_ptr val )
 {
     ptrace( PTRACE_POKEUSER, pid, RAX, val );
 }
 
-void ptlib_set_error( pid_t pid, int sc_num, int error )
+void set_error( pid_t pid, int sc_num, int error )
 {
-    ptlib_set_retval( pid, -error );
+    set_retval( pid, -error );
 }
 
-int ptlib_get_error( pid_t pid, int sc_num )
+int get_error( pid_t pid, int sc_num )
 {
-    return -(long)ptlib_get_retval( pid );
+    return -(long)get_retval( pid );
 }
 
-int ptlib_get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
+int get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
 {
-    return ptlib_linux_get_mem( pid, process_ptr, local_ptr, len );
+    return linux_get_mem( pid, process_ptr, local_ptr, len );
 }
 
-int ptlib_set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len )
+int set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len )
 {
-    return ptlib_linux_set_mem( pid, local_ptr, process_ptr, len );
+    return linux_set_mem( pid, local_ptr, process_ptr, len );
 }
 
-int ptlib_get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen )
+int get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen )
 {
-    return ptlib_linux_get_string( pid, process_ptr, local_ptr, maxlen );
+    return linux_get_string( pid, process_ptr, local_ptr, maxlen );
 }
 
-int ptlib_set_string( pid_t pid, const char *local_ptr, int_ptr process_ptr )
+int set_string( pid_t pid, const char *local_ptr, int_ptr process_ptr )
 {
-    return ptlib_linux_set_string( pid, local_ptr, process_ptr );
+    return linux_set_string( pid, local_ptr, process_ptr );
 }
 
-ssize_t ptlib_get_cwd( pid_t pid, char *buffer, size_t buff_size )
+ssize_t get_cwd( pid_t pid, char *buffer, size_t buff_size )
 {
-    return ptlib_linux_get_cwd( pid, buffer, buff_size );
+    return linux_get_cwd( pid, buffer, buff_size );
 }
 
-ssize_t ptlib_get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
+ssize_t get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
 {
-    return ptlib_linux_get_fd( pid, fd, buffer, buff_size );
+    return linux_get_fd( pid, fd, buffer, buff_size );
 }
 
-void ptlib_save_state( pid_t pid, void *buffer )
+void save_state( pid_t pid, void *buffer )
 {
-    ptrace( PTRACE_GETREGS, pid, 0, buffer );
+    ptrace( __ptrace_request(PTRACE_GETREGS), pid, 0, buffer );
 }
 
-void ptlib_restore_state( pid_t pid, const void *buffer )
+void restore_state( pid_t pid, const void *buffer )
 {
-    ptrace( PTRACE_SETREGS, pid, 0, buffer );
+    ptrace( __ptrace_request(PTRACE_SETREGS), pid, 0, buffer );
 }
 
-const void *ptlib_prepare_memory( )
+const void *prepare_memory( )
 {
     return memory_image;
 }
 
-size_t ptlib_prepare_memory_len()
+size_t prepare_memory_len()
 {
     return mem_offset;
 }
 
-pid_t ptlib_get_parent( pid_t pid )
+pid_t get_parent( pid_t pid )
 {
-    return ptlib_linux_get_parent(pid);
+    return linux_get_parent(pid);
 }
 
-int ptlib_fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[PTLIB_STATE_SIZE],
+int fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[STATE_SIZE],
         int_ptr context[FORK_CONTEXT_SIZE] )
 {
-    return ptlib_linux_fork_enter( pid, orig_sc, process_mem, our_mem, registers, context );
+    return linux_fork_enter( pid, orig_sc, process_mem, our_mem, registers, context );
 }
 
-int ptlib_fork_exit( pid_t pid, pid_t *newpid, void *registers[PTLIB_STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] )
+int fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] )
 {
-    return ptlib_linux_fork_exit( pid, newpid, registers, context );
+    return linux_fork_exit( pid, newpid, registers, context );
 }
+
+}; // End of namespace ptlib
