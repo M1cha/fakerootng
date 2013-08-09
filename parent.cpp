@@ -135,6 +135,7 @@ static std::unique_ptr<DebuggerThreads> workQ;
 struct thread_request {
     enum request_type {
         THREADREQ_PTRACE,
+        THREADREQ_PROXYCALL,
     } request;
 
     union {
@@ -144,6 +145,10 @@ struct thread_request {
             void *addr;
             void *data;
         } ptrace;
+        struct {
+            ptlib::thread_callback worker;
+            void *opaq;
+        } proxy;
     } u;
 };
 
@@ -152,6 +157,9 @@ struct result_ptrace {
     int error;
 };
 
+struct result_generic {
+    int placeholder;
+};
 
 class SyscallHandlerTask : public worker_queue::worker_task
 {
@@ -199,6 +207,27 @@ public:
         }
     }
 
+    static void proxy_call (void *initiator_opaq, ptlib::thread_callback worker_function, void *worker_opaq )
+    {
+        thread_request req;
+        req.request = thread_request::THREADREQ_PROXYCALL;
+        req.u.proxy.worker = worker_function;
+        req.u.proxy.opaq = worker_opaq;
+
+        ssize_t len = send( t_threadSocket, &req, sizeof(req), 0 );
+        if( len<0 )
+            throw errno_exception( "Send proxy call to master thread failed" );
+
+        result_generic res;
+        len = recv( t_threadSocket, &res, sizeof(res), 0 );
+
+        if( len<0 )
+            throw errno_exception( "Recv proxy call from master thread failed" );
+
+        if( static_cast<size_t>(len)<sizeof(res) )
+            throw detailed_exception( "Short proxy call response from master thread" );
+    }
+
 private:
     bool process_initial_signal()
     {
@@ -221,7 +250,7 @@ private:
             m_proc_state->wait( []( void *opaq )
                     {
                         SyscallHandlerTask *_this=static_cast<SyscallHandlerTask*>(opaq);
-                        _this->ptrace( PTRACE_CONT, _this->m_pid, nullptr, nullptr );
+                        SyscallHandlerTask::ptrace( PTRACE_CONT, _this->m_pid, nullptr, nullptr );
                     }, this );
             // The process is not running the client's code - let it run
             ptrace_continue(0);
@@ -254,7 +283,7 @@ private:
         // TODO Proper error checking
     }
 
-    long ptrace( __ptrace_request request, pid_t pid, void *addr, void *data )
+    static long ptrace( __ptrace_request request, pid_t pid, void *addr, void *data )
     {
         thread_request req;
         req.request = thread_request::THREADREQ_PTRACE;
@@ -373,7 +402,7 @@ static pid_state *lookup_state_create( pid_t pid )
 void init_debugger( daemonProcess *daemonProcess )
 {
     // Initialize the ptlib library
-    ptlib::init();
+    ptlib::init(SyscallHandlerTask::proxy_call, nullptr);
 
     register_handlers();
     init_globals();
@@ -497,6 +526,18 @@ static void handle_threadreq_ptrace( int fd, const thread_request *req )
     }
 }
 
+static void handle_threadreq_proxy( int fd, const thread_request *req )
+{
+    req->u.proxy.worker( req->u.proxy.opaq );
+
+    result_generic reply = { 0 };
+
+    if( send( fd, &reply, sizeof(reply), 0 )<0 ) {
+        dlog( "Writing to socket %d failed: %s\n", fd, strerror(errno) );
+        assert(false);
+    }
+}
+
 void handle_thread_request( int fd )
 {
     thread_request request;
@@ -513,6 +554,9 @@ void handle_thread_request( int fd )
     switch( request.request ) {
     case thread_request::THREADREQ_PTRACE:
         handle_threadreq_ptrace( fd, &request );
+        break;
+    case thread_request::THREADREQ_PROXYCALL:
+        handle_threadreq_proxy( fd, &request );
         break;
     default:
         dlog("Unknown thread request %d on fd %d\n", request.request, fd );

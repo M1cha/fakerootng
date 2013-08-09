@@ -46,6 +46,17 @@
 
 namespace ptlib {
 
+static struct {
+    callback_initiator callback;
+    void *opaq;
+} thread_proxy;
+
+void linux_init( callback_initiator callback, void *opaq )
+{
+    thread_proxy.callback=callback;
+    thread_proxy.opaq=opaq;
+}
+
 int linux_continue( __ptrace_request request, pid_t pid, int signal )
 {
     return ptrace( request, pid, 0, signal );

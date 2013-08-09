@@ -378,7 +378,7 @@ static int syscall_32_to_64[]={
 static int syscall_64_to_32[MAP_SIZE_32_64];
 
 /* We init the reverse map when the library loads */
-void init()
+void init( callback_initiator callback, void *opaq )
 {
     unsigned int i;
     for( i=0; i<ARRAY_SIZE(syscall_64_to_32); ++i )
@@ -391,6 +391,8 @@ void init()
             syscall_64_to_32[syscall_32_to_64[i]+SYS_X86_32_OFFSET]=i;
         }
     }
+
+    linux_init( callback, opaq );
 }
 
 static pid_t cache_process;

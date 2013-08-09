@@ -10,8 +10,17 @@ namespace ptlib {
 
 /* Functions for abstracting the details of registers and memory layout for interpreting ptrace stacks and memory */
 
-/* Called once before any other call to ptlib functions */
-void init();
+typedef void (*thread_callback)( void * );
+typedef void (*callback_initiator)( void *initiator_opaq, thread_callback worker_function, void *worker_opaq );
+/* Called once before any other call to ptlib functions.
+   opaq - A pointer to be passed to "callback" as is.
+   callback - a function returning void. It is used to proxy execute arbitrary code inside the debugger thread
+        callback has the following parameters:
+            opaq - same opaq passed to init.
+            thread_callback - the callback function to be called in the debugger thread
+            thread_opaq - an opaq which the debugger thread will make sure to call our thread_callback with
+ */
+void init( callback_initiator callback, void *opaq );
 
 /* Continue (or detach) a halted process */
 int cont( int request, pid_t pid, int signal );

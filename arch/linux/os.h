@@ -3,6 +3,7 @@
 
 namespace ptlib {
 
+void linux_init( callback_initiator callback, void *opaq );
 int linux_continue( __ptrace_request request, pid_t pid, int signal );
 void linux_prepare( pid_t pid );
 int linux_wait( pid_t *pid, int *status, extra_data *data, int async );
