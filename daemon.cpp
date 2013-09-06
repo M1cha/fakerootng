@@ -23,6 +23,7 @@
 #include "daemon.h"
 
 #include <memory>
+#include <iostream>
 
 #include <stdio.h>
 #include <assert.h>
@@ -398,6 +399,13 @@ bool daemonProcess::daemonize( bool nodetach, int skip_fd1, int skip_fd2 )
         // Still the child - exit without any cleanup
         _exit(0);
     }
+
+#if STRACE_WAITER
+    // Print the debugger's PID and sleep for 10 seconds, allowing external attach with strace before we actually do
+    // anything.
+    std::cout<<"Debugger pid "<<getpid()<<std::endl;
+    sleep(10);
+#endif
 
     // We are the grandchild - complete the daemonization
     setsid();

@@ -1,9 +1,11 @@
 #ifndef SYSCALLS_H
 #define SYSCALLS_H
 
+#include <sys/types.h>
+
 class pid_state;
 
-#define DECLARE_SYSFUNC(name) bool sys_##name( int sc_num, pid_t pid, pid_state *state )
+#define DECLARE_SYSFUNC(name) void sys_##name( int sc_num, pid_t pid, pid_state *state )
 
 // UID reporting and setting
 DECLARE_SYSFUNC(geteuid);

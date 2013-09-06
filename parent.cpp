@@ -38,12 +38,17 @@
 #include "worker_queue.h"
 #include "daemon.h"
 
+#include "syscalls.h"
+
 #include "parent.h"
 
 // Static function declarations
 static pid_state *lookup_state_create( pid_t pid );
 
 static std::unordered_map<pid_t,std::unique_ptr<pid_state>> children;
+
+// Keep track of handled syscalls
+static std::unordered_map<int, syscall_hook> syscalls;
 
 // Globally visible sizes of in process memory regions
 size_t static_mem_size, shared_mem_size;
@@ -228,57 +233,9 @@ public:
             throw detailed_exception( "Short proxy call response from master thread" );
     }
 
-private:
-    bool process_initial_signal()
-    {
-        if( m_ptlib_status!=ptlib::SIGNAL || m_parsed_status!=SIGSTOP ) {
-            dlog("Process " PID_F " reports with something other than SIGSTOP!\n", m_pid);
-            assert(false);
-            return true;
-        }
-
-        dlog("Received initial SIGSTOP on process " PID_F "\n", m_pid);
-
-        if( m_proc_state->get_state()==pid_state::INIT || !ptlib::TRAP_AFTER_EXEC ) {
-            // New organic process
-            m_proc_state->setStateNone();
-            ptrace_continue( 0 );
-        } else {
-            // New root process
-            m_proc_state->setStateNone();
-            // Let the fakeroot-ng code run. The process will receive a bogus TRAP after execve
-            m_proc_state->wait( []( void *opaq )
-                    {
-                        SyscallHandlerTask *_this=static_cast<SyscallHandlerTask*>(opaq);
-                        SyscallHandlerTask::ptrace( PTRACE_CONT, _this->m_pid, nullptr, nullptr );
-                    }, this );
-            // The process is not running the client's code - let it run
-            ptrace_continue(0);
-        }
-
-        return false;
-    }
-
-    void process_signal()
-    {
-        assert( m_ptlib_status==ptlib::SIGNAL );
-        dlog("pid " PID_F " received signal %ld\n", m_pid, m_parsed_status);
-        ptrace_continue( m_parsed_status );
-    }
-
-    void process_syscall()
-    {
-        dlog("pid " PID_F " system call %ld\n", m_pid, m_parsed_status);
-        ptrace_continue( 0 );
-    }
-    void process_exit()
-    {
-        // TODO
-    }
-
     void ptrace_continue( int signal )
     {
-        if( ptrace( PTRACE_SYSCALL, m_pid, 0, signal )<0 )
+        if( SyscallHandlerTask::ptrace( PTRACE_SYSCALL, m_pid, 0, signal )<0 )
             dlog("pid " PID_F " failed to perform ptrace: %s\n", m_pid, strerror(errno));
         // TODO Proper error checking
     }
@@ -309,9 +266,63 @@ private:
         return res.ret;
     }
 
-    long ptrace( __ptrace_request request, pid_t pid, void *addr, long signal )
+    static long ptrace( __ptrace_request request, pid_t pid, void *addr, long signal )
     {
         return ptrace( request, pid, addr, (void *)signal );
+    }
+
+private:
+    bool process_initial_signal()
+    {
+        if( m_ptlib_status!=ptlib::SIGNAL || m_parsed_status!=SIGSTOP ) {
+            dlog("Process " PID_F " reports with something other than SIGSTOP!\n", m_pid);
+            assert(false);
+            return true;
+        }
+
+        dlog("Received initial SIGSTOP on process " PID_F "\n", m_pid);
+
+        if( m_proc_state->get_state()==pid_state::INIT || !ptlib::TRAP_AFTER_EXEC ) {
+            // New organic process
+            m_proc_state->setStateNone();
+            ptrace_continue( 0 );
+        } else {
+            // New root process
+            m_proc_state->setStateNone();
+            // Let the fakeroot-ng code run. The process will receive a bogus TRAP after execve
+            m_proc_state->wait( [this]()
+                    {
+                        SyscallHandlerTask::ptrace( PTRACE_CONT, m_pid, nullptr, nullptr );
+                    } );
+            // The process is not running the client's code - let it run
+            ptrace_continue(0);
+        }
+
+        return false;
+    }
+
+    void process_signal()
+    {
+        assert( m_ptlib_status==ptlib::SIGNAL );
+        dlog("pid " PID_F " received signal %ld\n", m_pid, m_parsed_status);
+        ptrace_continue( m_parsed_status );
+    }
+
+    void process_syscall()
+    {
+        auto handler = syscalls.find(m_parsed_status);
+        if( handler == syscalls.end() ) {
+            // No specific handler for this syscall
+            dlog("pid " PID_F " system call %ld\n", m_pid, m_parsed_status);
+            ptrace_continue( 0 );
+        } else {
+            dlog("pid " PID_F " system call %s\n", m_pid, handler->second.name);
+            handler->second.func( m_parsed_status, m_pid, m_proc_state);
+        }
+    }
+    void process_exit()
+    {
+        // TODO
     }
 };
 
@@ -358,7 +369,12 @@ bool attach_debugger( pid_t child )
 
 static void register_handlers()
 {
-    // TODO implement
+    // A macro for defining a system call with different syscall and handler names
+#define DEF_SYS2( syscall, function ) syscalls[SYS_##syscall]=syscall_hook(sys_##function, #syscall)
+    // A macro fro defining a system call with the same syscall and handler names
+#define DEF_SYS1( syscall ) DEF_SYS2( syscall, syscall )
+
+    DEF_SYS1(getuid);
 }
 
 void init_globals()
@@ -391,6 +407,7 @@ static pid_state *lookup_state_create( pid_t pid )
         return ret;
 
     dlog("Creating state for new child " PID_F "\n", pid);
+    num_processes++;
     ptlib::prepare( pid );
 
     ret = new pid_state;
@@ -569,14 +586,14 @@ pid_state::pid_state() :
 {
 }
 
-void pid_state::wait( void (*callback)( void * ), void *opaq )
+void pid_state::wait( const std::function< void ()> &callback )
 {
     std::unique_lock<decltype(m_wait_lock)> lock(m_wait_lock);
 
     state oldstate=m_state;
     m_state=WAITING;
 
-    callback( opaq );
+    callback();
 
     m_wait_condition.wait( lock, [ this ]{ return m_state==WAKEUP; } );
 
@@ -595,4 +612,19 @@ void pid_state::wakeup( ptlib::WAIT_RET wait_state, int status, long parsed_stat
     m_wait_parsed_status=parsed_status;
 
     m_wait_condition.notify_one();
+}
+
+void pid_state::ptrace_syscall_wait( pid_t pid, int signal )
+{
+    wait( [&]()
+            {
+            SyscallHandlerTask::ptrace( PTRACE_SYSCALL, pid, nullptr, signal );
+            } );
+}
+
+void pid_state::end_handling()
+{
+    m_state=NONE;
+    m_task->ptrace_continue(0);
+    m_task=nullptr;
 }
