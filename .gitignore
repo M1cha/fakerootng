@@ -20,3 +20,6 @@ Makefile.in
 /missing
 /stamp-h1
 /INSTALL
+
+# Out of tree build directories
+/build_*

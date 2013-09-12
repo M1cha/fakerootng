@@ -317,6 +317,7 @@ private:
             ptrace_continue( 0 );
         } else {
             dlog("pid " PID_F " system call %s\n", m_pid, handler->second.name);
+            m_proc_state->start_handling( this );
             handler->second.func( m_parsed_status, m_pid, m_proc_state);
         }
     }
@@ -620,6 +621,11 @@ void pid_state::ptrace_syscall_wait( pid_t pid, int signal )
             {
             SyscallHandlerTask::ptrace( PTRACE_SYSCALL, pid, nullptr, signal );
             } );
+}
+
+void pid_state::start_handling( SyscallHandlerTask *task )
+{
+    m_task = task;
 }
 
 void pid_state::end_handling()

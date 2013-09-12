@@ -65,6 +65,7 @@ public:
     void wait( const std::function< void ()> &callback );
     void wakeup( ptlib::WAIT_RET wait_state, int status, long parsed_status );
     void ptrace_syscall_wait( pid_t pid, int signal );
+    void start_handling( SyscallHandlerTask *task );
     void end_handling();
 
     ptlib::WAIT_RET get_wait_state() const { return m_wait_state; }
