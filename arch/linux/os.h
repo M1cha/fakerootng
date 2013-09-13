@@ -6,7 +6,7 @@ namespace ptlib {
 void linux_init( const callback_initiator &callback );
 int linux_continue( __ptrace_request request, pid_t pid, int signal );
 void linux_prepare( pid_t pid );
-int linux_wait( pid_t *pid, int *status, extra_data *data, int async );
+bool linux_wait( pid_t *pid, int *status, extra_data *data, int async );
 long linux_parse_wait( pid_t pid, int status, enum WAIT_RET *type );
 int linux_reinterpret( enum WAIT_RET prevstate, pid_t pid, int status, long *ret );
 int linux_get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len );

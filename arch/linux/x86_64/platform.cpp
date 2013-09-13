@@ -437,7 +437,7 @@ void prepare( pid_t pid )
     linux_prepare(pid);
 }
 
-int wait( pid_t *pid, int *status, extra_data *data, int async )
+bool wait( pid_t *pid, int *status, extra_data *data, int async )
 {
     return linux_wait( pid, status, data, async );
 }
@@ -452,9 +452,9 @@ int reinterpret( enum WAIT_RET prestate, pid_t pid, int status, long *ret )
     return linux_reinterpret( prestate, pid, status, ret );
 }
 
-void *get_pc( pid_t pid )
+int_ptr get_pc( pid_t pid )
 {
-    return (void *)ptrace( PTRACE_PEEKUSER, pid, RIP, 0 );
+    return ptrace( PTRACE_PEEKUSER, pid, RIP, 0 );
 }
 
 int set_pc( pid_t pid, int_ptr location )

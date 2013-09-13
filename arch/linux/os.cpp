@@ -67,7 +67,7 @@ void linux_prepare( pid_t pid )
     //    perror("PTRACE_SETOPTIONS failed");
 }
 
-int linux_wait( pid_t *pid, int *status, extra_data *data, int async )
+bool linux_wait( pid_t *pid, int *status, extra_data *data, int async )
 {
     *pid=wait4(-1, status, (async?WNOHANG:0)|__WALL, data );
 
@@ -127,6 +127,7 @@ int linux_reinterpret( enum WAIT_RET prevstate, pid_t pid, int status, long *ret
 {
     // Previous state does not affect us
     // XXX if the first thing the child does is a "fork", is this statement still true?
+    abort();
     return prevstate;
 }
 
