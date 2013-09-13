@@ -1,6 +1,17 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
+/** 
+ * \file platform.h
+ * ptlib interface definitions.
+ *
+ * Here all interfaces for ptlib are defined in a platform independent way.
+ */
+
+/** \defgroup ptlib ptlib - PTrace wrapper LIBrary
+ * @{
+ */
+
 #include <sys/types.h>
 #include <functional>
 
@@ -13,12 +24,17 @@ namespace ptlib {
 
 typedef std::function < void( const std::function< void () > &thread_callback ) > callback_initiator;
 /* Called once before any other call to ptlib functions.
-   opaq - A pointer to be passed to "callback" as is.
    callback - a function returning void. It is used to proxy execute arbitrary code inside the debugger thread
         callback has the following parameters:
-            opaq - same opaq passed to init.
             thread_callback - the callback function to be called in the debugger thread
-            thread_opaq - an opaq which the debugger thread will make sure to call our thread_callback with
+ */
+
+/**
+  \brief Initialize the ptlib library.
+
+  This function should be called precisely once before use of the ptlib library.
+  @param callback Callback function for trampoline code - should execute provided code in main thread
+  @see callback_initiator
  */
 void init( const callback_initiator &callback );
 
@@ -126,5 +142,9 @@ int fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_ptr co
 void __dlog_( const char *format, ... ) COMPHINT_PRINTF( 1, 2);
 extern int log_level;
 #define dlog if( log_level>0 ) __dlog_
+
+/**
+ * @}
+ */
 
 #endif /* PLATFORM_H */

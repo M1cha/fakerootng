@@ -42,9 +42,10 @@ static const unsigned char memory_image[mem_offset]=
 };
 
 
-void init()
+void init( const callback_initiator &callback )
 {
     // Nothing to be done on this platform
+    linux_init( callback );
 }
 
 int cont( int request, pid_t pid, int signal )
