@@ -2,6 +2,7 @@
 #define PLATFORM_H
 
 #include <sys/types.h>
+#include <functional>
 
 /* Platform specific definitinos go in a special file */
 #include "platform_specific.h"
@@ -10,8 +11,7 @@ namespace ptlib {
 
 /* Functions for abstracting the details of registers and memory layout for interpreting ptrace stacks and memory */
 
-typedef void (*thread_callback)( void * );
-typedef void (*callback_initiator)( void *initiator_opaq, thread_callback worker_function, void *worker_opaq );
+typedef std::function < void( const std::function< void () > &thread_callback ) > callback_initiator;
 /* Called once before any other call to ptlib functions.
    opaq - A pointer to be passed to "callback" as is.
    callback - a function returning void. It is used to proxy execute arbitrary code inside the debugger thread
@@ -20,7 +20,7 @@ typedef void (*callback_initiator)( void *initiator_opaq, thread_callback worker
             thread_callback - the callback function to be called in the debugger thread
             thread_opaq - an opaq which the debugger thread will make sure to call our thread_callback with
  */
-void init( callback_initiator callback, void *opaq );
+void init( const callback_initiator &callback );
 
 /* Continue (or detach) a halted process */
 int cont( int request, pid_t pid, int signal );

@@ -3,7 +3,7 @@
 
 namespace ptlib {
 
-void linux_init( callback_initiator callback, void *opaq );
+void linux_init( const callback_initiator &callback );
 int linux_continue( __ptrace_request request, pid_t pid, int signal );
 void linux_prepare( pid_t pid );
 int linux_wait( pid_t *pid, int *status, extra_data *data, int async );
@@ -21,6 +21,8 @@ pid_t linux_get_parent( pid_t pid );
 int linux_fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[STATE_SIZE],
         int_ptr context[FORK_CONTEXT_SIZE] );
 int linux_fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] );
+long linux_ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *data);
+long linux_ptrace(enum __ptrace_request request, pid_t pid, int_ptr addr, int_ptr signal);
 
 }; // End of namespace ptlib
 

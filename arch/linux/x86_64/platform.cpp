@@ -378,7 +378,7 @@ static int syscall_32_to_64[]={
 static int syscall_64_to_32[MAP_SIZE_32_64];
 
 /* We init the reverse map when the library loads */
-void init( callback_initiator callback, void *opaq )
+void init( const callback_initiator &callback )
 {
     unsigned int i;
     for( i=0; i<ARRAY_SIZE(syscall_64_to_32); ++i )
@@ -392,7 +392,7 @@ void init( callback_initiator callback, void *opaq )
         }
     }
 
-    linux_init( callback, opaq );
+    linux_init( callback );
 }
 
 static pid_t cache_process;
@@ -572,7 +572,7 @@ int set_argument( pid_t pid, int argnum, int_ptr value )
 
 int_ptr get_retval( pid_t pid )
 {
-    return ptrace( PTRACE_PEEKUSER, pid, RAX );
+    return ptrace( PTRACE_PEEKUSER, pid, RAX, 0 );
 }
 
 int success( pid_t pid, int sc_num )
@@ -597,7 +597,7 @@ int success( pid_t pid, int sc_num )
 
 void set_retval( pid_t pid, int_ptr val )
 {
-    ptrace( PTRACE_POKEUSER, pid, RAX, val );
+    linux_ptrace( PTRACE_POKEUSER, pid, RAX, val );
 }
 
 void set_error( pid_t pid, int sc_num, int error )
@@ -647,7 +647,7 @@ void save_state( pid_t pid, void *buffer )
 
 void restore_state( pid_t pid, const void *buffer )
 {
-    ptrace( __ptrace_request(PTRACE_SETREGS), pid, 0, buffer );
+    ptrace( __ptrace_request(PTRACE_SETREGS), pid, nullptr, const_cast<void *>(buffer) );
 }
 
 const void *prepare_memory( )

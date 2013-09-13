@@ -127,7 +127,7 @@ int_ptr get_retval( pid_t pid )
 
 void set_retval( pid_t pid, int_ptr val )
 {
-    ptrace( PTRACE_POKEUSER, pid, 4*EAX, val );
+    linux_ptrace( PTRACE_POKEUSER, pid, 4*EAX, val );
 }
 
 int get_error( pid_t pid, int sc_num )

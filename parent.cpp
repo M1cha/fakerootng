@@ -151,8 +151,7 @@ struct thread_request {
             void *data;
         } ptrace;
         struct {
-            ptlib::thread_callback worker;
-            void *opaq;
+            const std::function< void() > *worker;
         } proxy;
     } u;
 };
@@ -212,12 +211,11 @@ public:
         }
     }
 
-    static void proxy_call (void *initiator_opaq, ptlib::thread_callback worker_function, void *worker_opaq )
+    static void proxy_call ( const std::function< void() > &worker_function )
     {
         thread_request req;
         req.request = thread_request::THREADREQ_PROXYCALL;
-        req.u.proxy.worker = worker_function;
-        req.u.proxy.opaq = worker_opaq;
+        req.u.proxy.worker = &worker_function;
 
         ssize_t len = send( t_threadSocket, &req, sizeof(req), 0 );
         if( len<0 )
@@ -235,7 +233,7 @@ public:
 
     void ptrace_continue( int signal )
     {
-        if( SyscallHandlerTask::ptrace( PTRACE_SYSCALL, m_pid, 0, signal )<0 )
+        if( ptlib::cont( PTRACE_SYSCALL, m_pid, signal )<0 )
             dlog("pid " PID_F " failed to perform ptrace: %s\n", m_pid, strerror(errno));
         // TODO Proper error checking
     }
@@ -420,7 +418,7 @@ static pid_state *lookup_state_create( pid_t pid )
 void init_debugger( daemonProcess *daemonProcess )
 {
     // Initialize the ptlib library
-    ptlib::init(SyscallHandlerTask::proxy_call, nullptr);
+    ptlib::init(SyscallHandlerTask::proxy_call);
 
     register_handlers();
     init_globals();
@@ -546,7 +544,7 @@ static void handle_threadreq_ptrace( int fd, const thread_request *req )
 
 static void handle_threadreq_proxy( int fd, const thread_request *req )
 {
-    req->u.proxy.worker( req->u.proxy.opaq );
+    (*req->u.proxy.worker)();
 
     result_generic reply = { 0 };
 

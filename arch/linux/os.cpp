@@ -48,18 +48,16 @@ namespace ptlib {
 
 static struct {
     callback_initiator callback;
-    void *opaq;
 } thread_proxy;
 
-void linux_init( callback_initiator callback, void *opaq )
+void linux_init( const callback_initiator &callback )
 {
-    thread_proxy.callback=callback;
-    thread_proxy.opaq=opaq;
+    thread_proxy.callback = callback;
 }
 
 int linux_continue( __ptrace_request request, pid_t pid, int signal )
 {
-    return ptrace( request, pid, 0, signal );
+    return linux_ptrace( request, pid, 0, signal );
 }
 
 void linux_prepare( pid_t pid )
@@ -139,7 +137,7 @@ int linux_get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
     size_t offset=((int_ptr)process_ptr)%sizeof(long);
     process_ptr-=offset;
     char *dst=(char *)local_ptr;
-    long buffer=ptrace(PTRACE_PEEKDATA, pid, process_ptr, 0);
+    long buffer=linux_ptrace(PTRACE_PEEKDATA, pid, process_ptr, 0);
     if( buffer==-1 && errno!=0 )
         return 0; // false means failure
 
@@ -157,7 +155,7 @@ int linux_get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
             process_ptr+=offset;
             offset=0;
 
-            buffer=ptrace(PTRACE_PEEKDATA, pid, process_ptr, 0);
+            buffer=linux_ptrace(PTRACE_PEEKDATA, pid, process_ptr, 0);
             if( buffer==-1 && errno!=0 )
                 return 0; // false means failure
         }
@@ -176,7 +174,7 @@ int linux_set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t
 
     if( offset!=0 ) {
         // We have "Stuff" hanging before the area we need to fill - initialize the buffer
-        buffer=ptrace( PTRACE_PEEKDATA, pid, process_ptr, 0 );
+        buffer=linux_ptrace( PTRACE_PEEKDATA, pid, process_ptr, 0 );
     }
 
     const char *src=static_cast<const char *>(local_ptr);
@@ -189,7 +187,7 @@ int linux_set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t
         len--;
 
         if( offset==sizeof(long) ) {
-            ptrace(PTRACE_POKEDATA, pid, process_ptr, buffer);
+            linux_ptrace(PTRACE_POKEDATA, pid, process_ptr, buffer);
             process_ptr+=offset;
             offset=0;
         }
@@ -198,14 +196,14 @@ int linux_set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t
     if( errno==0 && offset!=0 ) {
         // We have leftover data we still need to transfer. Need to make sure we are not
         // overwriting data outside of our intended area
-        long buffer2=ptrace( PTRACE_PEEKDATA, pid, process_ptr, 0 );
+        long buffer2=linux_ptrace( PTRACE_PEEKDATA, pid, process_ptr, 0 );
 
         unsigned int i;
         for( i=offset; i<sizeof(long); ++i )
             ((char *)&buffer)[i]=((char *)&buffer2)[i];
 
         if( errno==0 )
-            ptrace(PTRACE_POKEDATA, pid, process_ptr, buffer);
+            linux_ptrace(PTRACE_POKEDATA, pid, process_ptr, buffer);
     }
 
     return errno==0;
@@ -221,7 +219,7 @@ int linux_get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t ma
     int word_offset=0;
 
     while( !done ) {
-        unsigned long word=ptrace( PTRACE_PEEKDATA, pid, process_ptr+(word_offset++)*sizeof(long), 0 );
+        unsigned long word=linux_ptrace( PTRACE_PEEKDATA, pid, process_ptr+(word_offset++)*sizeof(long), 0 );
 
         while( !done && offset<sizeof(long) && i<maxlen ) {
             local_ptr[i]=((char *)&word)[offset]; /* Endianity neutral copy */
@@ -346,6 +344,26 @@ int linux_fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_
     set_argument( pid, 2, save_state[2] );
 
     return ret;
+}
+
+long linux_ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *data)
+{
+    long ret;
+    int error;
+    thread_proxy.callback( [&](){
+            errno=0;
+            ret=ptrace( request, pid, addr, data );
+            error=errno;
+            });
+
+    errno=error;
+
+    return ret;
+}
+
+long linux_ptrace(enum __ptrace_request request, pid_t pid, int_ptr addr, int_ptr signal)
+{
+    return linux_ptrace( request, pid, (void *)addr, (void *)signal );
 }
 
 }; // End of namespace ptlib
