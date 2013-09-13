@@ -5,7 +5,7 @@ AC_PREREQ(2.61)
 AC_INIT([fakeroot-ng], [0.18], [shachar@debian.org])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CANONICAL_TARGET()
-AM_INIT_AUTOMAKE([no-dist])
+AM_INIT_AUTOMAKE([no-dist subdir-objects])
 AC_CONFIG_SRCDIR([parent.h])
 AC_CONFIG_HEADER([config.h])
 
