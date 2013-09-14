@@ -1,6 +1,8 @@
 #ifndef ARCH_OS_H
 #define ARCH_OS_H
 
+#include <thread>
+
 namespace ptlib {
 
 /**
@@ -31,6 +33,10 @@ int fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void
 int fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] );
 long ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *data);
 long ptrace(enum __ptrace_request request, pid_t pid, int_ptr addr, int_ptr signal);
+
+extern std::thread::id master_thread;
+#define ASSERT_MASTER_THREAD() assert(std::this_thread::get_id()==ptlib::linux::master_thread)
+#define ASSERT_SLAVE_THREAD() assert(std::this_thread::get_id()!=ptlib::linux::master_thread)
 
 }; // End of namespace linux
 }; // End of namespace ptlib

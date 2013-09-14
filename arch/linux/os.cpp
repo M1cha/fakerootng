@@ -47,6 +47,8 @@
 namespace ptlib {
 namespace linux {
 
+std::thread::id master_thread;
+
 static struct {
     callback_initiator callback;
 } thread_proxy;
@@ -54,6 +56,7 @@ static struct {
 void init( const callback_initiator &callback )
 {
     thread_proxy.callback = callback;
+    master_thread = std::this_thread::get_id();
 }
 
 int cont( __ptrace_request request, pid_t pid, int signal )
@@ -70,6 +73,7 @@ void prepare( pid_t pid )
 
 bool wait( pid_t *pid, int *status, extra_data *data, int async )
 {
+    ASSERT_MASTER_THREAD();
     *pid=wait4(-1, status, (async?WNOHANG:0)|__WALL, data );
 
     if( async && *pid==0 ) {
@@ -83,6 +87,7 @@ bool wait( pid_t *pid, int *status, extra_data *data, int async )
 
 long parse_wait( pid_t pid, int status, enum WAIT_RET *type )
 {
+    ASSERT_MASTER_THREAD();
     long ret;
 
     if( WIFEXITED(status) ) {
@@ -309,6 +314,8 @@ pid_t get_parent( pid_t pid )
 int fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[STATE_SIZE],
         int_ptr context[FORK_CONTEXT_SIZE] )
 {
+    abort(); // XXX TODO and other tags
+
     /* Turn the fork/vfork into a clone */
     int clone_flags=CLONE_PTRACE|SIGCHLD;
 
@@ -350,6 +357,8 @@ int fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_ptr co
 
 long ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *data)
 {
+    ASSERT_SLAVE_THREAD();
+
     long ret;
     int error;
     thread_proxy.callback( [&](){
