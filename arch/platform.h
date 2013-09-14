@@ -9,6 +9,8 @@
  */
 
 /** \defgroup ptlib ptlib - PTrace wrapper LIBrary
+ *
+ * Sort-of stand alone library for abstracting the ugly ptrace details from the library's user.
  * @{
  */
 
@@ -18,6 +20,9 @@
 /* Platform specific definitinos go in a special file */
 #include "platform_specific.h"
 
+/**
+  @brief Namespace for the ptlib functions
+ */
 namespace ptlib {
 
 /* Functions for abstracting the details of registers and memory layout for interpreting ptrace stacks and memory */

@@ -392,7 +392,7 @@ void init( const callback_initiator &callback )
         }
     }
 
-    linux_init( callback );
+    linux::init( callback );
 }
 
 static pid_t cache_process;
@@ -429,27 +429,27 @@ int cont( int request, pid_t pid, int signal )
     /* Invalidate the cache */
     cache_process=0;
 
-    return linux_continue( __ptrace_request(request), pid, signal );
+    return linux::cont( __ptrace_request(request), pid, signal );
 }
 
 void prepare( pid_t pid )
 {
-    linux_prepare(pid);
+    linux::prepare(pid);
 }
 
 bool wait( pid_t *pid, int *status, extra_data *data, int async )
 {
-    return linux_wait( pid, status, data, async );
+    return linux::wait( pid, status, data, async );
 }
 
 long parse_wait( pid_t pid, int status, enum WAIT_RET *type )
 {
-    return linux_parse_wait( pid, status, type );
+    return linux::parse_wait( pid, status, type );
 }
 
 int reinterpret( enum WAIT_RET prestate, pid_t pid, int status, long *ret )
 {
-    return linux_reinterpret( prestate, pid, status, ret );
+    return linux::reinterpret( prestate, pid, status, ret );
 }
 
 int_ptr get_pc( pid_t pid )
@@ -597,7 +597,7 @@ int success( pid_t pid, int sc_num )
 
 void set_retval( pid_t pid, int_ptr val )
 {
-    linux_ptrace( PTRACE_POKEUSER, pid, RAX, val );
+    linux::ptrace( PTRACE_POKEUSER, pid, RAX, val );
 }
 
 void set_error( pid_t pid, int sc_num, int error )
@@ -612,32 +612,32 @@ int get_error( pid_t pid, int sc_num )
 
 int get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
 {
-    return linux_get_mem( pid, process_ptr, local_ptr, len );
+    return linux::get_mem( pid, process_ptr, local_ptr, len );
 }
 
 int set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len )
 {
-    return linux_set_mem( pid, local_ptr, process_ptr, len );
+    return linux::set_mem( pid, local_ptr, process_ptr, len );
 }
 
 int get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen )
 {
-    return linux_get_string( pid, process_ptr, local_ptr, maxlen );
+    return linux::get_string( pid, process_ptr, local_ptr, maxlen );
 }
 
 int set_string( pid_t pid, const char *local_ptr, int_ptr process_ptr )
 {
-    return linux_set_string( pid, local_ptr, process_ptr );
+    return linux::set_string( pid, local_ptr, process_ptr );
 }
 
 ssize_t get_cwd( pid_t pid, char *buffer, size_t buff_size )
 {
-    return linux_get_cwd( pid, buffer, buff_size );
+    return linux::get_cwd( pid, buffer, buff_size );
 }
 
 ssize_t get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
 {
-    return linux_get_fd( pid, fd, buffer, buff_size );
+    return linux::get_fd( pid, fd, buffer, buff_size );
 }
 
 void save_state( pid_t pid, void *buffer )
@@ -662,18 +662,18 @@ size_t prepare_memory_len()
 
 pid_t get_parent( pid_t pid )
 {
-    return linux_get_parent(pid);
+    return linux::get_parent(pid);
 }
 
 int fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[STATE_SIZE],
         int_ptr context[FORK_CONTEXT_SIZE] )
 {
-    return linux_fork_enter( pid, orig_sc, process_mem, our_mem, registers, context );
+    return linux::fork_enter( pid, orig_sc, process_mem, our_mem, registers, context );
 }
 
 int fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] )
 {
-    return linux_fork_exit( pid, newpid, registers, context );
+    return linux::fork_exit( pid, newpid, registers, context );
 }
 
 }; // End of namespace ptlib

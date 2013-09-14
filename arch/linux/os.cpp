@@ -45,29 +45,30 @@
 #undef PTRACE_POKEDATA
 
 namespace ptlib {
+namespace linux {
 
 static struct {
     callback_initiator callback;
 } thread_proxy;
 
-void linux_init( const callback_initiator &callback )
+void init( const callback_initiator &callback )
 {
     thread_proxy.callback = callback;
 }
 
-int linux_continue( __ptrace_request request, pid_t pid, int signal )
+int cont( __ptrace_request request, pid_t pid, int signal )
 {
-    return linux_ptrace( request, pid, 0, signal );
+    return ptrace( request, pid, 0, signal );
 }
 
-void linux_prepare( pid_t pid )
+void prepare( pid_t pid )
 {
     // These cause more harm than good
     //if( ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_TRACEFORK|PTRACE_O_TRACEVFORK|PTRACE_O_TRACECLONE)!=0 )
     //    perror("PTRACE_SETOPTIONS failed");
 }
 
-bool linux_wait( pid_t *pid, int *status, extra_data *data, int async )
+bool wait( pid_t *pid, int *status, extra_data *data, int async )
 {
     *pid=wait4(-1, status, (async?WNOHANG:0)|__WALL, data );
 
@@ -80,7 +81,7 @@ bool linux_wait( pid_t *pid, int *status, extra_data *data, int async )
 }
 
 
-long linux_parse_wait( pid_t pid, int status, enum WAIT_RET *type )
+long parse_wait( pid_t pid, int status, enum WAIT_RET *type )
 {
     long ret;
 
@@ -96,11 +97,11 @@ long linux_parse_wait( pid_t pid, int status, enum WAIT_RET *type )
         if( ret==SIGTRAP ) {
             siginfo_t siginfo;
 
-            if( ptrace(PTRACE_GETSIGINFO, pid, NULL, &siginfo)==0 &&
+            if( ::ptrace(PTRACE_GETSIGINFO, pid, NULL, &siginfo)==0 &&
                 (siginfo.si_code>>8==PTRACE_EVENT_FORK || siginfo.si_code>>8==PTRACE_EVENT_VFORK ||
                  siginfo.si_code>>8==PTRACE_EVENT_CLONE ) )
             {
-                ptrace( PTRACE_GETEVENTMSG, pid, NULL, &ret );
+                ::ptrace( PTRACE_GETEVENTMSG, pid, NULL, &ret );
 
                 *type=NEWPROCESS;
             } else {
@@ -123,7 +124,7 @@ long linux_parse_wait( pid_t pid, int status, enum WAIT_RET *type )
     return ret;
 }
 
-int linux_reinterpret( enum WAIT_RET prevstate, pid_t pid, int status, long *ret )
+int reinterpret( enum WAIT_RET prevstate, pid_t pid, int status, long *ret )
 {
     // Previous state does not affect us
     // XXX if the first thing the child does is a "fork", is this statement still true?
@@ -131,14 +132,14 @@ int linux_reinterpret( enum WAIT_RET prevstate, pid_t pid, int status, long *ret
     return prevstate;
 }
 
-int linux_get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
+int get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
 {
     errno=0;
 
     size_t offset=((int_ptr)process_ptr)%sizeof(long);
     process_ptr-=offset;
     char *dst=(char *)local_ptr;
-    long buffer=linux_ptrace(PTRACE_PEEKDATA, pid, process_ptr, 0);
+    long buffer=ptrace(PTRACE_PEEKDATA, pid, process_ptr, 0);
     if( buffer==-1 && errno!=0 )
         return 0; // false means failure
 
@@ -156,7 +157,7 @@ int linux_get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
             process_ptr+=offset;
             offset=0;
 
-            buffer=linux_ptrace(PTRACE_PEEKDATA, pid, process_ptr, 0);
+            buffer=ptrace(PTRACE_PEEKDATA, pid, process_ptr, 0);
             if( buffer==-1 && errno!=0 )
                 return 0; // false means failure
         }
@@ -165,7 +166,7 @@ int linux_get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
     return errno==0;
 }
 
-int linux_set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len )
+int set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len )
 {
     long buffer;
     size_t offset=((int_ptr)process_ptr)%sizeof(long);
@@ -175,7 +176,7 @@ int linux_set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t
 
     if( offset!=0 ) {
         // We have "Stuff" hanging before the area we need to fill - initialize the buffer
-        buffer=linux_ptrace( PTRACE_PEEKDATA, pid, process_ptr, 0 );
+        buffer=ptrace( PTRACE_PEEKDATA, pid, process_ptr, 0 );
     }
 
     const char *src=static_cast<const char *>(local_ptr);
@@ -188,7 +189,7 @@ int linux_set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t
         len--;
 
         if( offset==sizeof(long) ) {
-            linux_ptrace(PTRACE_POKEDATA, pid, process_ptr, buffer);
+            ptrace(PTRACE_POKEDATA, pid, process_ptr, buffer);
             process_ptr+=offset;
             offset=0;
         }
@@ -197,20 +198,20 @@ int linux_set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t
     if( errno==0 && offset!=0 ) {
         // We have leftover data we still need to transfer. Need to make sure we are not
         // overwriting data outside of our intended area
-        long buffer2=linux_ptrace( PTRACE_PEEKDATA, pid, process_ptr, 0 );
+        long buffer2=ptrace( PTRACE_PEEKDATA, pid, process_ptr, 0 );
 
         unsigned int i;
         for( i=offset; i<sizeof(long); ++i )
             ((char *)&buffer)[i]=((char *)&buffer2)[i];
 
         if( errno==0 )
-            linux_ptrace(PTRACE_POKEDATA, pid, process_ptr, buffer);
+            ptrace(PTRACE_POKEDATA, pid, process_ptr, buffer);
     }
 
     return errno==0;
 }
 
-int linux_get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen )
+int get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen )
 {
     /* Are we aligned on the "start" front? */
     unsigned int offset=((unsigned long)process_ptr)%sizeof(long);
@@ -220,7 +221,7 @@ int linux_get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t ma
     int word_offset=0;
 
     while( !done ) {
-        unsigned long word=linux_ptrace( PTRACE_PEEKDATA, pid, process_ptr+(word_offset++)*sizeof(long), 0 );
+        unsigned long word=ptrace( PTRACE_PEEKDATA, pid, process_ptr+(word_offset++)*sizeof(long), 0 );
 
         while( !done && offset<sizeof(long) && i<maxlen ) {
             local_ptr[i]=((char *)&word)[offset]; /* Endianity neutral copy */
@@ -237,14 +238,14 @@ int linux_get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t ma
     return i;
 } 
 
-int linux_set_string( pid_t pid, const char *local_ptr, int_ptr process_ptr )
+int set_string( pid_t pid, const char *local_ptr, int_ptr process_ptr )
 {
     size_t len=strlen(local_ptr)+1;
 
     return set_mem( pid, local_ptr, process_ptr, len );
 }
 
-ssize_t linux_get_cwd( pid_t pid, char *buffer, size_t buff_size )
+ssize_t get_cwd( pid_t pid, char *buffer, size_t buff_size )
 {
     char tmpbuff[20]; /* Leave enough chars for the digits */
     sprintf(tmpbuff, "/proc/" PID_F "/cwd", pid );
@@ -257,7 +258,7 @@ ssize_t linux_get_cwd( pid_t pid, char *buffer, size_t buff_size )
     return ret;
 }
 
-ssize_t linux_get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
+ssize_t get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
 {
     char tmpbuff[40];
     sprintf(tmpbuff, "/proc/" PID_F "/fd/%d", pid, fd );
@@ -270,7 +271,7 @@ ssize_t linux_get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
     return ret;
 }
 
-pid_t linux_get_parent( pid_t pid )
+pid_t get_parent( pid_t pid )
 {
     /* Query the proc filesystem to figure out who the process' parent is */
     char filename[100];
@@ -305,7 +306,7 @@ pid_t linux_get_parent( pid_t pid )
     return ret;
 }
 
-int linux_fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[STATE_SIZE],
+int fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[STATE_SIZE],
         int_ptr context[FORK_CONTEXT_SIZE] )
 {
     /* Turn the fork/vfork into a clone */
@@ -329,7 +330,7 @@ int linux_fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem
     return 0;
 }
 
-int linux_fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] )
+int fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] )
 {
     int ret=0;
 
@@ -347,13 +348,13 @@ int linux_fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_
     return ret;
 }
 
-long linux_ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *data)
+long ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *data)
 {
     long ret;
     int error;
     thread_proxy.callback( [&](){
             errno=0;
-            ret=ptrace( request, pid, addr, data );
+            ret=::ptrace( request, pid, addr, data );
             error=errno;
             });
 
@@ -362,9 +363,10 @@ long linux_ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *da
     return ret;
 }
 
-long linux_ptrace(enum __ptrace_request request, pid_t pid, int_ptr addr, int_ptr signal)
+long ptrace(enum __ptrace_request request, pid_t pid, int_ptr addr, int_ptr signal)
 {
-    return linux_ptrace( request, pid, (void *)addr, (void *)signal );
+    return ptrace( request, pid, (void *)addr, (void *)signal );
 }
 
+}; // End of namespace linux
 }; // End of namespace ptlib
