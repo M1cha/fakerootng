@@ -34,6 +34,7 @@ int main( int argc, char *argv[] )
     std::cout<<"Start queue"<<std::endl;
 
     worker_queue queue;
+    queue.start();
 
     std::cout<<"Sleep to allow threads to start"<<std::endl;
     sleep(1);
