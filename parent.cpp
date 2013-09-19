@@ -198,7 +198,9 @@ public:
             break;
         case ptlib::EXIT:
         case ptlib::SIGEXIT:
-            process_exit();
+            dlog("BUG - EXIT and SIGEXIT were meant to be handled by the master thread\n");
+            dlog(NULL);
+            assert(false);
             break;
         case ptlib::SYSCALL:
             process_syscall();
@@ -319,10 +321,6 @@ private:
             handler->second.func( m_parsed_status, m_pid, m_proc_state);
         }
     }
-    void process_exit()
-    {
-        // TODO
-    }
 };
 
 
@@ -437,12 +435,25 @@ void shutdown_debugger()
     workQ=nullptr;
 }
 
+static void process_exit( pid_t pid, enum ptlib::WAIT_RET wait_state, int status, long ret )
+{
+    num_processes--;
+    dlog("pid " PID_F " exit\n", pid);
+}
+
 // ret is the signal (if applicable) or status (if a child exit)
 static void process_sigchld( pid_t pid, enum ptlib::WAIT_RET wait_state, int status, long ret )
 {
     dlog("%s:%d pid " PID_F " wait_state %d status %08x ret %08lx\n", __FUNCTION__, __LINE__, pid, wait_state, status,
             ret );
     pid_state *proc_state=lookup_state_create(pid);
+
+    // Handle process exits synchronously
+    if( wait_state==ptlib::EXIT || wait_state==ptlib::SIGEXIT ) {
+        process_exit( pid, wait_state, status, ret );
+
+        return;
+    }
 
     switch( proc_state->get_state() ) {
     case pid_state::INIT:

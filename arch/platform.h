@@ -68,6 +68,8 @@ void prepare( pid_t pid );
 
   @note
   ptlib::NEWPROCESS can only be returned only if SUPPORTS_{FORK,VFORK,CLONE} is defined for the platform.
+
+  @see ptlib::parse_wait
  */
 enum WAIT_RET {
     SIGNAL,     ///< The process was halted with a signal.
