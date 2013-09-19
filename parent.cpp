@@ -374,6 +374,11 @@ static void register_handlers()
 #define DEF_SYS1( syscall ) DEF_SYS2( syscall, syscall )
 
     DEF_SYS1(getuid);
+    DEF_SYS1(geteuid);
+    DEF_SYS1(getresuid);
+#if defined(SYS_getuid16)
+    DEF_SYS2(getuid16, getuid);
+#endif
 }
 
 void init_globals()

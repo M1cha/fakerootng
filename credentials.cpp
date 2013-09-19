@@ -25,8 +25,21 @@
 
 void sys_getuid( int sc_num, pid_t pid, pid_state *state )
 {
-    // Exit the system call
     state->ptrace_syscall_wait(pid, 0);
     ptlib::set_retval( pid, state->m_uid );
+    state->end_handling();
+}
+
+void sys_geteuid( int sc_num, pid_t pid, pid_state *state )
+{
+    state->ptrace_syscall_wait(pid, 0);
+    ptlib::set_retval( pid, state->m_euid );
+    state->end_handling();
+}
+
+void sys_getresuid( int sc_num, pid_t pid, pid_state *state )
+{
+    state->ptrace_syscall_wait(pid, 0);
+    ptlib::set_retval( pid, state->m_suid );
     state->end_handling();
 }
