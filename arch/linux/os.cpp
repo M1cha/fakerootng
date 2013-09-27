@@ -311,6 +311,7 @@ pid_t get_parent( pid_t pid )
     return ret;
 }
 
+#if 0
 int fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[STATE_SIZE],
         int_ptr context[FORK_CONTEXT_SIZE] )
 {
@@ -354,6 +355,7 @@ int fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_ptr co
 
     return ret;
 }
+#endif
 
 long ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *data)
 {

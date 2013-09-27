@@ -377,6 +377,9 @@ static void register_handlers()
 #if defined(SYS_getuid16)
     DEF_SYS2(getuid16, getuid);
 #endif
+#if defined(SYS_clone)
+    DEF_SYS1(clone);
+#endif
 }
 
 void init_globals()

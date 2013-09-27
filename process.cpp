@@ -19,109 +19,69 @@
 */
 #include "config.h"
 
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/stat.h>
-
-#include <errno.h>
-#include <limits.h>
 #include <string.h>
-#include <unistd.h>
-#include <assert.h>
+
+#include <sys/types.h>
 
 #include "syscalls.h"
+#include "parent.h"
+
 #include "arch/platform.h"
-#include "process.h"
-#include "chroot.h"
 
 // XXX
 // Not implemented functions:
 // acct
 
-bool sys_fork( int sc_num, pid_t pid, pid_state *state )
+#if 0
+void sys_fork( int sc_num, pid_t pid, pid_state *state )
 {
-    if( state->state==pid_state::NONE ) {
-        // XXX It is not clear whether we should lock the shared memory while in this call.
-        // PROC_MEM_LOCK();
-        if( ptlib_fork_enter( pid, sc_num, state->mem->get_shared(), state->mem->get_loc(), state->saved_state,
-                    state->context_state+1 ) )
-        {
-            state->state=pid_state::RETURN;
-        } else {
-            state->state=pid_state::REDIRECT2;
-        }
-
-        state->context_state[0]=0;
-    } else if( state->state==pid_state::RETURN || state->state==pid_state::REDIRECT2 ) {
-        pid_t newpid;
-        if( ptlib_fork_exit( pid, &newpid, state->saved_state, state->context_state+1 ) && newpid>0 ) {
-            handle_new_process( pid, newpid );
-        }
-
-        state->state=pid_state::NONE;
-    }
-
-    return true;
+    ptlib::fork_handler( pid, sc_num, [&](){
+        state->ptrace_syscall_wait(pid, 0);
+    } );
+    state->end_handling();
 }
+#endif
 
-bool sys_vfork( int sc_num, pid_t pid, pid_state *state )
+#if defined(SYS_clone)
+void sys_clone( int sc_num, pid_t pid, pid_state *state )
 {
-    if( state->state==pid_state::NONE ) {
-        sys_fork( sc_num, pid, state );
-        state->context_state[0]=NEW_PROCESS_SAME_VM;
-        // XXX Is this a Linux specific thing?
+    int_ptr flags = ptlib::get_argument( pid, 1 );
+
+#if 0 // Dormant code
+    if( (flags&(CLONE_PARENT|CLONE_THREAD))!=0 )
+        state->context_state[0]|=NEW_PROCESS_SAME_PARENT;
+    if( (flags&CLONE_FS)!=0 )
+        state->context_state[0]|=NEW_PROCESS_SAME_ROOT;
+    if( (flags&CLONE_FILES)!=0 )
+        state->context_state[0]|=NEW_PROCESS_SAME_FD;
+    if( (flags&CLONE_VM)!=0 )
+        state->context_state[0]|=NEW_PROCESS_SAME_VM;
+    if( (flags&CLONE_PTRACE)!=0 )
+        state->context_state[0]|=NEW_PROCESS_SAME_DEBUGGER;
+#endif
+
+    dlog(PID_F": clone called with flags %lx\n", pid, (unsigned long)flags );
+
+    // Whatever it originally was, add a CLONE_PTRACE to the flags so that we remain in control
+    flags|=CLONE_PTRACE;
+    flags&=~CLONE_UNTRACED; // Reset the UNTRACED flag
+
+    ptlib::set_argument( pid, 1, flags );
+    state->ptrace_syscall_wait(pid, 0);
+
+    if( ptlib::success( pid, sc_num ) ) {
+        pid_t newpid=(pid_t)ptlib::get_retval( pid );
+        dlog(PID_F": clone succeeded, new process " PID_F "\n", pid, newpid );
+        //handle_new_process( pid, newpid );
     } else {
-        sys_fork( sc_num, pid, state );
+        dlog(PID_F": clone failed: %s\n", pid, strerror( ptlib::get_error( pid, sc_num ) ) );
     }
 
-    return true;
-}
-
-#ifdef SYS_clone
-bool sys_clone( int sc_num, pid_t pid, pid_state *state )
-{
-    if( state->state==pid_state::NONE ) {
-        state->state=pid_state::RETURN;
-
-        // Need to mark context_state[0] based on the type of new process being created
-        state->context_state[0]=0;
-        int_ptr flags=ptlib_get_argument( pid, 1 );
-
-        if( (flags&(CLONE_PARENT|CLONE_THREAD))!=0 )
-            state->context_state[0]|=NEW_PROCESS_SAME_PARENT;
-        if( (flags&CLONE_FS)!=0 )
-            state->context_state[0]|=NEW_PROCESS_SAME_ROOT;
-        if( (flags&CLONE_FILES)!=0 )
-            state->context_state[0]|=NEW_PROCESS_SAME_FD;
-        if( (flags&CLONE_VM)!=0 )
-            state->context_state[0]|=NEW_PROCESS_SAME_VM;
-        if( (flags&CLONE_PTRACE)!=0 )
-            state->context_state[0]|=NEW_PROCESS_SAME_DEBUGGER;
-
-        dlog(PID_F": clone called with flags %lx\n", pid, (unsigned long)flags );
-
-        // Whatever it originally was, add a CLONE_PTRACE to the flags so that we remain in control
-        flags|=CLONE_PTRACE;
-        flags&=~CLONE_UNTRACED; // Reset the UNTRACED flag
-
-        ptlib_set_argument( pid, 1, flags );
-    } else if( state->state==pid_state::RETURN ) {
-        // Was the call successful?
-        state->state=pid_state::NONE;
-
-        if( ptlib_success( pid, state->orig_sc ) ) {
-            pid_t newpid=(pid_t)ptlib_get_retval( pid );
-            dlog(PID_F": clone succeeded, new process " PID_F "\n", pid, newpid );
-            handle_new_process( pid, newpid );
-        } else {
-            dlog(PID_F": clone failed: %s\n", pid, strerror( ptlib_get_error( pid, state->orig_sc ) ) );
-        }
-    }
-
-    return true;
+    state->end_handling();
 }
 #endif // SYS_CLONE
 
+#if 0
 // Function interface is different - returns an extra bool to signify whether to send a trap after the call
 // context_state[0] is state machine:
 // 0 - just returned from execve
@@ -434,3 +394,4 @@ bool sys_kill( int sc_num, pid_t pid, pid_state *state )
 
     return true;
 }
+#endif

@@ -28,9 +28,6 @@ ssize_t get_fd( pid_t pid, int fd, char *buffer, size_t buff_size );
 void save_state( pid_t pid, void *buffer );
 void restore_state( pid_t pid, const void *buffer );
 pid_t get_parent( pid_t pid );
-int fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[STATE_SIZE],
-        int_ptr context[FORK_CONTEXT_SIZE] );
-int fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] );
 long ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *data);
 long ptrace(enum __ptrace_request request, pid_t pid, int_ptr addr, int_ptr signal);
 

@@ -25,6 +25,7 @@
 #include <asm/ptrace.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include "../../platform.h"
 #include "../os.h"
@@ -464,6 +465,7 @@ int set_pc( pid_t pid, int_ptr location )
 
 int get_syscall( pid_t pid )
 {
+    ASSERT_MASTER_THREAD();
     int syscall=ptrace( PTRACE_PEEKUSER, pid, ORIG_RAX, 0 );
 
     // Need to translate the 32 bit syscalls to 64 bit ones
@@ -500,6 +502,7 @@ static int translate_syscall( pid_t pid, int sc_num )
 
 int set_syscall( pid_t pid, int sc_num )
 {
+    ASSERT_MASTER_THREAD();
     sc_num=translate_syscall( pid, sc_num );
 
     if( sc_num==-1 ) {
@@ -512,6 +515,7 @@ int set_syscall( pid_t pid, int sc_num )
 
 int generate_syscall( pid_t pid, int sc_num, int_ptr base_memory )
 {
+    ASSERT_MASTER_THREAD();
     sc_num=translate_syscall( pid, sc_num );
 
     if( sc_num!=-1 && ptrace(PTRACE_POKEUSER, pid, RAX, sc_num)==0 ) {
@@ -535,6 +539,7 @@ static int arg_offset_64bit[]={
 
 int_ptr get_argument( pid_t pid, int argnum )
 {
+    ASSERT_SLAVE_THREAD();
     /* Check for error condition */
     if( argnum<1 || argnum>6 ) {
         dlog("ptlib_get_argument: " PID_F " invalid argument number %d\n", pid, argnum);
@@ -545,15 +550,16 @@ int_ptr get_argument( pid_t pid, int argnum )
 
     if( is_64(pid) ) {
         /* 64 bit */
-        return ptrace( PTRACE_PEEKUSER, pid, arg_offset_64bit[argnum-1], 0 );
+        return linux::ptrace( PTRACE_PEEKUSER, pid, arg_offset_64bit[argnum-1], 0 );
     } else {
         /* 32 bit */
-        return ptrace( PTRACE_PEEKUSER, pid, arg_offset_32bit[argnum-1], 0 );
+        return linux::ptrace( PTRACE_PEEKUSER, pid, arg_offset_32bit[argnum-1], 0 );
     }
 }
 
 int set_argument( pid_t pid, int argnum, int_ptr value )
 {
+    ASSERT_SLAVE_THREAD();
     if( argnum<1 || argnum>6 ) {
         dlog("ptlib_set_argument: " PID_F " invalid argument number %d\n", pid, argnum);
         errno=EINVAL;
@@ -563,16 +569,17 @@ int set_argument( pid_t pid, int argnum, int_ptr value )
 
     if( is_64(pid) ) {
         /* 64 bit */
-        return ptrace( PTRACE_POKEUSER, pid, arg_offset_64bit[argnum-1], value );
+        return linux::ptrace( PTRACE_POKEUSER, pid, arg_offset_64bit[argnum-1], value );
     } else {
         /* 32 bit */
-        return ptrace( PTRACE_POKEUSER, pid, arg_offset_32bit[argnum-1], value );
+        return linux::ptrace( PTRACE_POKEUSER, pid, arg_offset_32bit[argnum-1], value );
     }
 }
 
 int_ptr get_retval( pid_t pid )
 {
-    return ptrace( PTRACE_PEEKUSER, pid, RAX, 0 );
+    ASSERT_SLAVE_THREAD();
+    return linux::ptrace( PTRACE_PEEKUSER, pid, RAX, 0 );
 }
 
 int success( pid_t pid, int sc_num )
@@ -665,6 +672,7 @@ pid_t get_parent( pid_t pid )
     return linux::get_parent(pid);
 }
 
+#if 0
 int fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[STATE_SIZE],
         int_ptr context[FORK_CONTEXT_SIZE] )
 {
@@ -675,5 +683,6 @@ int fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_ptr co
 {
     return linux::fork_exit( pid, newpid, registers, context );
 }
+#endif
 
 }; // End of namespace ptlib

@@ -176,33 +176,20 @@ size_t prepare_memory_len(); /* How much memory does the platform need beyond ho
 /* Process relationship - return the parent of a process */
 pid_t get_parent( pid_t pid );
 
-/* Process creation with debugger attached:
- * call the "enter" right before the function, "exit" right after it returns
- * fork_enter returns true if it did not change the syscall, false if it did.
- * orig_sc is the original system call used by the process.
-
- * fork_exit returns true if a new process was created, false if the call failed.
+/**
+ * @brief Handle process creation with debugger attached
  *
- * Caller should make sure to call fork_exit for both child AND parent process.
  * Keep in mind that child process might start running (traced) before the parent
  * process returns from the fork, or after. It is also possible that child or parent
  * will run to completion before the other one returns from the fork. Caller must be
  * prepared to handle them in arbitrary order.
  * 
- * The pid of the new process is returned in newpid as per fork's return code (or
- * whatever function it is that was called).
- *
- * fork_exit makes sure that the return value from the kernel matches what the
- * called of fork (or whatever) would expect
-
- * process_mem is a pointer to the shared memory area in the process space (as per generate_syscall)
- * our_mem is a pointer to the same memory in the debugger porcess space
+ * @param pid the pid of the process executing the call
+ * @param sc_num the actual system call number performed
+ * @param waiter a callback to be called whenever the handler needs to release the original process
+ * @return the PID of the new process created
  */
-
-#define FORK_CONTEXT_SIZE 3
-int fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[STATE_SIZE],
-        int_ptr context[FORK_CONTEXT_SIZE] );
-int fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] );
+pid_t fork_handler( pid_t pid, int orig_sc, std::function<void ()> waiter );
 
 }; // End of namespace ptlib
 
