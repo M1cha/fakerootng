@@ -304,6 +304,7 @@ int daemonProcess::create( bool nodetach )
         if( daemonize( nodetach, sockets[0] ) ) {
             // We are the daemon
             daemon_process=std::unique_ptr<daemonProcess>(new daemonProcess(sockets[0]));
+            close(sockets[1]);
             daemon_process->start();
             daemon_process.reset();
             exit(0);
@@ -474,6 +475,7 @@ bool daemonProcess::handle_request( const sigset_t *sigmask, bool existing_child
     struct timespec timeout;
     timeout.tv_sec=0;
     timeout.tv_nsec=0;
+    dlog("session_fds %lu\n", session_fds.size());
 
     // Wait nothing if we are about to exit, indefinitely if we have reason to stay
     int result=pselect( max_fd, &read_set, NULL, &except_set, (ret || existing_children) ? NULL : &timeout, sigmask );
@@ -565,6 +567,7 @@ void daemonProcess::handle_new_connection()
 void daemonProcess::handle_connection_request( decltype(session_fds)::iterator & element )
 {
     ipcMessage<daemonCtrl::request> request;
+    dlog("Session %d\n", element->get());
 
     try {
         request.recv( element->get() );
