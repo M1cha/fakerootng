@@ -368,7 +368,7 @@ static void register_handlers()
 {
     // A macro for defining a system call with different syscall and handler names
 #define DEF_SYS2( syscall, function ) syscalls[SYS_##syscall]=syscall_hook(sys_##function, #syscall)
-    // A macro fro defining a system call with the same syscall and handler names
+    // A macro for defining a system call with the same syscall and handler names
 #define DEF_SYS1( syscall ) DEF_SYS2( syscall, syscall )
 
     DEF_SYS1(getuid);
@@ -377,6 +377,7 @@ static void register_handlers()
 #if defined(SYS_getuid16)
     DEF_SYS2(getuid16, getuid);
 #endif
+    DEF_SYS1(execve);
 #if defined(SYS_clone)
     DEF_SYS1(clone);
 #endif

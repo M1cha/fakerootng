@@ -81,6 +81,16 @@ void sys_clone( int sc_num, pid_t pid, pid_state *state )
 }
 #endif // SYS_CLONE
 
+void sys_execve( int sc_num, pid_t pid, pid_state *state )
+{
+    state->ptrace_syscall_wait(pid, 0);
+    if( ptlib::success( pid, sc_num ) ) {
+        // If the syscall succeeded, we will get an extra SIGTRAP that would, otherwise, confuse our state keeping
+        state->ptrace_syscall_wait(pid, 0);
+    }
+    state->end_handling();
+}
+
 #if 0
 // Function interface is different - returns an extra bool to signify whether to send a trap after the call
 // context_state[0] is state machine:

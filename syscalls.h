@@ -36,8 +36,7 @@ DECLARE_SYSFUNC(fork);
 DECLARE_SYSFUNC(vfork);
 DECLARE_SYSFUNC(waitpid);
 DECLARE_SYSFUNC(vfork);
-//DECLARE_SYSFUNC(execve)
-bool sys_execve( int sc_num, pid_t pid, pid_state *state, bool &post_trap );
+DECLARE_SYSFUNC(execve);
 DECLARE_SYSFUNC(setsid);
 DECLARE_SYSFUNC(ptrace);
 DECLARE_SYSFUNC(kill);
