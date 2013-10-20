@@ -4,6 +4,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+/* This tests the semantics of vfork:
+   Make sure that the parent does not run until the child exists (or execs)
+   Make sure that the parent and child share address space.
+ */
 int global;
 
 int main()
