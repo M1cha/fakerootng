@@ -26,7 +26,14 @@ class SyscallHandlerTask;
 
 class pid_state {
 public:
-    enum state { INIT, NEW_INSTANCE, NONE, KERNEL, WAITING, WAKEUP };
+    enum state {
+        STATE_INIT,     ///< Sanity - process should never actually do anything while in this state
+        STATE_NEW,      ///< New process, recently registered. Should see a SIGSTOP next
+        STATE_NONE,     ///< Idle state
+        STATE_KERNEL,   ///< Inside a system call
+        STATE_WAITING,  ///< A worker thread is waiting on this process
+        STATE_WAKEUP,
+    };
     
 public:
     // The credentials (including the Linux specific file system UID)
@@ -35,7 +42,7 @@ public:
     std::set<gid_t> m_groups;
 
 private:
-    enum state m_state = INIT;
+    enum state m_state = STATE_INIT;
     SyscallHandlerTask *m_task = nullptr;
     std::mutex m_wait_lock;
     std::condition_variable m_wait_condition;
@@ -53,13 +60,13 @@ public:
 
     void setStateNone()
     {
-        m_state=NONE;
+        m_state=STATE_NONE;
     }
 
     void setStateNewInstance()
     {
-        assert(m_state==INIT);
-        m_state=NEW_INSTANCE;
+        assert(m_state==STATE_INIT);
+        m_state=STATE_NEW;
     }
 
     void wait( const std::function< void ()> &callback );

@@ -4,7 +4,7 @@
 AC_PREREQ(2.61)
 AC_INIT([fakeroot-ng], [0.18], [shachar@debian.org])
 AC_CONFIG_MACRO_DIR([m4])
-AC_CANONICAL_TARGET()
+AC_CANONICAL_TARGET
 AM_INIT_AUTOMAKE([no-dist subdir-objects])
 AC_CONFIG_SRCDIR([parent.h])
 AC_CONFIG_HEADER([config.h])
@@ -49,7 +49,7 @@ AX_PTHREAD([
             CC="$PTHREAD_CC"
         ],
         [
-            AC_ERROR([Compiler must support pthreads])
+            AC_MSG_ERROR([compiler must support pthreads])
         ])
 
 dnl Globally define the root UID
