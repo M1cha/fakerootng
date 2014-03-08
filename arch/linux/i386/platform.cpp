@@ -73,7 +73,7 @@ int wait( pid_t *pid, int *status, extra_data *data, int async )
     return linux_wait( pid, status, data, async );
 }
 
-long parse_wait( pid_t pid, int status, enum WAIT_RET *type )
+long parse_wait( pid_t pid, int status, WAIT_RET *type )
 {
     return linux_parse_wait( pid, status, type );
 }

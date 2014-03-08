@@ -85,17 +85,17 @@ bool wait( pid_t *pid, int *status, extra_data *data, int async )
 }
 
 
-long parse_wait( pid_t pid, int status, enum WAIT_RET *type )
+long parse_wait( pid_t pid, int status, WAIT_RET *type )
 {
     ASSERT_MASTER_THREAD();
     long ret;
 
     if( WIFEXITED(status) ) {
         ret=WEXITSTATUS(status);
-        *type=EXIT;
+        *type=WAIT_RET::EXIT;
     } else if( WIFSIGNALED(status) ) {
         ret=WTERMSIG(status);
-        *type=SIGEXIT;
+        *type=WAIT_RET::SIGEXIT;
     } else if( WIFSTOPPED(status) ) {
         ret=WSTOPSIG(status);
 
@@ -108,16 +108,16 @@ long parse_wait( pid_t pid, int status, enum WAIT_RET *type )
             {
                 ::ptrace( PTRACE_GETEVENTMSG, pid, NULL, &ret );
 
-                *type=NEWPROCESS;
+                *type=WAIT_RET::NEWPROCESS;
             } else {
                 /* Since we cannot reliably know when PTRACE_O_TRACESYSGOOD is supported, we always assume that's the reason for a
                  * SIGTRACE */
                 ret=get_syscall(pid);
-                *type=SYSCALL;
+                *type=WAIT_RET::SYSCALL;
             }
         } else {
             dlog("stopped with some other signal\n");
-            *type=SIGNAL;
+            *type=WAIT_RET::SIGNAL;
         }
     } else {
         /* What is going on here? We should never get here. */
@@ -129,7 +129,7 @@ long parse_wait( pid_t pid, int status, enum WAIT_RET *type )
     return ret;
 }
 
-int reinterpret( enum WAIT_RET prevstate, pid_t pid, int status, long *ret )
+WAIT_RET reinterpret( WAIT_RET prevstate, pid_t pid, int status, long *ret )
 {
     // Previous state does not affect us
     // XXX if the first thing the child does is a "fork", is this statement still true?

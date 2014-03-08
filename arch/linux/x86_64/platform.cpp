@@ -443,12 +443,12 @@ bool wait( pid_t *pid, int *status, extra_data *data, int async )
     return linux::wait( pid, status, data, async );
 }
 
-long parse_wait( pid_t pid, int status, enum WAIT_RET *type )
+long parse_wait( pid_t pid, int status, WAIT_RET *type )
 {
     return linux::parse_wait( pid, status, type );
 }
 
-int reinterpret( enum WAIT_RET prestate, pid_t pid, int status, long *ret )
+WAIT_RET reinterpret( WAIT_RET prestate, pid_t pid, int status, long *ret )
 {
     return linux::reinterpret( prestate, pid, status, ret );
 }

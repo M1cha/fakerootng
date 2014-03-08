@@ -168,7 +168,7 @@ struct result_generic {
 class SyscallHandlerTask : public worker_queue::worker_task
 {
 public:
-    SyscallHandlerTask( pid_t pid, pid_state *proc_state, enum ptlib::WAIT_RET ptlib_status, int wait_status,
+    SyscallHandlerTask( pid_t pid, pid_state *proc_state, ptlib::WAIT_RET ptlib_status, int wait_status,
             long parsed_status ) :
         m_pid( pid ),
         m_proc_state( proc_state ),
@@ -193,19 +193,19 @@ public:
         }
 
         switch( m_ptlib_status ) {
-        case ptlib::SIGNAL:
+        case ptlib::WAIT_RET::SIGNAL:
             process_signal();
             break;
-        case ptlib::EXIT:
-        case ptlib::SIGEXIT:
+        case ptlib::WAIT_RET::EXIT:
+        case ptlib::WAIT_RET::SIGEXIT:
             dlog("BUG - EXIT and SIGEXIT were meant to be handled by the master thread\n");
             dlog(NULL);
             assert(false);
             break;
-        case ptlib::SYSCALL:
+        case ptlib::WAIT_RET::SYSCALL:
             process_syscall();
             break;
-        case ptlib::NEWPROCESS:
+        case ptlib::WAIT_RET::NEWPROCESS:
             dlog("Should never happen\n");
             dlog(NULL);
             assert(false);
@@ -274,7 +274,7 @@ public:
 private:
     bool process_initial_signal()
     {
-        if( m_ptlib_status!=ptlib::SIGNAL || m_parsed_status!=SIGSTOP ) {
+        if( m_ptlib_status!=ptlib::WAIT_RET::SIGNAL || m_parsed_status!=SIGSTOP ) {
             dlog("Process " PID_F " reports with something other than SIGSTOP!\n", m_pid);
             assert(false);
             return true;
@@ -303,7 +303,7 @@ private:
 
     void process_signal()
     {
-        assert( m_ptlib_status==ptlib::SIGNAL );
+        assert( m_ptlib_status==ptlib::WAIT_RET::SIGNAL );
         dlog("pid " PID_F " received signal %ld\n", m_pid, m_parsed_status);
         ptrace_continue( m_parsed_status );
     }
@@ -442,21 +442,21 @@ void shutdown_debugger()
     workQ=nullptr;
 }
 
-static void process_exit( pid_t pid, enum ptlib::WAIT_RET wait_state, int status, long ret )
+static void process_exit( pid_t pid, ptlib::WAIT_RET wait_state, int status, long ret )
 {
     num_processes--;
     dlog("pid " PID_F " exit\n", pid);
 }
 
 // ret is the signal (if applicable) or status (if a child exit)
-static void process_sigchld( pid_t pid, enum ptlib::WAIT_RET wait_state, int status, long ret )
+static void process_sigchld( pid_t pid, ptlib::WAIT_RET wait_state, int status, long ret )
 {
     dlog("%s:%d pid " PID_F " wait_state %d status %08x ret %08lx\n", __FUNCTION__, __LINE__, pid, wait_state, status,
             ret );
     pid_state *proc_state=lookup_state_create(pid);
 
     // Handle process exits synchronously
-    if( wait_state==ptlib::EXIT || wait_state==ptlib::SIGEXIT ) {
+    if( wait_state==ptlib::WAIT_RET::EXIT || wait_state==ptlib::WAIT_RET::SIGEXIT ) {
         process_exit( pid, wait_state, status, ret );
 
         return;
@@ -469,7 +469,7 @@ static void process_sigchld( pid_t pid, enum ptlib::WAIT_RET wait_state, int sta
         workQ->schedule_task( new SyscallHandlerTask( pid, proc_state, wait_state, status, ret ) );
         break;
     case pid_state::state::KERNEL:
-        if( wait_state==ptlib::SYSCALL ) {
+        if( wait_state==ptlib::WAIT_RET::SYSCALL ) {
             ptrace( PTRACE_SYSCALL, pid, 0, 0 );
             proc_state->setStateNone();
         } else
@@ -520,7 +520,7 @@ int process_children( daemonProcess *daemon )
         long ret;
         ptlib::extra_data data;
 
-        enum ptlib::WAIT_RET wait_state;
+        ptlib::WAIT_RET wait_state;
         if( ptlib::wait( &pid, &status, &data, true ) ) {
             // A child had something to say
             ret=ptlib::parse_wait( pid, status, &wait_state );

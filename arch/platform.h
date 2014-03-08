@@ -71,7 +71,7 @@ void prepare( pid_t pid );
 
   @see ptlib::parse_wait
  */
-enum WAIT_RET {
+enum class WAIT_RET {
     SIGNAL,     ///< The process was halted with a signal.
     EXIT,       ///< The process performed a normal exit.
     SIGEXIT,    ///< The process quit due to a signal.
@@ -112,11 +112,11 @@ bool wait( pid_t *pid, int *status, extra_data *data, int async );
  @see   ptlib::wait
  @see   ptlib::WAIT_RET
  */
-long parse_wait( pid_t pid, int status, enum WAIT_RET *type );
+long parse_wait( pid_t pid, int status, WAIT_RET *type );
 
 /* If we get a trace before we run prepare, we might mis-interpret the signals */
 // TODO Is this function even needed?
-int reinterpret( enum WAIT_RET prestate, pid_t pid, int status, long *ret );
+WAIT_RET reinterpret( WAIT_RET prestate, pid_t pid, int status, long *ret );
 
 /**
   @brief get process' program counter
