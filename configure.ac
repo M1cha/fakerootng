@@ -89,6 +89,7 @@ AC_LANG_PUSH(C++)
 testprog="`cat <<"EOP"
 std::unordered_map<int, int> test;
 static thread_local decltype(test)::iterator iterator;
+enum class e { test };
 for( auto &i: test )
     i.second++;
     int *nullable=nullptr;

@@ -26,13 +26,13 @@ class SyscallHandlerTask;
 
 class pid_state {
 public:
-    enum state {
-        STATE_INIT,     ///< Sanity - process should never actually do anything while in this state
-        STATE_NEW,      ///< New process, recently registered. Should see a SIGSTOP next
-        STATE_NONE,     ///< Idle state
-        STATE_KERNEL,   ///< Inside a system call
-        STATE_WAITING,  ///< A worker thread is waiting on this process
-        STATE_WAKEUP,
+    enum class state {
+        INIT,     ///< Sanity - process should never actually do anything while in this state
+        NEW,      ///< New process, recently registered. Should see a SIGSTOP next
+        NONE,     ///< Idle state
+        KERNEL,   ///< Inside a system call
+        WAITING,  ///< A worker thread is waiting on this process
+        WAKEUP,
     };
     
 public:
@@ -42,7 +42,7 @@ public:
     std::set<gid_t> m_groups;
 
 private:
-    enum state m_state = STATE_INIT;
+    enum state m_state = state::INIT;
     SyscallHandlerTask *m_task = nullptr;
     std::mutex m_wait_lock;
     std::condition_variable m_wait_condition;
@@ -60,13 +60,13 @@ public:
 
     void setStateNone()
     {
-        m_state=STATE_NONE;
+        m_state=state::NONE;
     }
 
     void setStateNewInstance()
     {
-        assert(m_state==STATE_INIT);
-        m_state=STATE_NEW;
+        assert(m_state==state::INIT);
+        m_state=state::NEW;
     }
 
     void wait( const std::function< void ()> &callback );

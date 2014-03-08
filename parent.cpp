@@ -187,7 +187,7 @@ private:
 public:
     virtual void run()
     {
-        if( m_proc_state->get_state()==pid_state::STATE_INIT || m_proc_state->get_state()==pid_state::STATE_NEW ) {
+        if( m_proc_state->get_state()==pid_state::state::INIT || m_proc_state->get_state()==pid_state::state::NEW ) {
             if( ! process_initial_signal() )
                 return;
         }
@@ -282,7 +282,7 @@ private:
 
         dlog("Received initial SIGSTOP on process " PID_F "\n", m_pid);
 
-        if( m_proc_state->get_state()==pid_state::STATE_INIT || !ptlib::TRAP_AFTER_EXEC ) {
+        if( m_proc_state->get_state()==pid_state::state::INIT || !ptlib::TRAP_AFTER_EXEC ) {
             // New organic process
             m_proc_state->setStateNone();
             ptrace_continue( 0 );
@@ -463,22 +463,22 @@ static void process_sigchld( pid_t pid, enum ptlib::WAIT_RET wait_state, int sta
     }
 
     switch( proc_state->get_state() ) {
-    case pid_state::STATE_INIT:
-    case pid_state::STATE_NEW:
-    case pid_state::STATE_NONE:
+    case pid_state::state::INIT:
+    case pid_state::state::NEW:
+    case pid_state::state::NONE:
         workQ->schedule_task( new SyscallHandlerTask( pid, proc_state, wait_state, status, ret ) );
         break;
-    case pid_state::STATE_KERNEL:
+    case pid_state::state::KERNEL:
         if( wait_state==ptlib::SYSCALL ) {
             ptrace( PTRACE_SYSCALL, pid, 0, 0 );
             proc_state->setStateNone();
         } else
             workQ->schedule_task( new SyscallHandlerTask( pid, proc_state, wait_state, status, ret ) );
         break;
-    case pid_state::STATE_WAITING:
+    case pid_state::state::WAITING:
         proc_state->wakeup( wait_state, status, ret );
         break;
-    case pid_state::STATE_WAKEUP:
+    case pid_state::state::WAKEUP:
         assert(false);
         break;
     }
@@ -614,11 +614,11 @@ void pid_state::wait( const std::function< void ()> &callback )
     std::unique_lock<decltype(m_wait_lock)> lock(m_wait_lock);
 
     state oldstate=m_state;
-    m_state=STATE_WAITING;
+    m_state=state::WAITING;
 
     callback();
 
-    m_wait_condition.wait( lock, [ this ]{ return m_state==STATE_WAKEUP; } );
+    m_wait_condition.wait( lock, [ this ]{ return m_state==state::WAKEUP; } );
 
     m_state=oldstate;
 }
@@ -627,8 +627,8 @@ void pid_state::wakeup( ptlib::WAIT_RET wait_state, int status, long parsed_stat
 {
     std::unique_lock<decltype(m_wait_lock)> lock(m_wait_lock);
 
-    assert( m_state==STATE_WAITING );
-    m_state=STATE_WAKEUP;
+    assert( m_state==state::WAITING );
+    m_state=state::WAKEUP;
 
     m_wait_state=wait_state;
     m_wait_status=status;
@@ -652,7 +652,7 @@ void pid_state::start_handling( SyscallHandlerTask *task )
 
 void pid_state::end_handling()
 {
-    m_state=STATE_NONE;
+    m_state=state::NONE;
     m_task->ptrace_continue(0);
     m_task=nullptr;
 }
