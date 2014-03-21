@@ -112,7 +112,7 @@ int parse_options( int argc, char *argv[] )
         return -1;
     }
 
-    if( logfile && ! init_log( logfile, log_flush ) ) {
+    if( ! init_log( logfile, logfile!=NULL, log_flush ) ) {
         perror( "Failed to create log file" );
 
         return -1;

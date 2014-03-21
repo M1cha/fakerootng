@@ -25,6 +25,7 @@
 
 #include "syscalls.h"
 #include "parent.h"
+#include "log.h"
 
 #include "arch/platform.h"
 
@@ -60,7 +61,7 @@ void sys_clone( int sc_num, pid_t pid, pid_state *state )
         state->context_state[0]|=NEW_PROCESS_SAME_DEBUGGER;
 #endif
 
-    dlog(PID_F": clone called with flags %lx\n", pid, (unsigned long)flags );
+    LOG_T() << pid << ": clone called with flags " << HEX_FORMAT(flags, 8);
 
     // Whatever it originally was, add a CLONE_PTRACE to the flags so that we remain in control
     flags|=CLONE_PTRACE;
@@ -71,10 +72,10 @@ void sys_clone( int sc_num, pid_t pid, pid_state *state )
 
     if( ptlib::success( pid, sc_num ) ) {
         pid_t newpid=(pid_t)ptlib::get_retval( pid );
-        dlog(PID_F": clone succeeded, new process " PID_F "\n", pid, newpid );
+        LOG_T() << pid << ": clone succeeded, new process " << newpid;
         //handle_new_process( pid, newpid );
     } else {
-        dlog(PID_F": clone failed: %s\n", pid, strerror( ptlib::get_error( pid, sc_num ) ) );
+        LOG_T() << pid << ": clone failed: " << strerror( ptlib::get_error( pid, sc_num ) );
     }
 
     state->end_handling();

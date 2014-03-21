@@ -33,6 +33,7 @@
 #include <errno.h>
 #include <assert.h>
 
+#include "../../log.h"
 #include "../platform.h"
 #include "os.h"
 
@@ -116,13 +117,12 @@ long parse_wait( pid_t pid, int status, WAIT_RET *type )
                 *type=WAIT_RET::SYSCALL;
             }
         } else {
-            dlog("stopped with some other signal\n");
+            LOG_I() << "stopped with some other signal";
             *type=WAIT_RET::SIGNAL;
         }
     } else {
         /* What is going on here? We should never get here. */
-        dlog("Process %d received unknown status %x - aborting\n", pid, status);
-        dlog(NULL); /* Flush the log before we abort */
+        LOG_F() << "Process " << pid << " received unknown status " << HEX_FORMAT(status, 8) << " - aborting";
         abort();
     }
 
@@ -284,7 +284,7 @@ pid_t get_parent( pid_t pid )
 
     FILE *stat_file=fopen(filename, "r");
     if( stat_file==NULL ) {
-        dlog("%s: Failed to open %s: %s\n", __FUNCTION__, filename, strerror(errno) );
+        LOG_E() << __FUNCTION__ << ": Failed to open " << filename << ": " << strerror(errno);
 
         return -1;
     }

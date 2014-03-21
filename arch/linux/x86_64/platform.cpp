@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#include "../../../log.h"
 #include "../../platform.h"
 #include "../os.h"
 
@@ -416,7 +417,7 @@ static int is_64( pid_t pid )
                 cache_64=0; // 32 bit mode
                 break;
             default:
-                dlog("is_64: " PID_F " unknown usbsystem 0x%lx\n", pid, cs );
+                LOG_E() << "is_64: " << pid << " unknown usbsystem 0x" << HEX_FORMAT(cs,8);
                 break;
         }
 
@@ -473,7 +474,7 @@ int get_syscall( pid_t pid )
         if( syscall>=0 && (unsigned int)syscall<ARRAY_SIZE(syscall_32_to_64) ) {
             syscall=syscall_32_to_64[syscall];
         } else {
-            dlog("ptlib_get_syscall: " PID_F " syscall out of range %d\n", pid, syscall);
+            LOG_W() << "ptlib_get_syscall: " << pid << " syscall out of range " << syscall;
 
             syscall=-1;
         }
@@ -491,7 +492,8 @@ static int translate_syscall( pid_t pid, int sc_num )
             sc=syscall_64_to_32[sc];
         } else {
             sc=-1;
-            dlog("ptlib_set_syscall: " PID_F " invalid 64 to 32 bit translation for syscall %d\n", pid, sc_num );
+            LOG_E() << "ptlib_set_syscall: " << pid <<
+                    " invalid 64 to 32 bit translation for syscall " << sc_num;
         }
 
         sc_num=sc;
@@ -542,7 +544,7 @@ int_ptr get_argument( pid_t pid, int argnum )
     ASSERT_SLAVE_THREAD();
     /* Check for error condition */
     if( argnum<1 || argnum>6 ) {
-        dlog("ptlib_get_argument: " PID_F " invalid argument number %d\n", pid, argnum);
+        LOG_E() << "ptlib_get_argument: " << pid << " invalid argument number " << argnum;
         errno=EINVAL;
 
         return -1;
@@ -561,7 +563,7 @@ int set_argument( pid_t pid, int argnum, int_ptr value )
 {
     ASSERT_SLAVE_THREAD();
     if( argnum<1 || argnum>6 ) {
-        dlog("ptlib_set_argument: " PID_F " invalid argument number %d\n", pid, argnum);
+        LOG_E() << "ptlib_set_argument: " << pid << " invalid argument number " << argnum;
         errno=EINVAL;
 
         return -1;

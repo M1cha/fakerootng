@@ -37,6 +37,7 @@
 #include "exceptions.h"
 #include "worker_queue.h"
 #include "daemon.h"
+#include "log.h"
 
 #include "syscalls.h"
 
@@ -198,16 +199,14 @@ public:
             break;
         case ptlib::WAIT_RET::EXIT:
         case ptlib::WAIT_RET::SIGEXIT:
-            dlog("BUG - EXIT and SIGEXIT were meant to be handled by the master thread\n");
-            dlog(NULL);
+            LOG_F() << "BUG - EXIT and SIGEXIT were meant to be handled by the master thread";
             assert(false);
             break;
         case ptlib::WAIT_RET::SYSCALL:
             process_syscall();
             break;
         case ptlib::WAIT_RET::NEWPROCESS:
-            dlog("Should never happen\n");
-            dlog(NULL);
+            LOG_F() << "Should never happen";
             assert(false);
             break;
         }
@@ -236,7 +235,7 @@ public:
     void ptrace_continue( int signal )
     {
         if( ptlib::cont( PTRACE_SYSCALL, m_pid, signal )<0 )
-            dlog("pid " PID_F " failed to perform ptrace: %s\n", m_pid, strerror(errno));
+            LOG_E() << "pid " << m_pid << " failed to perform ptrace: " << strerror(errno);
         // TODO Proper error checking
     }
 
@@ -275,12 +274,12 @@ private:
     bool process_initial_signal()
     {
         if( m_ptlib_status!=ptlib::WAIT_RET::SIGNAL || m_parsed_status!=SIGSTOP ) {
-            dlog("Process " PID_F " reports with something other than SIGSTOP!\n", m_pid);
+            LOG_W() << "Process " << m_pid << " reports with something other than SIGSTOP!";
             assert(false);
             return true;
         }
 
-        dlog("Received initial SIGSTOP on process " PID_F "\n", m_pid);
+        LOG_I() << "Received initial SIGSTOP on process " << m_pid;
 
         if( m_proc_state->get_state()==pid_state::state::INIT || !ptlib::TRAP_AFTER_EXEC ) {
             // New organic process
@@ -304,7 +303,7 @@ private:
     void process_signal()
     {
         assert( m_ptlib_status==ptlib::WAIT_RET::SIGNAL );
-        dlog("pid " PID_F " received signal %ld\n", m_pid, m_parsed_status);
+        LOG_T() << "pid " << m_pid << " received signal " << m_parsed_status;
         ptrace_continue( m_parsed_status );
     }
 
@@ -313,10 +312,10 @@ private:
         auto handler = syscalls.find(m_parsed_status);
         if( handler == syscalls.end() ) {
             // No specific handler for this syscall
-            dlog("pid " PID_F " system call %ld\n", m_pid, m_parsed_status);
+            LOG_T() << "pid " << m_pid << " system call " << m_parsed_status;
             ptrace_continue( 0 );
         } else {
-            dlog("pid " PID_F " system call %s\n", m_pid, handler->second.name);
+            LOG_T() << "pid " << m_pid << " system call " << handler->second.name;
             m_proc_state->start_handling( this );
             handler->second.func( m_parsed_status, m_pid, m_proc_state);
         }
@@ -349,15 +348,15 @@ static void handle_new_process( pid_t parent_id, pid_t child_id )
 
 bool attach_debugger( pid_t child )
 {
-    dlog(NULL);
+    flush_log();
 
     // Attach a debugger to the child
     if( ptrace(PTRACE_ATTACH, child, 0, 0)!=0 ) {
-        dlog("Could not start trace of process " PID_F ": %s\n", child, strerror(errno) );
+        LOG_E() << "Could not start trace of process " << child << ": " << strerror(errno);
 
         throw errno_exception( "Could not start trace of process" );
     }
-    dlog("Debugger successfully attached to process " PID_F "\n", child );
+    LOG_I() << "Debugger successfully attached to process " << child;
 
     handle_new_process( -1, child ); // No parent - a root process
 
@@ -415,7 +414,7 @@ static pid_state *lookup_state_create( pid_t pid )
     if( ret!=nullptr )
         return ret;
 
-    dlog("Creating state for new child " PID_F "\n", pid);
+    LOG_I() << "Creating state for new child " << pid;
     num_processes++;
     ptlib::prepare( pid );
 
@@ -445,14 +444,14 @@ void shutdown_debugger()
 static void process_exit( pid_t pid, ptlib::WAIT_RET wait_state, int status, long ret )
 {
     num_processes--;
-    dlog("pid " PID_F " exit\n", pid);
+    LOG_I() << "pid " << pid << " exit";
 }
 
 // ret is the signal (if applicable) or status (if a child exit)
 static void process_sigchld( pid_t pid, ptlib::WAIT_RET wait_state, int status, long ret )
 {
-    dlog("%s:%d pid " PID_F " wait_state %d status %08x ret %08lx\n", __FUNCTION__, __LINE__, pid, wait_state, status,
-            ret );
+    LOG_T() << __FUNCTION__ << ":" << __LINE__ << " pid " << pid << " wait_state " << wait_state <<
+            " status " << HEX_FORMAT(status, 8) << " ret " << HEX_FORMAT(ret, 8);
     pid_state *proc_state=lookup_state_create(pid);
 
     // Handle process exits synchronously
@@ -486,7 +485,7 @@ static void process_sigchld( pid_t pid, ptlib::WAIT_RET wait_state, int status, 
 
 int process_children( daemonProcess *daemon )
 {
-    dlog( "Begin the process loop\n" );
+    LOG_I() << "Begin the process loop";
 
     // Prepare the signal masks so we do not lose SIGCHLD while we wait
 
@@ -539,8 +538,8 @@ int process_children( daemonProcess *daemon )
 
             } else if( errno==ECHILD ) {
                 // We should never get here. If we have no more children, we should have known about it already
-                dlog( "BUG - ptlib wait failed with %s while numchildren is still %d\n", strerror(errno), num_processes );
-                dlog(NULL);
+                LOG_F() << "BUG - ptlib wait failed with " << strerror(errno) << " while numchildren is still " <<
+                        num_processes;
                 num_processes=0;
             }
         }
@@ -560,7 +559,7 @@ static void handle_threadreq_ptrace( int fd, const thread_request *req )
     };
 
     if( send( fd, &reply, sizeof(reply), 0 )<0 ) {
-        dlog( "Writing to socket %d failed: %s\n", fd, strerror(errno) );
+        LOG_F() << "Writing to socket " << fd << " failed: " << strerror(errno);
         assert(false);
     }
 }
@@ -572,7 +571,7 @@ static void handle_threadreq_proxy( int fd, const thread_request *req )
     result_generic reply = { 0 };
 
     if( send( fd, &reply, sizeof(reply), 0 )<0 ) {
-        dlog( "Writing to socket %d failed: %s\n", fd, strerror(errno) );
+        LOG_F() << "Writing to socket " << fd << " failed: " << strerror(errno);
         assert(false);
     }
 }
@@ -583,7 +582,7 @@ void handle_thread_request( int fd )
 
     ssize_t size = recv( fd, &request, sizeof(request), 0 );
     if( size<0 ) {
-        dlog("thread request recv failed on fd %d: %s\n", fd, strerror(errno) );
+        LOG_E() << "thread request recv failed on fd " << fd << ": " << strerror(errno);
 
         return;
     }
@@ -598,7 +597,7 @@ void handle_thread_request( int fd )
         handle_threadreq_proxy( fd, &request );
         break;
     default:
-        dlog("Unknown thread request %d on fd %d\n", request.request, fd );
+        LOG_E() << "Unknown thread request " << request.request << " on fd " << fd;
         break;
     };
 }

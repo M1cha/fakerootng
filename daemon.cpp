@@ -85,8 +85,8 @@ public:
         }
 
         if( static_cast<unsigned>(num_read)<sizeof(T) ) {
-            dlog("Session %d produced short read (expected %lu, got %ld)", fd, (long unsigned int) sizeof(T),
-                    (long int) num_read);
+            LOG_E() << "Session " << fd << " produced short read (expected " << sizeof(T) <<
+                    ", got " << num_read << ")";
             throw daemonCtrl::short_msg_exception();
         }
 
@@ -118,8 +118,8 @@ public:
             throw errno_exception("Send failed");
 
         if( static_cast<unsigned>(num_written)<sizeof(T) ) {
-            dlog("Session %d produced short send (expected %lu, got %ld)", fd, (long unsigned int) sizeof(T),
-                    (long int) num_written);
+            LOG_E() << "Session " << fd << " produced short send (expected " << sizeof(T) << ", got " <<
+                    num_written << ")";
             throw daemonCtrl::short_msg_exception();
         }
     }
@@ -186,11 +186,11 @@ void daemonCtrl::connect( const char * state_file_path )
 
         cmd_reserve();
     } catch( const errno_exception &exception ) {
-        dlog("Daemon connect failed: %s (%s)", exception.what(), exception.get_error_message() );
+        LOG_E() << "Daemon connect failed: " << exception.what() << ", (" << exception.get_error_message() << ")";
         close( client_socket );
         daemon_socket=-1;
     } catch( const std::exception &exception ) {
-        dlog("Daemon connect failed: %s", exception.what());
+        LOG_E() << "Daemon connect failed: " << exception.what();
         close( client_socket );
         daemon_socket=-1;
         throw;
@@ -273,7 +273,7 @@ daemonProcess::~daemonProcess()
 
         FILE * new_state = fopen( tmp_path.c_str(), "wt" );
         if( new_state==NULL ) {
-            dlog("Failed to open state file for saving: %s\n", strerror(errno) );
+            LOG_E() << "Failed to open state file for saving: " << strerror(errno);
 
             return;
         }
@@ -281,7 +281,7 @@ daemonProcess::~daemonProcess()
         fclose( new_state );
 
         if( rename( tmp_path.c_str(), state_path.c_str() )<0 ) {
-            dlog("Rename of temporary file failed: %s\n", strerror(errno) );
+            LOG_E() << "Rename of temporary file failed: " << strerror(errno);
         }
         unlink((state_path+".run").c_str());
     }
@@ -289,7 +289,7 @@ daemonProcess::~daemonProcess()
 
 void daemonProcess::register_session( unique_fd &fd )
 {
-    dlog("Added session %d\n", fd.get());
+    LOG_I() << "Added session " << fd.get();
     session_fds.push_back( std::move(fd) );
     recalc_select_mask();
 }
@@ -382,7 +382,7 @@ bool daemonProcess::daemonize( bool nodetach, int skip_fd1, int skip_fd2 )
             throw errno_exception("waitpid on child failed");
 
         if( !WIFEXITED(status) || WEXITSTATUS(status)!=0 ) {
-            dlog("Child exit with result %x", status);
+            LOG_E() << "Child exit with result " << std::hex << status;
             throw detailed_exception( "Child process exit with error - cannot start daemon" );
         }
 
@@ -392,7 +392,7 @@ bool daemonProcess::daemonize( bool nodetach, int skip_fd1, int skip_fd2 )
     // We are the child - we want to be the grandchild
     debugger=fork();
     if( debugger<0 ) {
-        dlog("Failed to fork grandchild: %s", strerror(errno));
+        LOG_F() << "Failed to fork grandchild: " << strerror(errno);
         _exit(1);
     }
 
@@ -410,7 +410,7 @@ bool daemonProcess::daemonize( bool nodetach, int skip_fd1, int skip_fd2 )
 
     // We are the grandchild - complete the daemonization
     setsid();
-    dlog("Debugger started\n");
+    LOG_I() << "Debugger started";
 
     if( !nodetach ) {
         // Close all open file descriptors except our skip_fds and the debug_log (if it exists)
@@ -447,9 +447,9 @@ void daemonProcess::start()
     do {
         repeat=false;
 
-        dlog("Debugger init loop\n");
+        LOG_I() << "Debugger init loop";
         process_children( this );
-        dlog("Debugger done\n");
+        LOG_I() << "Debugger done";
 
         struct timeval timeout;
         timeout.tv_sec=GRACE_NEW_CONNECTION_TIMEOUT;
@@ -464,7 +464,7 @@ void daemonProcess::start()
 
     shutdown_debugger();
 
-    dlog("Daemon done\n");
+    LOG_I() << "Daemon done";
 }
 
 bool daemonProcess::handle_request( const sigset_t *sigmask, bool existing_children )
@@ -475,7 +475,7 @@ bool daemonProcess::handle_request( const sigset_t *sigmask, bool existing_child
     struct timespec timeout;
     timeout.tv_sec=0;
     timeout.tv_nsec=0;
-    dlog("session_fds %lu\n", session_fds.size());
+    LOG_D() << "session_fds " << session_fds.size();
 
     // Wait nothing if we are about to exit, indefinitely if we have reason to stay
     int result=pselect( max_fd, &read_set, NULL, &except_set, (ret || existing_children) ? NULL : &timeout, sigmask );
@@ -499,8 +499,8 @@ bool daemonProcess::handle_request( const sigset_t *sigmask, bool existing_child
                 if( FD_ISSET( current->get(), &read_set ) || FD_ISSET( current->get(), &except_set ) )
                     handle_connection_request( current );
             } catch( const errno_exception &except ) {
-                dlog("Read from session socket %d failed: %s (%s)", current->get(), except.what(),
-                        except.get_error_message());
+                LOG_E() << "Read from session socket " << current->get() << " failed: " << except.what() <<
+                        " (" << except.get_error_message() << ")";
             } catch( const daemonCtrl::terminal_error &except ) {
                 close_session(current);
             }
@@ -511,8 +511,8 @@ bool daemonProcess::handle_request( const sigset_t *sigmask, bool existing_child
                 if( FD_ISSET( i, &read_set ) )
                     handle_thread_request( i );
             } catch( const errno_exception &except ) {
-                dlog("Read from thread socket %d failed: %s (%s)", i, except.what(),
-                        except.get_error_message());
+                LOG_E() << "Read from thread socket " << i << " failed: " << except.what() << " (" <<
+                        except.get_error_message() << ")";
             }
         }
     }
@@ -530,7 +530,7 @@ void daemonProcess::register_thread_socket( int fd )
 {
     {
         std::lock_guard<std::mutex> lockGuard( thread_fds_mutex );
-        dlog("Registering fd %d\n", fd);
+        LOG_D() << "Registering fd " << fd;
         std::pair< decltype(thread_fds)::iterator, bool > result = thread_fds.insert( fd );
         assert(result.second);
     }
@@ -553,21 +553,21 @@ void daemonProcess::handle_new_connection()
     assert(master_socket);
     unique_fd connection_fd( ::accept( master_socket.get(), NULL, NULL ) );
     if( !connection_fd ) {
-        dlog( "Accept failed: %s", strerror(errno) );
+        LOG_W() << "Accept failed: " << strerror(errno);
         return;
     }
 
     set_client_sock_options( connection_fd.get() );
 
     session_fds.push_back(std::move(connection_fd));
-    dlog("Received new session, socket #%d", connection_fd.get());
+    LOG_D() << "Received new session, socket #" << connection_fd.get();
     recalc_select_mask();
 }
 
 void daemonProcess::handle_connection_request( decltype(session_fds)::iterator & element )
 {
     ipcMessage<daemonCtrl::request> request;
-    dlog("Session %d\n", element->get());
+    LOG_T() << "Session " << element->get();
 
     try {
         request.recv( element->get() );
@@ -580,11 +580,11 @@ void daemonProcess::handle_connection_request( decltype(session_fds)::iterator &
             handle_cmd_attach( element, request );
             break;
         default:
-            dlog("Session %d sent unknown command %d\n", element->get(), request->command);
+            LOG_E() << "Session " << element->get() << " sent unknown command " << request->command;
             close_session(element);
         };
     } catch( const daemonCtrl::remote_hangup_exception &exception ) {
-        dlog("Session %d hung up\n", element->get());
+        LOG_E() << "Session " << element->get() << " hung up";
         close_session(element);
     }
 }
@@ -643,7 +643,7 @@ void daemonProcess::recalc_select_mask()
 
 void daemonProcess::close_session( decltype(session_fds)::iterator & element )
 {
-    dlog("Session %d closed\n", element->get());
+    LOG_I() << "Session " << element->get() << " closed";
     session_fds.erase(element);
 
     recalc_select_mask();

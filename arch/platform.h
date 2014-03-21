@@ -16,6 +16,7 @@
 
 #include <sys/types.h>
 #include <functional>
+#include <iostream>
 
 /* Platform specific definitinos go in a special file */
 #include "platform_specific.h"
@@ -78,6 +79,22 @@ enum class WAIT_RET {
     SYSCALL,    ///< The process performed a system call.
     NEWPROCESS  ///< This is a notification of a new process (but see the note above).
 };
+
+static inline std::ostream &operator<< (std::ostream &strm, WAIT_RET wait_ret)
+{
+#define PRODUCE_CASE(state) case WAIT_RET::state: strm<<#state; break
+    switch( wait_ret ) {
+        PRODUCE_CASE(SIGNAL);
+        PRODUCE_CASE(EXIT);
+        PRODUCE_CASE(SIGEXIT);
+        PRODUCE_CASE(SYSCALL);
+        PRODUCE_CASE(NEWPROCESS);
+    }
+#undef PRODUCE_CASE
+
+    return strm;
+}
+
 /**
  @brief Wait for next event. Returns some data about the event.
 
@@ -192,11 +209,6 @@ pid_t get_parent( pid_t pid );
 pid_t fork_handler( pid_t pid, int orig_sc, std::function<void ()> waiter );
 
 }; // End of namespace ptlib
-
-/* This is a function that must be provided by the user of the library */
-void __dlog_( const char *format, ... ) COMPHINT_PRINTF( 1, 2);
-extern int log_level;
-#define dlog if( log_level>0 ) __dlog_
 
 /**
  * @}
