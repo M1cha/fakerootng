@@ -15,5 +15,5 @@ fakeroot_ng_SOURCES=main.cpp log.cpp daemon.cpp worker_queue.cpp file_lie.cpp pa
 # file.cpp ptrace.cpp chroot.cpp credentials.cpp 
 
 #fakeroot_ng_LDFLAGS=-Larch/$(target_os)/$(target_cpu)
-fakeroot_ng_LDADD=arch/$(target_os)/$(target_cpu)/libarch.a
+fakeroot_ng_LDADD=$(BOOST_LIBS) arch/$(target_os)/$(target_cpu)/libarch.a
 fakeroot_ng_CPPFLAGS=-I$(top_srcdir)/arch/$(target_os)/$(target_cpu)

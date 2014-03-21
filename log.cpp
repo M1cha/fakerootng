@@ -7,6 +7,10 @@
 #include <boost/iostreams/stream.hpp>
 #include <iostream>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include "log.h"
 #include "arch/platform.h"
 
@@ -24,7 +28,8 @@ bool init_log( const char * file_name, bool enabled, bool flush )
     }
 
     if( !log_file.is_open() ) {
-        log_file = std::move( ios::file_descriptor_sink(file_name, std::ios_base::app|std::ios_base::out) );
+        int fd = open(file_name, O_WRONLY|O_CREAT|O_APPEND, 0666);
+        log_file = std::move( ios::file_descriptor_sink(fd, ios::close_handle) );
 
         // Allocate a log sink
         typedef logging::sinks::synchronous_sink< logging::sinks::text_ostream_backend > text_sink;
@@ -42,15 +47,20 @@ bool init_log( const char * file_name, bool enabled, bool flush )
     return true;
 }
 
-void close_log()
-{
-    // XXX Implement
-}
-
 int get_log_fd()
 {
     if( log_file.is_open() )
         return log_file.handle();
     else
         return -1;
+}
+
+void close_log()
+{
+    // TODO Implement
+}
+
+void flush_log()
+{
+    // TODO Implement
 }

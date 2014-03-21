@@ -19,6 +19,8 @@
 */
 #include "config.h"
 
+#include <sstream>
+
 #include <sys/types.h>
 #include <sys/ptrace.h>
 #include <sys/wait.h>
@@ -252,10 +254,10 @@ int set_string( pid_t pid, const char *local_ptr, int_ptr process_ptr )
 
 ssize_t get_cwd( pid_t pid, char *buffer, size_t buff_size )
 {
-    char tmpbuff[20]; /* Leave enough chars for the digits */
-    sprintf(tmpbuff, "/proc/" PID_F "/cwd", pid );
+    std::stringstream formatter;
+    formatter << "/proc/" << pid << "/cwd";
 
-    ssize_t ret=readlink( tmpbuff, buffer, buff_size>0 ? buff_size-1 : 0 );
+    ssize_t ret=readlink( formatter.str().c_str(), buffer, buff_size>0 ? buff_size-1 : 0 );
 
     if( ret>0 )
         buffer[ret]='\0';
@@ -265,10 +267,10 @@ ssize_t get_cwd( pid_t pid, char *buffer, size_t buff_size )
 
 ssize_t get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
 {
-    char tmpbuff[40];
-    sprintf(tmpbuff, "/proc/" PID_F "/fd/%d", pid, fd );
+    std::stringstream formatter;
+    formatter << "/proc/" << pid << "/fd/" << fd;
 
-    ssize_t ret=readlink( tmpbuff, buffer, buff_size>0 ? buff_size-1 : 0 );
+    ssize_t ret=readlink( formatter.str().c_str(), buffer, buff_size>0 ? buff_size-1 : 0 );
 
     if( ret>0 )
         buffer[ret]='\0';
@@ -279,10 +281,11 @@ ssize_t get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
 pid_t get_parent( pid_t pid )
 {
     /* Query the proc filesystem to figure out who the process' parent is */
-    char filename[100];
-    sprintf(filename, "/proc/" PID_F "/status", pid);
+    std::stringstream filename;
+    filename << "/proc/" << pid << "/status";
 
-    FILE *stat_file=fopen(filename, "r");
+    // TODO use a better parser (maybe using boost::spirit?)
+    FILE *stat_file=fopen(filename.str().c_str(), "r");
     if( stat_file==NULL ) {
         LOG_E() << __FUNCTION__ << ": Failed to open " << filename << ": " << strerror(errno);
 
