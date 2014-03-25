@@ -33,7 +33,7 @@ $(DEPDIR)/stamp:
 	mkdir -p $(DEPDIR)
 	touch $(DEPDIR)/stamp
 
-include $(wildcard $(DEPDIR)/*.Pdep)
+include $(wildcard $(DEPDIR)/*.dep)
 
 .PHONY: clean distclean
 
