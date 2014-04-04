@@ -5,6 +5,10 @@
 
 namespace ptlib {
 
+namespace platform {
+    struct process_state;
+};
+
 /**
   \ingroup ptlib
   @brief namespace for generic linux implementation
@@ -13,6 +17,8 @@ namespace ptlib {
   platforms.
  */
 namespace linux {
+platform::process_state *get_process_state( pid_t pid );
+
 void init( const callback_initiator &callback );
 int cont( __ptrace_request request, pid_t pid, int signal );
 void prepare( pid_t pid );

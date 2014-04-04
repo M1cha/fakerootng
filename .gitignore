@@ -3,6 +3,7 @@
 Makefile
 Makefile.in
 .deps
+.dirstamp
 
 /autom4te.cache
 /aclocal.m4

@@ -67,6 +67,9 @@
 
 #define SYS_X86_32_OFFSET 31
 
+/* An unsigned int as long as a pointer */
+typedef unsigned long int_ptr;
+
 namespace ptlib {
 
 /* Marks the library as supporting debugging children */
@@ -125,8 +128,5 @@ typedef struct rusage extra_data;
 
 #define PREF_NOP SYS_getuid
 #define PREF_MMAP SYS_mmap
-
-/* An unsigned int as long as a pointer */
-typedef unsigned long int_ptr;
 
 #endif /* PLATFORM_SPECIFIC_H */

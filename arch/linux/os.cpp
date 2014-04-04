@@ -20,6 +20,9 @@
 #include "config.h"
 
 #include <sstream>
+#include <unordered_map>
+
+#include <boost/thread/shared_mutex.hpp>
 
 #include <sys/types.h>
 #include <sys/ptrace.h>
@@ -38,6 +41,7 @@
 #include "../../log.h"
 #include "../platform.h"
 #include "os.h"
+#include <platform_specific_internal.h>
 
 // Some ptrace command enums are doubly defined, once as enums and once as preprocessor. Type safety requires we use
 // the later
@@ -55,6 +59,31 @@ std::thread::id master_thread;
 static struct {
     callback_initiator callback;
 } thread_proxy;
+
+static std::unordered_map< pid_t, platform::process_state > state_cache;
+static boost::shared_mutex state_cache_lock;
+
+platform::process_state *get_process_state( pid_t pid )
+{
+    boost::shared_lock<decltype(state_cache_lock)> shared_guard( state_cache_lock );
+    auto i = state_cache.find(pid);
+    platform::process_state *ret = &i->second;
+
+    if( i == state_cache.end() ) {
+        shared_guard.unlock();
+        ASSERT_MASTER_THREAD();
+
+        // TODO Should we act to prevent the cache from exploding? Not likely to happen, either way
+        boost::unique_lock< decltype(state_cache_lock) > exclusive_guard( state_cache_lock );
+        ret = &state_cache[pid];
+        exclusive_guard.unlock();
+
+        if( ptrace(PTRACE_GETREGS, pid, nullptr, &ret->registers)!=0 )
+            throw std::system_error(errno, std::system_category(), "Failed to get registers from process");
+    }
+
+    return ret;
+}
 
 void init( const callback_initiator &callback )
 {

@@ -30,6 +30,7 @@
 #include "../../../log.h"
 #include "../../platform.h"
 #include "../os.h"
+#include "platform_specific_internal.h"
 
 namespace ptlib {
 
@@ -541,6 +542,7 @@ static int arg_offset_64bit[]={
 
 int_ptr get_argument( pid_t pid, int argnum )
 {
+    platform::process_state *state = linux::get_process_state(pid);
     ASSERT_SLAVE_THREAD();
     /* Check for error condition */
     if( argnum<1 || argnum>6 ) {
