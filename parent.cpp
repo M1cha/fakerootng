@@ -624,7 +624,7 @@ void pid_state::wait( const std::function< void ()> &callback )
 
 void pid_state::wakeup( ptlib::WAIT_RET wait_state, int status, long parsed_status )
 {
-    std::unique_lock<decltype(m_wait_lock)> lock(m_wait_lock);
+    ASSERT( !m_wait_lock.try_lock() );
 
     assert( m_state==state::WAITING );
     m_state=state::WAKEUP;

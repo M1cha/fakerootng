@@ -156,14 +156,14 @@ int set_pc( pid_t pid, int_ptr location );
 /* Report the syscall number being invoked */
 int get_syscall( pid_t pid );
 int set_syscall( pid_t pid, int sc_num ); /* Change the meaning of a just started system call */
-int generate_syscall( pid_t pid, int sc_num, int_ptr base_memory ); /* Generate a new system call */
+bool generate_syscall( pid_t pid, int sc_num, int_ptr base_memory ); /* Generate a new system call */
 
 /* Return the nth argument passed */
 int_ptr get_argument( pid_t pid, int argnum );
 int set_argument( pid_t pid, int argnum, int_ptr value );
 
 int_ptr get_retval( pid_t pid );
-int success( pid_t pid, int sc_num ); /* Report whether the syscall succeeded */
+bool success( pid_t pid, int sc_num ); /* Report whether the syscall succeeded */
 void set_retval( pid_t pid, int_ptr val );
 void set_error( pid_t pid, int sc_num, int error );
 int get_error( pid_t pid, int sc_num );
@@ -183,8 +183,8 @@ ssize_t get_cwd( pid_t pid, char *buffer, size_t buff_size );
 ssize_t get_fd( pid_t pid, int fd, char *buffer, size_t buff_size );
 
 /* Save/restore the process state */
-void save_state( pid_t pid, void *buffer );
-void restore_state( pid_t pid, const void *buffer );
+cpu_state save_state( pid_t pid );
+void restore_state( pid_t pid, const cpu_state *state );
 
 /* Initialize debugger controled memory inside debuggee address space */
 const void *prepare_memory( ); /* Returns pointer to static buffer with the desired opcods, of prepare_memory_len length */

@@ -4,6 +4,7 @@
 #include <sys/syscall.h>
 //#include <asm/ptrace.h>
 #include <sys/resource.h>
+#include <sys/user.h>
 
 /* Specially defined 32 bit syscalls that don't have a 64 syscall, but need to be handled */
 #define __NR_waitpid -3
@@ -79,8 +80,6 @@ static const bool SUPPORTS_CLONE=true;
 
 static const bool PARENT_CAN_WAIT=true;
 
-static const size_t STATE_SIZE=27;
-
 /* This is defined to 1 if the platform sends a SIGTRAP to the process after a successful execve if it's being traced */
 static const bool TRAP_AFTER_EXEC=true;
 
@@ -110,6 +109,8 @@ struct stat {
 };
 
 typedef struct rusage extra_data;
+
+typedef user_regs_struct cpu_state;
 
 }; // End of namespace ptlib
 

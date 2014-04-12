@@ -18,4 +18,15 @@ void flush_log();
 
 #define HEX_FORMAT(val, width) std::setw(width) << std::setfill('0') << std::hex << (val) << std::setbase(0)
 
+#ifdef NDEBUG
+#define ASSERT(cond)
+#else
+
+#define ASSERT(cond) if(!(cond)) { \
+    LOG_F()<<"Assertion failed "<<__FILE__<<":"<<__LINE__<<" at "<<__func__<<": " #cond; \
+    flush_log(); \
+}
+
+#endif
+
 #endif // LOG_H

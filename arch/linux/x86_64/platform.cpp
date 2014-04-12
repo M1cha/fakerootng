@@ -34,6 +34,8 @@
 
 namespace ptlib {
 
+typedef platform::process_state::types cpu_types;
+
 #define mem_offset 8
 static const unsigned char memory_image[mem_offset]=
 {
@@ -377,7 +379,7 @@ static int syscall_32_to_64[]={
 };
 
 #define ARRAY_SIZE(arr) (sizeof(arr)/sizeof(arr[0]))
-#define MAP_SIZE_32_64 (ARRAY_SIZE(syscall_32_to_64)+SYS_X86_32_OFFSET)
+static constexpr size_t MAP_SIZE_32_64 = ARRAY_SIZE(syscall_32_to_64)+SYS_X86_32_OFFSET;
 static int syscall_64_to_32[MAP_SIZE_32_64];
 
 /* We init the reverse map when the library loads */
@@ -398,40 +400,8 @@ void init( const callback_initiator &callback )
     linux::init( callback );
 }
 
-static pid_t cache_process;
-static int cache_64;
-
-/* Is the process 64 bit? */
-static int is_64( pid_t pid )
-{
-    if( cache_process!=pid ) {
-
-        unsigned long cs=ptrace( PTRACE_PEEKUSER, pid, CS, 0 );
-
-        cache_process=pid;
-
-        switch(cs) {
-            case 0x33:
-                cache_64=1; // 64 bit mode
-                break;
-            case 0x23:
-                cache_64=0; // 32 bit mode
-                break;
-            default:
-                LOG_E() << "is_64: " << pid << " unknown usbsystem 0x" << HEX_FORMAT(cs,8);
-                break;
-        }
-
-    }
-
-    return cache_64;
-}
-
 int cont( int request, pid_t pid, int signal )
 {
-    /* Invalidate the cache */
-    cache_process=0;
-
     return linux::cont( __ptrace_request(request), pid, signal );
 }
 
@@ -457,28 +427,49 @@ WAIT_RET reinterpret( WAIT_RET prestate, pid_t pid, int status, long *ret )
 
 int_ptr get_pc( pid_t pid )
 {
-    return ptrace( PTRACE_PEEKUSER, pid, RIP, 0 );
+    platform::process_state *state = linux::get_process_state(pid);
+    return state->registers.rip;
 }
 
 int set_pc( pid_t pid, int_ptr location )
 {
-    return ptrace( PTRACE_POKEUSER, pid, RIP, location );
+    platform::process_state *state = linux::get_process_state(pid);
+    state->registers.rip = location;
+    state->dirty = true;
+    return 0;
 }
 
 int get_syscall( pid_t pid )
 {
-    ASSERT_MASTER_THREAD();
-    int syscall=ptrace( PTRACE_PEEKUSER, pid, ORIG_RAX, 0 );
+    platform::process_state *state = linux::get_process_state(pid);
 
-    // Need to translate the 32 bit syscalls to 64 bit ones
-    if( !is_64(pid) ) {
-        if( syscall>=0 && (unsigned int)syscall<ARRAY_SIZE(syscall_32_to_64) ) {
+    int syscall;
+
+    switch( state->type )
+    {
+    case cpu_types::amd64:
+        syscall = state->registers.orig_rax;
+        break;
+    case cpu_types::i386:
+        // Need to translate the 32 bit syscalls to 64 bit ones
+        syscall = state->registers.orig_rax;
+        assert(syscall>=0);
+        if( (unsigned long)syscall < ARRAY_SIZE(syscall_32_to_64) ) {
             syscall=syscall_32_to_64[syscall];
         } else {
             LOG_W() << "ptlib_get_syscall: " << pid << " syscall out of range " << syscall;
 
             syscall=-1;
         }
+        break;
+    case cpu_types::x32:
+        LOG_F()<<"Unhandled platform type x32";
+        abort();
+        break;
+    default:
+        LOG_F()<<"Unknown platform type!";
+        abort();
+        break;
     }
 
     return syscall;
@@ -486,26 +477,27 @@ int get_syscall( pid_t pid )
 
 static int translate_syscall( pid_t pid, int sc_num )
 {
-    if( !is_64(pid) ) {
-        int sc=sc_num+SYS_X86_32_OFFSET;
+    platform::process_state *state = linux::get_process_state(pid);
 
-        if( (sc-SYS_X86_32_OFFSET)!=-1 && sc>=0 && (unsigned int)sc<ARRAY_SIZE(syscall_64_to_32) ) {
-            sc=syscall_64_to_32[sc];
-        } else {
-            sc=-1;
-            LOG_E() << "ptlib_set_syscall: " << pid <<
-                    " invalid 64 to 32 bit translation for syscall " << sc_num;
-        }
+    if( state->type == cpu_types::amd64 )
+        return sc_num;
 
-        sc_num=sc;
+    assert( state->type == cpu_types::i386 );
+    int sc=sc_num+SYS_X86_32_OFFSET;
+
+    if( (sc-SYS_X86_32_OFFSET)!=-1 && sc>=0 && (unsigned int)sc<ARRAY_SIZE(syscall_64_to_32) ) {
+        sc=syscall_64_to_32[sc];
+    } else {
+        sc=-1;
+        LOG_E() << "ptlib_set_syscall: " << pid <<
+                " invalid 64 to 32 bit translation for syscall " << sc_num;
     }
 
-    return sc_num;
+    return sc;
 }
 
 int set_syscall( pid_t pid, int sc_num )
 {
-    ASSERT_MASTER_THREAD();
     sc_num=translate_syscall( pid, sc_num );
 
     if( sc_num==-1 ) {
@@ -513,37 +505,58 @@ int set_syscall( pid_t pid, int sc_num )
         return -1;
     }
 
-    return ptrace(PTRACE_POKEUSER, pid, ORIG_RAX, sc_num);
+    platform::process_state *state = linux::get_process_state(pid);
+    state->registers.orig_rax = sc_num;
+    state->dirty = true;
+
+    return 0;
 }
 
-int generate_syscall( pid_t pid, int sc_num, int_ptr base_memory )
+bool generate_syscall( pid_t pid, int sc_num, int_ptr base_memory )
 {
-    ASSERT_MASTER_THREAD();
     sc_num=translate_syscall( pid, sc_num );
 
-    if( sc_num!=-1 && ptrace(PTRACE_POKEUSER, pid, RAX, sc_num)==0 ) {
-        if( is_64(pid) ) {
+    platform::process_state *state = linux::get_process_state(pid);
+
+    if( sc_num!=-1 ) {
+        state->registers.rax = sc_num;
+        state->dirty = true;
+
+        switch( state->type ) {
+        case cpu_types::amd64:
             /* 64 bit syscall instruction */
             return set_pc( pid, base_memory-mem_offset+syscall_instr64_offset )==0;
-        } else {
+        case cpu_types::i386:
             /* 32 bit syscall instruction */
             return set_pc( pid, base_memory-mem_offset )==0;
+        default:
+            LOG_F() << "Unsupported CPU platform";
+            abort();
         }
     } else
-        return 0;
+        return false;
 }
 
-static int arg_offset_32bit[]={
-    RBX, RCX, RDX, RSI, RDI, RBP
+static decltype(user_regs_struct::rax) user_regs_struct::*arg_offset_32bit[]={
+    &user_regs_struct::rbx,
+    &user_regs_struct::rcx,
+    &user_regs_struct::rdx,
+    &user_regs_struct::rsi,
+    &user_regs_struct::rdi,
+    &user_regs_struct::rbp
 };
-static int arg_offset_64bit[]={
-    RDI, RSI, RDX, R10, R8, R9
+
+static decltype(user_regs_struct::rax) user_regs_struct::*arg_offset_64bit[]={
+    &user_regs_struct::rdi,
+    &user_regs_struct::rsi,
+    &user_regs_struct::rdx,
+    &user_regs_struct::r10,
+    &user_regs_struct::r8,
+    &user_regs_struct::r9
 };
 
 int_ptr get_argument( pid_t pid, int argnum )
 {
-    platform::process_state *state = linux::get_process_state(pid);
-    ASSERT_SLAVE_THREAD();
     /* Check for error condition */
     if( argnum<1 || argnum>6 ) {
         LOG_E() << "ptlib_get_argument: " << pid << " invalid argument number " << argnum;
@@ -552,18 +565,30 @@ int_ptr get_argument( pid_t pid, int argnum )
         return -1;
     }
 
-    if( is_64(pid) ) {
-        /* 64 bit */
-        return linux::ptrace( PTRACE_PEEKUSER, pid, arg_offset_64bit[argnum-1], 0 );
-    } else {
-        /* 32 bit */
-        return linux::ptrace( PTRACE_PEEKUSER, pid, arg_offset_32bit[argnum-1], 0 );
+    platform::process_state *state = linux::get_process_state(pid);
+
+    int_ptr ret;
+
+    switch( state->type ) {
+    case cpu_types::amd64:
+        ret = state->registers.*arg_offset_64bit[argnum];
+        break;
+    case cpu_types::i386:
+        ret = state->registers.*arg_offset_32bit[argnum];
+        break;
+
+        ret &= 0xffffffff;
+        break;
+    default:
+        LOG_F() << "Unsupported CPU platform";
+        abort();
     }
+
+    return ret;
 }
 
 int set_argument( pid_t pid, int argnum, int_ptr value )
 {
-    ASSERT_SLAVE_THREAD();
     if( argnum<1 || argnum>6 ) {
         LOG_E() << "ptlib_set_argument: " << pid << " invalid argument number " << argnum;
         errno=EINVAL;
@@ -571,44 +596,44 @@ int set_argument( pid_t pid, int argnum, int_ptr value )
         return -1;
     }
 
-    if( is_64(pid) ) {
-        /* 64 bit */
-        return linux::ptrace( PTRACE_POKEUSER, pid, arg_offset_64bit[argnum-1], value );
-    } else {
-        /* 32 bit */
-        return linux::ptrace( PTRACE_POKEUSER, pid, arg_offset_32bit[argnum-1], value );
+    platform::process_state *state = linux::get_process_state(pid);
+    state->dirty = true;
+
+    switch( state->type ) {
+    case cpu_types::amd64:
+        state->registers.*arg_offset_64bit[argnum] = value;
+        break;
+    case cpu_types::i386:
+        state->registers.*arg_offset_32bit[argnum] = value;
+        break;
+    default:
+        LOG_F() << "Unsupported CPU platform";
+        abort();
     }
+
+    return 0;
 }
 
 int_ptr get_retval( pid_t pid )
 {
-    ASSERT_SLAVE_THREAD();
-    return linux::ptrace( PTRACE_PEEKUSER, pid, RAX, 0 );
+    platform::process_state *state = linux::get_process_state(pid);
+    return state->registers.rax;
 }
 
-int success( pid_t pid, int sc_num )
+bool success( pid_t pid, int sc_num )
 {
     unsigned long ret=get_retval( pid );
 
     /* This heuristic is good for all syscalls we found. It may not be good for all of them */
     return ret<0xfffffffffffff000u;
-
-#if 0
-    switch( sc_num ) {
-        case SYS_mmap:
-        case SYS_mmap2:
-            /* -errno on error */
-            return ((unsigned int)ret)<0xfffff000u;
-        default:
-            return ((int)ret)>=0;
-    }
-#endif
-
 }
 
 void set_retval( pid_t pid, int_ptr val )
 {
-    linux::ptrace( PTRACE_POKEUSER, pid, RAX, val );
+    platform::process_state *state = linux::get_process_state(pid);
+
+    state->registers.rax = val;
+    state->dirty = true;
 }
 
 void set_error( pid_t pid, int sc_num, int error )
@@ -651,14 +676,19 @@ ssize_t get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
     return linux::get_fd( pid, fd, buffer, buff_size );
 }
 
-void save_state( pid_t pid, void *buffer )
+cpu_state save_state( pid_t pid )
 {
-    ptrace( __ptrace_request(PTRACE_GETREGS), pid, 0, buffer );
+    platform::process_state *state = linux::get_process_state(pid);
+
+    return state->registers;
 }
 
-void restore_state( pid_t pid, const void *buffer )
+void restore_state( pid_t pid, const cpu_state *saved_state )
 {
-    ptrace( __ptrace_request(PTRACE_SETREGS), pid, nullptr, const_cast<void *>(buffer) );
+    platform::process_state *state = linux::get_process_state(pid);
+
+    state->registers = *saved_state;
+    state->dirty = true;
 }
 
 const void *prepare_memory( )
@@ -675,6 +705,26 @@ pid_t get_parent( pid_t pid )
 {
     return linux::get_parent(pid);
 }
+
+namespace platform {
+
+void process_state::post_load(pid_t pid)
+{
+    switch(registers.cs) {
+    case 0x33:
+        type = cpu_types::amd64;
+        break;
+    case 0x23:
+        type = cpu_types::i386;
+        break;
+    default:
+        LOG_F() << "Unknown code segment " << HEX_FORMAT(registers.cs, 2);
+        abort();
+        break;
+    }
+}
+
+}; // End namespace platform
 
 #if 0
 int fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[STATE_SIZE],

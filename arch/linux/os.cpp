@@ -21,8 +21,8 @@
 
 #include <sstream>
 #include <unordered_map>
-
-#include <boost/thread/shared_mutex.hpp>
+#include <system_error>
+#include <mutex>
 
 #include <sys/types.h>
 #include <sys/ptrace.h>
@@ -61,25 +61,29 @@ static struct {
 } thread_proxy;
 
 static std::unordered_map< pid_t, platform::process_state > state_cache;
-static boost::shared_mutex state_cache_lock;
+static std::mutex state_cache_lock;
 
-platform::process_state *get_process_state( pid_t pid )
+platform::process_state *get_process_state( pid_t pid, bool create )
 {
-    boost::shared_lock<decltype(state_cache_lock)> shared_guard( state_cache_lock );
+    std::unique_lock<decltype(state_cache_lock)> lock_guard( state_cache_lock );
     auto i = state_cache.find(pid);
     platform::process_state *ret = &i->second;
 
     if( i == state_cache.end() ) {
-        shared_guard.unlock();
-        ASSERT_MASTER_THREAD();
+        if( create ) {
+            ASSERT_MASTER_THREAD();
 
-        // TODO Should we act to prevent the cache from exploding? Not likely to happen, either way
-        boost::unique_lock< decltype(state_cache_lock) > exclusive_guard( state_cache_lock );
-        ret = &state_cache[pid];
-        exclusive_guard.unlock();
+            // TODO Should we act to prevent the cache from exploding? Not likely to happen, either way
+            ret = &state_cache[pid];
+            lock_guard.unlock();
 
-        if( ptrace(PTRACE_GETREGS, pid, nullptr, &ret->registers)!=0 )
-            throw std::system_error(errno, std::system_category(), "Failed to get registers from process");
+            if( ::ptrace(PTRACE_GETREGS, pid, nullptr, &ret->registers)!=0 )
+                throw std::system_error(errno, std::system_category(), "Failed to get registers from process");
+
+            ret->post_load(pid);
+        } else {
+            ret = nullptr;
+        }
     }
 
     return ret;
@@ -93,6 +97,35 @@ void init( const callback_initiator &callback )
 
 int cont( __ptrace_request request, pid_t pid, int signal )
 {
+    ASSERT_SLAVE_THREAD();
+
+    platform::process_state *state = linux::get_process_state(pid, false);
+
+    if( state!=nullptr ) {
+        int error;
+        int ret;
+        thread_proxy.callback([=, &error, &ret]() {
+                errno=0;
+                if( state->dirty ) {
+                    if( ::ptrace( (__ptrace_request)PTRACE_SETREGS, pid, 0, &state->registers )<0 ) {
+                        error = errno;
+                        return;
+                    }
+                }
+
+                ::ptrace( request, pid, 0, signal );
+                error = errno;
+                });
+        if( error!=0 ) {
+            LOG_E() << "Flushing cache failed with error " << strerror(errno);
+            throw std::system_error(error, std::system_category(), "Failed to flush cache");
+        }
+
+        std::unique_lock< decltype(state_cache_lock) > lock_guard( state_cache_lock );
+        state_cache.erase(pid);
+        lock_guard.unlock();
+    }
+
     return ptrace( request, pid, 0, signal );
 }
 

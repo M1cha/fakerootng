@@ -17,7 +17,7 @@ namespace platform {
   platforms.
  */
 namespace linux {
-platform::process_state *get_process_state( pid_t pid );
+platform::process_state *get_process_state( pid_t pid, bool create = true );
 
 void init( const callback_initiator &callback );
 int cont( __ptrace_request request, pid_t pid, int signal );
@@ -38,8 +38,8 @@ long ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *data);
 long ptrace(enum __ptrace_request request, pid_t pid, int_ptr addr, int_ptr signal);
 
 extern std::thread::id master_thread;
-#define ASSERT_MASTER_THREAD() assert(std::this_thread::get_id()==ptlib::linux::master_thread)
-#define ASSERT_SLAVE_THREAD() assert(std::this_thread::get_id()!=ptlib::linux::master_thread)
+#define ASSERT_MASTER_THREAD() ASSERT(std::this_thread::get_id()==ptlib::linux::master_thread)
+#define ASSERT_SLAVE_THREAD() ASSERT(std::this_thread::get_id()!=ptlib::linux::master_thread)
 
 }; // End of namespace linux
 }; // End of namespace ptlib
