@@ -227,6 +227,13 @@ i686|i586|i486)
 esac
 ]
 
+AC_ARG_ENABLE([delay], [AC_HELP_STRING([--enable-delay], [delay starting the daemon so we can attach with an external debugger])], [enable_delay=$enablevar], [enable_delay=no])
+
+AS_IF(
+        [test "x$enable_delay" != xno],
+        [AC_DEFINE([STRACE_WAITER], [1],
+            [Define this to have the daemon wait so we can attach with an external debugger.])])
+
 # Check whether we are ported to this platform
 AC_MSG_CHECKING([whether platform $target_os/$target_cpu is supported])
 
