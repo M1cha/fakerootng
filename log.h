@@ -9,12 +9,18 @@ int get_log_fd();
 void close_log();
 void flush_log();
 
-#define LOG_T() BOOST_LOG_TRIVIAL(trace)
-#define LOG_D() BOOST_LOG_TRIVIAL(debug)
-#define LOG_I() BOOST_LOG_TRIVIAL(info)
-#define LOG_W() BOOST_LOG_TRIVIAL(warning)
-#define LOG_E() BOOST_LOG_TRIVIAL(error)
-#define LOG_F() BOOST_LOG_TRIVIAL(fatal)
+#if 0
+#define FILELOC <<__FILE__<<":"<<__LINE__<<":"
+#else
+#define FILELOC
+#endif
+
+#define LOG_T() BOOST_LOG_TRIVIAL(trace) FILELOC
+#define LOG_D() BOOST_LOG_TRIVIAL(debug) FILELOC
+#define LOG_I() BOOST_LOG_TRIVIAL(info) FILELOC
+#define LOG_W() BOOST_LOG_TRIVIAL(warning) FILELOC
+#define LOG_E() BOOST_LOG_TRIVIAL(error) FILELOC
+#define LOG_F() BOOST_LOG_TRIVIAL(fatal) FILELOC
 
 #define HEX_FORMAT(val, width) std::setw(width) << std::setfill('0') << std::hex << (val) << std::setbase(0)
 

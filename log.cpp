@@ -3,6 +3,10 @@
 #include <boost/log/core.hpp>
 #include <boost/log/sinks/sync_frontend.hpp>
 #include <boost/log/sinks/text_ostream_backend.hpp>
+#include <boost/log/utility/setup/common_attributes.hpp>
+#include <boost/log/expressions.hpp>
+#include <boost/log/support/date_time.hpp>
+
 #include <boost/iostreams/device/file_descriptor.hpp>
 #include <boost/iostreams/stream.hpp>
 #include <iostream>
@@ -15,6 +19,7 @@
 #include "arch/platform.h"
 
 namespace logging = boost::log;
+namespace expr = boost::log::expressions;
 namespace ios = boost::iostreams;
 
 static ios::file_descriptor_sink log_file;
@@ -39,6 +44,17 @@ bool init_log( const char * file_name, bool enabled, bool flush )
         log_streambuf.open(log_file);
         sink->locked_backend()->add_stream( boost::make_shared<std::ostream>( &log_streambuf ) );
         sink->locked_backend()->auto_flush(flush);
+
+        logging::add_common_attributes();
+
+        sink->set_formatter
+        (
+            expr::stream
+                // << expr::format_date_time< boost::posix_time::ptime >("TimeStamp", "%H%M%S") << ":"
+                << expr::attr< logging::attributes::current_thread_id::value_type >("ThreadID") << ":"
+                << expr::attr< logging::trivial::severity_level >("Severity") << ":"
+                << expr::message
+        );
 
         // Register the sink in the logging core
         logging::core::get()->add_sink(sink);
