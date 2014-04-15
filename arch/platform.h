@@ -50,9 +50,8 @@ void init( const callback_initiator &callback );
   @param request PTRACE request type.
   @param pid the pid of the process to restart.
   @param signal the signal to send the process with the ptrace command.
-  @return the same value as the corresponding ptrace command
  */
-int cont( int request, pid_t pid, int signal );
+void cont( int request, pid_t pid, int signal );
 
 /**
   @brief Call once per each new process created.

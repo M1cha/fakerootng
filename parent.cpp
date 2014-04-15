@@ -234,9 +234,7 @@ public:
 
     void ptrace_continue( int signal )
     {
-        if( ptlib::cont( PTRACE_SYSCALL, m_pid, signal )<0 )
-            LOG_E() << "pid " << m_pid << " failed to perform ptrace: " << strerror(errno);
-        // TODO Proper error checking
+        ptlib::cont( PTRACE_SYSCALL, m_pid, signal );
     }
 
     static long ptrace( __ptrace_request request, pid_t pid, void *addr, void *data )
@@ -291,7 +289,8 @@ private:
             // Let the fakeroot-ng code run. The process will receive a bogus TRAP after execve
             m_proc_state->wait( [this]()
                     {
-                        SyscallHandlerTask::ptrace( PTRACE_CONT, m_pid, nullptr, nullptr );
+                        ptlib::cont( PTRACE_CONT, m_pid, 0 );
+                        //SyscallHandlerTask::ptrace( PTRACE_CONT, m_pid, nullptr, nullptr );
                     } );
             // The process is not running the client's code - let it run
             ptrace_continue(0);
@@ -313,6 +312,7 @@ private:
         if( handler == syscalls.end() ) {
             // No specific handler for this syscall
             LOG_T() << "pid " << m_pid << " system call " << m_parsed_status;
+            m_proc_state->setStateKernel();
             ptrace_continue( 0 );
         } else {
             LOG_T() << "pid " << m_pid << " system call " << handler->second.name;
@@ -450,7 +450,7 @@ static void process_exit( pid_t pid, ptlib::WAIT_RET wait_state, int status, lon
 // ret is the signal (if applicable) or status (if a child exit)
 static void process_sigchld( pid_t pid, ptlib::WAIT_RET wait_state, int status, long ret )
 {
-    LOG_T() << __FUNCTION__ << ":" << __LINE__ << " pid " << pid << " wait_state " << wait_state <<
+    LOG_T() << "pid " << pid << " wait_state " << wait_state <<
             " status " << HEX_FORMAT(status, 8) << " ret " << HEX_FORMAT(ret, 8);
     pid_state *proc_state=lookup_state_create(pid);
 
@@ -461,6 +461,7 @@ static void process_sigchld( pid_t pid, ptlib::WAIT_RET wait_state, int status, 
         return;
     }
 
+    LOG_T() << "Process " << pid << " in state " << proc_state->get_state();
     switch( proc_state->get_state() ) {
     case pid_state::state::INIT:
     case pid_state::state::NEW:
@@ -469,7 +470,7 @@ static void process_sigchld( pid_t pid, ptlib::WAIT_RET wait_state, int status, 
         break;
     case pid_state::state::KERNEL:
         if( wait_state==ptlib::WAIT_RET::SYSCALL ) {
-            ptrace( PTRACE_SYSCALL, pid, 0, 0 );
+            ptlib::cont( PTRACE_SYSCALL, pid, 0 );
             proc_state->setStateNone();
         } else
             workQ->schedule_task( new SyscallHandlerTask( pid, proc_state, wait_state, status, ret ) );
@@ -615,7 +616,9 @@ void pid_state::wait( const std::function< void ()> &callback )
     state oldstate=m_state;
     m_state=state::WAITING;
 
+    lock.unlock();
     callback();
+    lock.lock();
 
     m_wait_condition.wait( lock, [ this ]{ return m_state==state::WAKEUP; } );
 
@@ -624,7 +627,7 @@ void pid_state::wait( const std::function< void ()> &callback )
 
 void pid_state::wakeup( ptlib::WAIT_RET wait_state, int status, long parsed_status )
 {
-    ASSERT( !m_wait_lock.try_lock() );
+    std::unique_lock<decltype(m_wait_lock)> lock(m_wait_lock);
 
     assert( m_state==state::WAITING );
     m_state=state::WAKEUP;
@@ -640,7 +643,7 @@ void pid_state::ptrace_syscall_wait( pid_t pid, int signal )
 {
     wait( [&]()
             {
-            SyscallHandlerTask::ptrace( PTRACE_SYSCALL, pid, nullptr, signal );
+                ptlib::cont( PTRACE_SYSCALL, pid, signal );
             } );
 }
 

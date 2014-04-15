@@ -69,6 +69,12 @@ public:
         m_state=state::NEW;
     }
 
+    void setStateKernel()
+    {
+        assert(m_state==state::NONE);
+        m_state=state::KERNEL;
+    }
+
     void wait( const std::function< void ()> &callback );
     void wakeup( ptlib::WAIT_RET wait_state, int status, long parsed_status );
     void ptrace_syscall_wait( pid_t pid, int signal );
@@ -82,6 +88,22 @@ private:
     pid_state( const pid_state &rhs ) = delete;
     pid_state &operator=( const pid_state &rhs ) = delete;
 };
+
+static inline std::ostream &operator<< (std::ostream &strm, pid_state::state wait_ret)
+{
+#define PRODUCE_CASE(_state) case pid_state::state::_state: strm<<#_state; break
+    switch( wait_ret ) {
+        PRODUCE_CASE(INIT);
+        PRODUCE_CASE(NEW);
+        PRODUCE_CASE(NONE);
+        PRODUCE_CASE(KERNEL);
+        PRODUCE_CASE(WAITING);
+        PRODUCE_CASE(WAKEUP);
+    }
+#undef PRODUCE_CASE
+
+    return strm;
+}
 
 typedef void (*sys_callback)( int sc_num, pid_t pid, pid_state *state );
 struct syscall_hook {

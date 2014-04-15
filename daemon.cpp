@@ -475,7 +475,6 @@ bool daemonProcess::handle_request( const sigset_t *sigmask, bool existing_child
     struct timespec timeout;
     timeout.tv_sec=0;
     timeout.tv_nsec=0;
-    LOG_D() << "session_fds " << session_fds.size();
 
     // Wait nothing if we are about to exit, indefinitely if we have reason to stay
     int result=pselect( max_fd, &read_set, NULL, &except_set, (ret || existing_children) ? NULL : &timeout, sigmask );
@@ -530,7 +529,7 @@ void daemonProcess::register_thread_socket( int fd )
 {
     {
         std::lock_guard<std::mutex> lockGuard( thread_fds_mutex );
-        LOG_D() << "Registering fd " << fd;
+        LOG_D() << "Registering thread socket " << fd;
         std::pair< decltype(thread_fds)::iterator, bool > result = thread_fds.insert( fd );
         assert(result.second);
     }
@@ -567,7 +566,7 @@ void daemonProcess::handle_new_connection()
 void daemonProcess::handle_connection_request( decltype(session_fds)::iterator & element )
 {
     ipcMessage<daemonCtrl::request> request;
-    LOG_T() << "Session " << element->get();
+    LOG_T() << "Request on session " << element->get();
 
     try {
         request.recv( element->get() );

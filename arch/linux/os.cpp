@@ -56,8 +56,23 @@ namespace linux {
 
 std::thread::id master_thread;
 
-static struct {
-    callback_initiator callback;
+static class {
+    callback_initiator m_callback;
+
+public:
+    void callback( std::function<void ()> cb_function ) const
+    {
+        if( std::this_thread::get_id()==ptlib::linux::master_thread )
+            cb_function();
+        else
+            m_callback( cb_function );
+    }
+
+    void set_callback( const callback_initiator &cb_init )
+    {
+        ASSERT( !m_callback );
+        m_callback = cb_init;
+    }
 } thread_proxy;
 
 static std::unordered_map< pid_t, platform::process_state > state_cache;
@@ -91,17 +106,17 @@ platform::process_state *get_process_state( pid_t pid, bool create )
 
 void init( const callback_initiator &callback )
 {
-    thread_proxy.callback = callback;
+    thread_proxy.set_callback( callback );
     master_thread = std::this_thread::get_id();
 }
 
-int cont( __ptrace_request request, pid_t pid, int signal )
+void cont( __ptrace_request request, pid_t pid, int signal )
 {
-    ASSERT_SLAVE_THREAD();
-
     platform::process_state *state = linux::get_process_state(pid, false);
 
     if( state!=nullptr ) {
+        LOG_T()<<"Flushing cache for process "<<pid;
+
         int error;
         int ret;
         thread_proxy.callback([=, &error, &ret]() {
@@ -115,18 +130,18 @@ int cont( __ptrace_request request, pid_t pid, int signal )
 
                 ::ptrace( request, pid, 0, signal );
                 error = errno;
-                });
+            });
+
         if( error!=0 ) {
-            LOG_E() << "Flushing cache failed with error " << strerror(errno);
+            LOG_E() << "Flushing cache failed with error " << strerror(error);
             throw std::system_error(error, std::system_category(), "Failed to flush cache");
         }
 
         std::unique_lock< decltype(state_cache_lock) > lock_guard( state_cache_lock );
         state_cache.erase(pid);
         lock_guard.unlock();
-    }
-
-    return ptrace( request, pid, 0, signal );
+    } else
+        ptrace( request, pid, 0, signal );
 }
 
 void prepare( pid_t pid )
@@ -424,8 +439,6 @@ int fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_ptr co
 
 long ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *data)
 {
-    ASSERT_SLAVE_THREAD();
-
     long ret;
     int error;
     thread_proxy.callback( [&](){
@@ -435,6 +448,9 @@ long ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *data)
             });
 
     errno=error;
+
+    if( errno!=0 )
+        throw std::system_error(errno, std::system_category(), "ptrace operation failed");
 
     return ret;
 }

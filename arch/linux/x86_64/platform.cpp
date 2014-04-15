@@ -400,9 +400,9 @@ void init( const callback_initiator &callback )
     linux::init( callback );
 }
 
-int cont( int request, pid_t pid, int signal )
+void cont( int request, pid_t pid, int signal )
 {
-    return linux::cont( __ptrace_request(request), pid, signal );
+    linux::cont( __ptrace_request(request), pid, signal );
 }
 
 void prepare( pid_t pid )

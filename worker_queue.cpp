@@ -23,6 +23,8 @@
 
 #include <assert.h>
 
+#include "log.h"
+
 worker_queue::worker_task::~worker_task()
 {
 }
@@ -78,20 +80,27 @@ void worker_queue::thread_shutdown()
 
 void worker_queue::worker()
 {
+    LOG_I()<<"Worker thread started";
     thread_init();
 
     while( !m_terminate ) {
-        // Handle all tasks already in the queue
         std::unique_lock<std::mutex> queue_lock( m_queue_lock );
-        while( !m_queue.empty() ) {
-            std::unique_ptr<worker_task> task( std::move( m_queue.front() ) );
-            m_queue.pop_front();
 
-            queue_lock.unlock();
+        try {
+            // Handle all tasks already in the queue
+            while( !m_queue.empty() ) {
+                std::unique_ptr<worker_task> task( std::move( m_queue.front() ) );
+                m_queue.pop_front();
 
-            task->run();
+                queue_lock.unlock();
 
-            queue_lock.lock();
+                task->run();
+
+                queue_lock.lock();
+            }
+        } catch( const std::exception &e )
+        {
+            LOG_F()<<"Uncaught exception: "<<e.what();
         }
         
         // Wait for more tasks
@@ -100,6 +109,7 @@ void worker_queue::worker()
     }
 
     thread_shutdown();
+    LOG_I()<<"Worker thread shut down";
 }
 
 void worker_queue::schedule_task( worker_task * task )
