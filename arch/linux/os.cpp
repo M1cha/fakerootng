@@ -92,6 +92,7 @@ platform::process_state *get_process_state( pid_t pid, bool create )
             ret = &state_cache[pid];
             lock_guard.unlock();
 
+            LOG_T() << "Created cache for process " << pid;
             if( ::ptrace(PTRACE_GETREGS, pid, nullptr, &ret->registers)!=0 )
                 throw std::system_error(errno, std::system_category(), "Failed to get registers from process");
 
@@ -115,18 +116,22 @@ void cont( __ptrace_request request, pid_t pid, int signal )
     platform::process_state *state = linux::get_process_state(pid, false);
 
     if( state!=nullptr ) {
-        LOG_T()<<"Flushing cache for process "<<pid;
-
         int error;
         int ret;
         thread_proxy.callback([=, &error, &ret]() {
                 errno=0;
                 if( state->dirty ) {
+                    LOG_D()<<"Flushing cache for process "<<pid;
                     if( ::ptrace( (__ptrace_request)PTRACE_SETREGS, pid, 0, &state->registers )<0 ) {
                         error = errno;
                         return;
                     }
                 }
+
+                LOG_T() << "Deleting cache for process " << pid;
+                std::unique_lock< decltype(state_cache_lock) > lock_guard( state_cache_lock );
+                state_cache.erase(pid);
+                lock_guard.unlock();
 
                 ::ptrace( request, pid, 0, signal );
                 error = errno;
@@ -136,12 +141,10 @@ void cont( __ptrace_request request, pid_t pid, int signal )
             LOG_E() << "Flushing cache failed with error " << strerror(error);
             throw std::system_error(error, std::system_category(), "Failed to flush cache");
         }
-
-        std::unique_lock< decltype(state_cache_lock) > lock_guard( state_cache_lock );
-        state_cache.erase(pid);
-        lock_guard.unlock();
-    } else
+    } else {
+        LOG_T() << "Process " << pid << " continued with no cache to flush";
         ptrace( request, pid, 0, signal );
+    }
 }
 
 void prepare( pid_t pid )
@@ -155,6 +158,8 @@ bool wait( pid_t *pid, int *status, extra_data *data, int async )
 {
     ASSERT_MASTER_THREAD();
     *pid=wait4(-1, status, (async?WNOHANG:0)|__WALL, data );
+
+    ASSERT( *pid<=0 || linux::get_process_state(*pid, false)==NULL );
 
     if( async && *pid==0 ) {
         errno=EAGAIN;
