@@ -406,6 +406,7 @@ bool daemonProcess::daemonize( bool nodetach, int skip_fd1, int skip_fd2 )
     // anything.
     std::cout<<"Debugger pid "<<getpid()<<std::endl;
     sleep(10);
+    std::cout<<"Sleep done"<<std::endl;
 #endif
 
     // We are the grandchild - complete the daemonization

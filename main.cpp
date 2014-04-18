@@ -191,6 +191,7 @@ static int real_perform_child( daemonCtrl &daemon_ctrl, char *argv[] )
     try {
         daemon_ctrl.cmd_attach();
 
+        LOG_I()<<"Parent performing exec";
         execvp(argv[0], argv);
 
         perror("Fakeroot-ng exec failed");

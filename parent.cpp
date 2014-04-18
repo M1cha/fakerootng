@@ -232,9 +232,18 @@ public:
             throw detailed_exception( "Short proxy call response from master thread" );
     }
 
+    void ptrace_systrace( int signal )
+    {
+        ptlib::cont( PTRACE_SYSCALL, m_pid, 0 );
+    }
+
     void ptrace_continue( int signal )
     {
-        ptlib::cont( PTRACE_SYSCALL, m_pid, signal );
+        m_proc_state->wait( [this]()
+                {
+                    ptlib::cont( PTRACE_CONT, m_pid, 0 );
+                    //SyscallHandlerTask::ptrace( PTRACE_CONT, m_pid, nullptr, nullptr );
+                } );
     }
 
     static long ptrace( __ptrace_request request, pid_t pid, void *addr, void *data )
@@ -282,18 +291,18 @@ private:
         if( m_proc_state->get_state()==pid_state::state::INIT || !ptlib::TRAP_AFTER_EXEC ) {
             // New organic process
             m_proc_state->setStateNone();
-            ptrace_continue( 0 );
+            ptrace_systrace( 0 );
         } else {
+            LOG_D() << "New root process " << m_pid;
             // New root process
             m_proc_state->setStateNone();
-            // Let the fakeroot-ng code run. The process will receive a bogus TRAP after execve
-            m_proc_state->wait( [this]()
-                    {
-                        ptlib::cont( PTRACE_CONT, m_pid, 0 );
-                        //SyscallHandlerTask::ptrace( PTRACE_CONT, m_pid, nullptr, nullptr );
-                    } );
-            // The process is not running the client's code - let it run
+
+            // Process is still within the fakeroot-ng code. Let it continue.
+            // The process will receive a bogus TRAP after execve
             ptrace_continue(0);
+
+            // The process is now running the client's code - let it run and track syscalls
+            ptlib::cont( PTRACE_SYSCALL, m_pid, 0 );
         }
 
         return false;
@@ -303,7 +312,7 @@ private:
     {
         assert( m_ptlib_status==ptlib::WAIT_RET::SIGNAL );
         LOG_T() << "pid " << m_pid << " received signal " << m_parsed_status;
-        ptrace_continue( m_parsed_status );
+        ptrace_systrace( m_parsed_status );
     }
 
     void process_syscall()
@@ -313,7 +322,7 @@ private:
             // No specific handler for this syscall
             LOG_T() << "pid " << m_pid << " system call " << m_parsed_status;
             m_proc_state->setStateKernel();
-            ptrace_continue( 0 );
+            ptrace_systrace( 0 );
         } else {
             LOG_T() << "pid " << m_pid << " system call " << handler->second.name;
             m_proc_state->start_handling( this );
@@ -623,6 +632,7 @@ void pid_state::wait( const std::function< void ()> &callback )
     m_wait_condition.wait( lock, [ this ]{ return m_state==state::WAKEUP; } );
 
     m_state=oldstate;
+    LOG_T()<<"Setting state back to "<<m_state;
 }
 
 void pid_state::wakeup( ptlib::WAIT_RET wait_state, int status, long parsed_status )
@@ -655,6 +665,6 @@ void pid_state::start_handling( SyscallHandlerTask *task )
 void pid_state::end_handling()
 {
     m_state=state::NONE;
-    m_task->ptrace_continue(0);
+    m_task->ptrace_systrace(0);
     m_task=nullptr;
 }
