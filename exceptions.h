@@ -1,36 +1,17 @@
 #ifndef EXCEPTIONS_H
 #define EXCEPTIONS_H
 
-#include <exception>
+#include <system_error>
 #include <errno.h>
 #include <string.h>
 #include <string>
 
-class errno_exception : public std::exception 
+class errno_exception : public std::system_error 
 {
-    int _errno;
-    std::string _context;
 public:
-    errno_exception( const char * context ) :
-        _errno( errno ), _context( context )
+    explicit errno_exception( const char * context ) :
+        std::system_error( errno, std::system_category(), context )
     {
-        _context+=": ";
-        _context+=strerror( _errno );
-    }
-
-    const char * what() const throw()
-    {
-        return _context.c_str();
-    }
-
-    int get_error() const throw()
-    {
-        return _errno;
-    }
-
-    const char *get_error_message() const throw()
-    {
-        return strerror(_errno);
     }
 };
 

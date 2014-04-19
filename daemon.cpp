@@ -185,10 +185,6 @@ void daemonCtrl::connect( const char * state_file_path )
         daemon_socket=client_socket;
 
         cmd_reserve();
-    } catch( const errno_exception &exception ) {
-        LOG_E() << "Daemon connect failed: " << exception.what() << ", (" << exception.get_error_message() << ")";
-        close( client_socket );
-        daemon_socket=-1;
     } catch( const std::exception &exception ) {
         LOG_E() << "Daemon connect failed: " << exception.what();
         close( client_socket );
@@ -242,8 +238,8 @@ void daemonCtrl::cmd_attach()
         prctl( PR_SET_PTRACER, daemon_pid, 0, 0, 0 );
 #endif // HAVE_DECL_PR_SET_PTRACER
         send_std_cmd( CMD_ATTACH, response );
-    } catch( const errno_exception &exception ) {
-        errno=exception.get_error();
+    } catch( const std::system_error &exception ) {
+        errno=exception.code().value();
         throw errno_exception( "Ptrace attach failed" );
     }
 }
@@ -498,9 +494,9 @@ bool daemonProcess::handle_request( const sigset_t *sigmask, bool existing_child
             try {
                 if( FD_ISSET( current->get(), &read_set ) || FD_ISSET( current->get(), &except_set ) )
                     handle_connection_request( current );
-            } catch( const errno_exception &except ) {
+            } catch( const std::system_error &except ) {
                 LOG_E() << "Read from session socket " << current->get() << " failed: " << except.what() <<
-                        " (" << except.get_error_message() << ")";
+                        " (" << except.code() << ")";
             } catch( const daemonCtrl::terminal_error &except ) {
                 close_session(current);
             }
@@ -510,9 +506,8 @@ bool daemonProcess::handle_request( const sigset_t *sigmask, bool existing_child
             try {
                 if( FD_ISSET( i, &read_set ) )
                     handle_thread_request( i );
-            } catch( const errno_exception &except ) {
-                LOG_E() << "Read from thread socket " << i << " failed: " << except.what() << " (" <<
-                        except.get_error_message() << ")";
+            } catch( const std::exception &except ) {
+                LOG_E() << "Read from thread socket " << i << " failed: " << except.what();
             }
         }
     }
@@ -592,6 +587,7 @@ void daemonProcess::handle_connection_request( decltype(session_fds)::iterator &
 void daemonProcess::handle_cmd_reserve( decltype(session_fds)::iterator & element,
         const ipcMessage<daemonCtrl::request> &message )
 {
+    LOG_T() << "Reserving";
     ipcMessage<daemonCtrl::response> response;
     response->command=daemonCtrl::CMD_RESERVE;
     response->result=0;
@@ -601,13 +597,14 @@ void daemonProcess::handle_cmd_reserve( decltype(session_fds)::iterator & elemen
 void daemonProcess::handle_cmd_attach( decltype(session_fds)::iterator & element,
         const ipcMessage<daemonCtrl::request> &message )
 {
+    LOG_T() << "Attaching";
     ipcMessage<daemonCtrl::response> response;
     response->command=daemonCtrl::CMD_ATTACH;
     try {
         attach_debugger( message.credentials()->pid );
         response->result=0;
-    } catch( const errno_exception &exception ) {
-        response->result=exception.get_error();
+    } catch( const std::system_error &exception ) {
+        response->result=exception.code().value();
     }
 
     response.send(element->get());

@@ -20,12 +20,14 @@
 #include "config.h"
 
 #include "syscalls.h"
+#include "log.h"
 
 #include "parent.h"
 
 void sys_getuid( int sc_num, pid_t pid, pid_state *state )
 {
     state->ptrace_syscall_wait(pid, 0);
+    LOG_D() << "Reporting uid " << state->m_uid;
     ptlib::set_retval( pid, state->m_uid );
     state->end_handling();
 }
@@ -33,6 +35,7 @@ void sys_getuid( int sc_num, pid_t pid, pid_state *state )
 void sys_geteuid( int sc_num, pid_t pid, pid_state *state )
 {
     state->ptrace_syscall_wait(pid, 0);
+    LOG_D() << "Reporting euid " << state->m_euid;
     ptlib::set_retval( pid, state->m_euid );
     state->end_handling();
 }
@@ -40,6 +43,7 @@ void sys_geteuid( int sc_num, pid_t pid, pid_state *state )
 void sys_getresuid( int sc_num, pid_t pid, pid_state *state )
 {
     state->ptrace_syscall_wait(pid, 0);
+    LOG_D() << "Reporting saved uid " << state->m_suid;
     ptlib::set_retval( pid, state->m_suid );
     state->end_handling();
 }
