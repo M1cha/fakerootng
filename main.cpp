@@ -138,10 +138,10 @@ static bool sanity_check()
         tmppath=DEFAULT_TMPDIR;
     }
 
-    std::auto_ptr<char> templt(new char[tmppath.length()+20]);
-    sprintf( templt.get(), "%s/fakeroot-ng.XXXXXX", tmppath.c_str() );
+    std::vector<char> templt(tmppath.length()+20);
+    sprintf( templt.data(), "%s/fakeroot-ng.XXXXXX", tmppath.c_str() );
 
-    int file=mkstemp( templt.get() );
+    int file=mkstemp( templt.data() );
 
     if( file==-1 ) {
         perror("Couldn't create temporary file");
@@ -150,10 +150,10 @@ static bool sanity_check()
     }
 
     // First - make sure we don't leave any junk behind
-    unlink( templt.get() );
+    unlink( templt.data() );
 
     // Write some data into the file so it's not empty
-    if( write( file, templt.get(), tmppath.length() )<0 ) {
+    if( write( file, templt.data(), tmppath.length() )<0 ) {
         perror("Couldn't write into temporary file");
 
         return false;

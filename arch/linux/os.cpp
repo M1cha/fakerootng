@@ -117,8 +117,7 @@ void cont( __ptrace_request request, pid_t pid, int signal )
 
     if( state!=nullptr ) {
         int error;
-        int ret;
-        thread_proxy.callback([=, &error, &ret]() {
+        thread_proxy.callback([=, &error]() {
                 errno=0;
                 if( state->dirty ) {
                     LOG_D()<<"Flushing cache for process "<<pid;

@@ -441,10 +441,8 @@ void daemonProcess::start()
 {
     init_debugger( this );
 
-    bool repeat;
+    bool repeat = false;
     do {
-        repeat=false;
-
         LOG_I() << "Debugger init loop";
         process_children( this );
         LOG_I() << "Debugger done";

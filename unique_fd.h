@@ -3,7 +3,7 @@
 
 #include <sys/file.h>
 #include <unistd.h>
-#include "exceptions.h"
+#include "log.h"
 
 class unique_fd {
     int _fd;
@@ -40,7 +40,7 @@ public:
     {
         if( _fd>=0 )
             if( close(_fd)<0 )
-                throw errno_exception( "Close failed" );
+                LOG_E() << "Close failed: " << strerror(errno);
     }
 
     int get() const { return _fd; }
