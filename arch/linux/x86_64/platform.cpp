@@ -571,10 +571,10 @@ int_ptr get_argument( pid_t pid, int argnum )
 
     switch( state->type ) {
     case cpu_types::amd64:
-        ret = state->registers.*arg_offset_64bit[argnum];
+        ret = state->registers.*arg_offset_64bit[argnum-1];
         break;
     case cpu_types::i386:
-        ret = state->registers.*arg_offset_32bit[argnum];
+        ret = state->registers.*arg_offset_32bit[argnum-1];
         break;
 
         ret &= 0xffffffff;
@@ -601,10 +601,10 @@ int set_argument( pid_t pid, int argnum, int_ptr value )
 
     switch( state->type ) {
     case cpu_types::amd64:
-        state->registers.*arg_offset_64bit[argnum] = value;
+        state->registers.*arg_offset_64bit[argnum-1] = value;
         break;
     case cpu_types::i386:
-        state->registers.*arg_offset_32bit[argnum] = value;
+        state->registers.*arg_offset_32bit[argnum-1] = value;
         break;
     default:
         LOG_F() << "Unsupported CPU platform";

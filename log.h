@@ -15,7 +15,7 @@ void flush_log();
 #define LOG_FILE_LOC
 #endif
 
-#define LOG_T() BOOST_LOG_TRIVIAL(trace) <<__func__<<":"<<__LINE__<<":"
+#define LOG_T() BOOST_LOG_TRIVIAL(trace) <<__FILE__<<":"<<__LINE__<<":"
 #define LOG_D() BOOST_LOG_TRIVIAL(debug) LOG_FILE_LOC
 #define LOG_I() BOOST_LOG_TRIVIAL(info) LOG_FILE_LOC
 #define LOG_W() BOOST_LOG_TRIVIAL(warning) LOG_FILE_LOC
