@@ -86,6 +86,7 @@ class daemonProcess {
     std::string state_path;
     unique_fd master_socket;
     unique_fd state_fd;
+    pthread_t master_thread;
 
     static bool daemonize( bool nodetach, int skip_fd1=-1, int skip_fd2=-1 );
 

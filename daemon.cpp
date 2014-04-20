@@ -244,7 +244,7 @@ void daemonCtrl::cmd_attach()
     }
 }
 
-daemonProcess::daemonProcess( int session_fd ) : max_fd(0)
+daemonProcess::daemonProcess( int session_fd ) : max_fd(0), master_thread( pthread_self() )
 {
     unique_fd session(session_fd);
     set_client_sock_options(session_fd);
@@ -253,7 +253,8 @@ daemonProcess::daemonProcess( int session_fd ) : max_fd(0)
 }
 
 daemonProcess::daemonProcess( const std::string &path, unique_fd &state_file, unique_fd &master_fd ) :
-    state_path( path ), master_socket( std::move(master_fd) ), state_fd( std::move(state_file) )
+    state_path( path ), master_socket( std::move(master_fd) ), state_fd( std::move(state_file) ),
+    master_thread( pthread_self() )
 {
     FILE *state_file_handle=fdopen( dup(state_fd.get()), "rt" );
     load_map( state_file_handle );
@@ -636,6 +637,9 @@ void daemonProcess::recalc_select_mask()
     }
 
     max_fd++;
+
+    // The master thread might be performing a pselect right now - wake it up so it gets the new mask.
+    pthread_kill(master_thread, SIGCHLD);
 }
 
 void daemonProcess::close_session( decltype(session_fds)::iterator & element )
