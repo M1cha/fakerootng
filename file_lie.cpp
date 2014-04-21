@@ -26,15 +26,24 @@
 
 #include "file_lie.h"
 
+namespace file_list {
+
 struct db_key_hash {
     size_t operator()(const override_key &key) const { return key.inode; };
 };
 
-typedef std::unordered_map<override_key, stat_override, db_key_hash> file_hash;
+typedef std::unordered_map<const override_key, stat_override, db_key_hash> file_hash;
 
 static file_hash map_hash;
+static std::mutex map_mutex;
 
-bool get_map( dev_t dev, ptlib::inode_t inode, stat_override *stat )
+std::unique_lock<std::mutex> lock()
+{
+    return std::unique_lock<std::mutex>(map_mutex);
+}
+
+#if 0
+bool get_map( dev_t dev, ino_t inode, stat_override *stat )
 {
     file_hash::iterator i(map_hash.find( override_key( dev, inode) ));
 
@@ -51,7 +60,7 @@ void set_map( const stat_override *stat )
     map_hash[override_key(stat->dev, stat->inode)]=*stat;
 }
 
-void remove_map( dev_t dev, ptlib::inode_t inode )
+void remove_map( dev_t dev, ino_t inode )
 {
     file_hash::iterator i(map_hash.find( override_key( dev, inode) ));
 
@@ -83,3 +92,6 @@ void save_map( FILE *file )
         }
     }
 }
+#endif
+
+};

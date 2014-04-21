@@ -297,6 +297,7 @@ private:
             // New root process
             m_proc_state->setStateNone();
 
+            assert(ptlib::TRAP_AFTER_EXEC);
             // Process is still within the fakeroot-ng code. Let it continue.
             // The process will receive a bogus TRAP after execve
             ptrace_continue(0);

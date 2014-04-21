@@ -2,7 +2,6 @@
 #define PLATFORM_SPECIFIC_H
 
 #include <sys/syscall.h>
-//#include <asm/ptrace.h>
 #include <sys/resource.h>
 #include <sys/user.h>
 
@@ -82,31 +81,6 @@ static const bool PARENT_CAN_WAIT=true;
 
 /* This is defined to 1 if the platform sends a SIGTRAP to the process after a successful execve if it's being traced */
 static const bool TRAP_AFTER_EXEC=true;
-
-typedef unsigned long inode_t;
-
-struct stat {
-    unsigned long   dev;
-    unsigned long   ino;
-    unsigned long   nlink;
-
-    unsigned int    mode;
-    unsigned int    uid;
-    unsigned int    gid;
-    unsigned int    __pad0;
-    unsigned long   rdev;
-    long            size;
-    long            blksize;
-    long            blocks;      /* Number 512-byte blocks allocated. */
-
-    unsigned long   atime;
-    unsigned long   atime_nsec; 
-    unsigned long   mtime;
-    unsigned long   mtime_nsec;
-    unsigned long   ctime;
-    unsigned long   ctime_nsec;
-    long            __unused[3];
-};
 
 typedef struct rusage extra_data;
 

@@ -257,7 +257,7 @@ daemonProcess::daemonProcess( const std::string &path, unique_fd &state_file, un
     master_thread( pthread_self() )
 {
     FILE *state_file_handle=fdopen( dup(state_fd.get()), "rt" );
-    load_map( state_file_handle );
+    //load_map( state_file_handle );
     fclose(state_file_handle);
     recalc_select_mask();
 }
@@ -274,7 +274,7 @@ daemonProcess::~daemonProcess()
 
             return;
         }
-        save_map( new_state );
+        //save_map( new_state );
         fclose( new_state );
 
         if( rename( tmp_path.c_str(), state_path.c_str() )<0 ) {
