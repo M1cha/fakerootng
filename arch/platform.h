@@ -187,7 +187,9 @@ void restore_state( pid_t pid, const cpu_state *state );
 
 /* Initialize debugger controled memory inside debuggee address space */
 const void *prepare_memory( ); /* Returns pointer to static buffer with the desired opcods, of prepare_memory_len length */
-size_t prepare_memory_len(); /* How much memory does the platform need beyond how much the process needs */
+
+// constexpr size_t prepare_memory_len;
+/* How much memory does the platform need beyond how much the process needs. Defined in the platform specific header */
 
 /* Process relationship - return the parent of a process */
 pid_t get_parent( pid_t pid );

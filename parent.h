@@ -49,7 +49,7 @@ public:
 
         template <typename T> T* get_shared_addr()
         {
-            return reinterpret_cast<T*>(shared_ptr.get<char>() + ptlib::prepare_memory_len());
+            return reinterpret_cast<T*>(shared_ptr.get<char>() + ptlib::prepare_memory_len);
         }
     } m_proc_mem;
 private:
@@ -93,6 +93,14 @@ public:
     void end_handling();
     void uses_buffers( pid_t pid );
     void verify_syscall_success( pid_t pid, int sc_num, const char *exception_message ) const;
+    void generate_syscall( pid_t pid ) const;
+
+    int_ptr proxy_mmap(const char *exception_message, pid_t pid,
+            int_ptr addr, size_t length, int prot, int flags, int fd, off_t offset);
+    int proxy_open(const char *exception_message, pid_t pid,
+            int_ptr pathname, int flags, mode_t mode = 0666);
+    void proxy_close(const char *exception_message, pid_t pid,
+            int fd);
 
     ptlib::WAIT_RET get_wait_state() const { return m_wait_state; }
     int get_wait_status() const { return m_wait_status; }

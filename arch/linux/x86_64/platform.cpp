@@ -36,15 +36,13 @@ namespace ptlib {
 
 typedef platform::process_state::types cpu_types;
 
-static const unsigned char memory_image[]=
+static const unsigned char memory_image[prepare_memory_len]=
 {
     0xcd, 0x80, /* int 0x80 - syscall for 32 bit */
     0x00, 0x00, /* Pad */
     0x0f, 0x05, /* syscall - 64 bit */
     0x00, 0x00, /* Pad */
 };
-
-static const size_t mem_offset = sizeof memory_image;
 
 static int syscall_instr64_offset=4;
 
@@ -520,11 +518,11 @@ void generate_syscall( pid_t pid, int_ptr base_memory )
     switch( state->type ) {
     case cpu_types::amd64:
         /* 64 bit syscall instruction */
-        set_pc( pid, base_memory-mem_offset+syscall_instr64_offset );
+        set_pc( pid, base_memory-prepare_memory_len+syscall_instr64_offset );
         break;
     case cpu_types::i386:
         /* 32 bit syscall instruction */
-        set_pc( pid, base_memory-mem_offset );
+        set_pc( pid, base_memory-prepare_memory_len );
         break;
     default:
         LOG_F() << "Unsupported CPU platform";
@@ -689,11 +687,6 @@ void restore_state( pid_t pid, const cpu_state *saved_state )
 const void *prepare_memory( )
 {
     return memory_image;
-}
-
-size_t prepare_memory_len()
-{
-    return mem_offset;
 }
 
 pid_t get_parent( pid_t pid )

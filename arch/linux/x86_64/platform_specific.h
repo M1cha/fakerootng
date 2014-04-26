@@ -82,6 +82,8 @@ static const bool PARENT_CAN_WAIT=true;
 /* This is defined to 1 if the platform sends a SIGTRAP to the process after a successful execve if it's being traced */
 static const bool TRAP_AFTER_EXEC=true;
 
+constexpr size_t prepare_memory_len = 8;
+
 typedef struct rusage extra_data;
 
 typedef user_regs_struct cpu_state;

@@ -401,7 +401,7 @@ void init_globals()
     size_t page_size=sysconf(_SC_PAGESIZE);
 
     static_mem_size=page_size;
-    shared_mem_size=2*PATH_MAX+ptlib::prepare_memory_len();
+    shared_mem_size=2*PATH_MAX+ptlib::prepare_memory_len;
     // Round this to the higher page size
     shared_mem_size+=page_size-1;
     shared_mem_size-=shared_mem_size%page_size;
@@ -679,22 +679,10 @@ void pid_state::uses_buffers( pid_t pid )
     ptlib::cpu_state saved_state = ptlib::save_state( pid );
 
     // Allocate the private use area
-    ptlib::set_syscall( pid, ptlib::preferred::MMAP );
-    ptlib::set_argument( pid, 1, 0 );
-    ptlib::set_argument( pid, 2, PAGE_SIZE );
-    ptlib::set_argument( pid, 3, PROT_READ|PROT_WRITE|PROT_EXEC );
-    ptlib::set_argument( pid, 4, MAP_PRIVATE|MAP_ANONYMOUS );
-    ptlib::set_argument( pid, 5, -1 );
-    ptlib::set_argument( pid, 6, 0 );
+    m_proc_mem.non_shared_addr = proxy_mmap( "Mmap private storage in debugee process failed", pid,
+            0, PAGE_SIZE, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0 );
 
-    ptrace_syscall_wait( pid, 0 );
-
-    // Check mmap's return value
-    verify_syscall_success( pid, ptlib::preferred::MMAP, "Mmap in debugee process failed" );
-
-    m_proc_mem.non_shared_addr = ptlib::get_retval( pid );
-
-    char filename[PAGE_SIZE];
+    char filename[PAGE_SIZE - ptlib::prepare_memory_len];
     const char *tmpdir=getenv("FAKEROOT_TMPDIR");
 
     if( tmpdir==NULL )
@@ -719,62 +707,41 @@ void pid_state::uses_buffers( pid_t pid )
     m_proc_mem.shared_ptr = unique_mmap("Failed to mmap shared mem file", fd.get(), shared_mem_size, 0,
                 PROT_READ|PROT_WRITE, MAP_SHARED);
 
-    // Fill in the memory with necessary commands and adjust the pointer
-    memcpy( m_proc_mem.shared_ptr.get<void>(), ptlib::prepare_memory(), ptlib::prepare_memory_len() );
-
-    strcpy( m_proc_mem.shared_ptr.get<char>()+ptlib::prepare_memory_len(), filename);
+    // Fill in the memory with necessary commands
+    memcpy( m_proc_mem.shared_ptr.get<void>(), ptlib::prepare_memory(), ptlib::prepare_memory_len );
 
     // The local shared memory is mapped. Now we need to map the remote end
     // Generate a new system call
     // Copy the instructions for generating a syscall to the newly created memory
-    ptlib::set_mem( pid, ptlib::prepare_memory(), m_proc_mem.non_shared_addr, ptlib::prepare_memory_len() );
+    ptlib::set_mem( pid, ptlib::prepare_memory(), m_proc_mem.non_shared_addr, ptlib::prepare_memory_len );
 
-    ptlib::generate_syscall( pid, m_proc_mem.non_shared_addr + ptlib::prepare_memory_len() );
+    // Our generate_syscall function looks for the instructions in the shared memory member. This has not, yet, been
+    // mapped in the debugee. Fool it to use the static buffer instead, for now.
+    m_proc_mem.shared_addr = m_proc_mem.non_shared_addr + ptlib::prepare_memory_len;
 
-    // Continue the process until it actually runs the syscall code
+    generate_syscall( pid );
     ptrace_syscall_wait( pid, 0 );
 
-    // Fill in the parameters to open the same file
-    ptlib::set_syscall( pid, ptlib::preferred::OPEN );
-    ptlib::set_string( pid, filename, m_proc_mem.non_shared_addr+ptlib::prepare_memory_len() );
-    ptlib::set_argument( pid, 1, m_proc_mem.non_shared_addr+ptlib::prepare_memory_len() );
-    ptlib::set_argument( pid, 2, O_RDONLY );
-    ptrace_syscall_wait( pid, 0 );
-
-    // Test to see if the open was successful
-    verify_syscall_success( pid, ptlib::preferred::OPEN, "Opening shared memory file failed in debugee" );
-
-    int remote_fd = ptlib::get_retval( pid );
+    // Open the same file by the debugee
+    ptlib::set_string( pid, filename, m_proc_mem.non_shared_addr+ptlib::prepare_memory_len );
+    int remote_fd = proxy_open( "Opening shared memory file failed in debugee", pid,
+            m_proc_mem.non_shared_addr+ptlib::prepare_memory_len, O_RDONLY );
 
     // MMap it
-    ptlib::generate_syscall( pid, m_proc_mem.non_shared_addr + ptlib::prepare_memory_len() );
+    generate_syscall( pid );
     ptrace_syscall_wait( pid, 0 );
 
-    ptlib::set_syscall( pid, ptlib::preferred::MMAP );
-    ptlib::set_argument( pid, 1, 0 );
-    ptlib::set_argument( pid, 2, shared_mem_size );
-    ptlib::set_argument( pid, 3, PROT_READ|PROT_EXEC );
-    ptlib::set_argument( pid, 4, MAP_SHARED );
-    ptlib::set_argument( pid, 5, remote_fd );
-    ptlib::set_argument( pid, 6, 0 );
-
-    ptrace_syscall_wait( pid, 0 );
-    verify_syscall_success( pid, ptlib::preferred::MMAP, "Mapping shared memory file failed in debugee" );
-
-    m_proc_mem.shared_addr = ptlib::get_retval( pid );
+    m_proc_mem.shared_addr = proxy_mmap( "Mapping shared memory file failed in debugee", pid,
+            0, shared_mem_size, PROT_READ|PROT_EXEC, MAP_SHARED, remote_fd, 0 ) + ptlib::prepare_memory_len;
 
     // Close the file descriptor
-    ptlib::generate_syscall( pid, m_proc_mem.shared_addr + ptlib::prepare_memory_len() );
+    generate_syscall( pid );
     ptrace_syscall_wait( pid, 0 );
 
-    ptlib::set_syscall( pid, ptlib::preferred::CLOSE );
-    ptlib::set_argument( pid, 1, remote_fd );
-    ptrace_syscall_wait( pid, 0 );
-    verify_syscall_success( pid, ptlib::preferred::CLOSE,
-            "Closing shared memory file failed in debugee. How is this even possible?" );
+    proxy_close( "Closing shared memory file failed in debugee. How is this even possible?", pid, remote_fd );
 
     // Function was entered just entering a system call. Return to the same state before restoring the state
-    ptlib::generate_syscall( pid, m_proc_mem.shared_addr + ptlib::prepare_memory_len() );
+    generate_syscall( pid );
     ptrace_syscall_wait( pid, 0 );
 
     ptlib::restore_state( pid, &saved_state );
@@ -783,6 +750,54 @@ void pid_state::uses_buffers( pid_t pid )
 void pid_state::verify_syscall_success( pid_t pid, int sc_num, const char *exception_message ) const
 {
     if( !ptlib::success( pid, sc_num ) )
-        throw std::system_error( ptlib::get_error( pid, ptlib::preferred::MMAP ), std::system_category(),
+        throw std::system_error( ptlib::get_error( pid, sc_num ), std::system_category(),
                 exception_message );
+}
+
+void pid_state::generate_syscall( pid_t pid ) const
+{
+    ptlib::generate_syscall( pid, m_proc_mem.shared_addr );
+}
+
+int_ptr pid_state::proxy_mmap(const char *exception_message, pid_t pid,
+                int_ptr addr, size_t length, int prot, int flags, int fd, off_t offset)
+{
+    ptlib::set_syscall( pid, ptlib::preferred::MMAP );
+    ptlib::set_argument( pid, 1, addr );
+    ptlib::set_argument( pid, 2, length );
+    ptlib::set_argument( pid, 3, prot );
+    ptlib::set_argument( pid, 4, flags );
+    ptlib::set_argument( pid, 5, fd );
+    ptlib::set_argument( pid, 6, offset );
+
+    ptrace_syscall_wait( pid, 0 );
+
+    // Check mmap's return value
+    verify_syscall_success( pid, ptlib::preferred::MMAP, exception_message );
+
+    return ptlib::get_retval( pid );
+}
+
+int pid_state::proxy_open(const char *exception_message, pid_t pid,
+        int_ptr pathname, int flags, mode_t mode)
+{
+    ptlib::set_syscall( pid, ptlib::preferred::OPEN );
+    ptlib::set_argument( pid, 1, pathname );
+    ptlib::set_argument( pid, 2, flags );
+    ptlib::set_argument( pid, 3, mode );
+    ptrace_syscall_wait( pid, 0 );
+
+    // Test to see if the open was successful
+    verify_syscall_success( pid, ptlib::preferred::OPEN, exception_message );
+
+    return ptlib::get_retval( pid );
+}
+void pid_state::proxy_close(const char *exception_message, pid_t pid,
+        int fd)
+{
+    ptlib::set_syscall( pid, ptlib::preferred::CLOSE );
+    ptlib::set_argument( pid, 1, fd );
+    ptrace_syscall_wait( pid, 0 );
+
+    verify_syscall_success( pid, ptlib::preferred::OPEN, exception_message );
 }
