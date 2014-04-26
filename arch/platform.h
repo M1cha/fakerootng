@@ -155,7 +155,7 @@ int set_pc( pid_t pid, int_ptr location );
 /* Report the syscall number being invoked */
 int get_syscall( pid_t pid );
 int set_syscall( pid_t pid, int sc_num ); /* Change the meaning of a just started system call */
-bool generate_syscall( pid_t pid, int sc_num, int_ptr base_memory ); /* Generate a new system call */
+void generate_syscall( pid_t pid, int_ptr base_memory ); /* Generate a new system call */
 
 /* Return the nth argument passed */
 int_ptr get_argument( pid_t pid, int argnum );

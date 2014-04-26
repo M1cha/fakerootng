@@ -513,29 +513,23 @@ int set_syscall( pid_t pid, int sc_num )
     return 0;
 }
 
-bool generate_syscall( pid_t pid, int sc_num, int_ptr base_memory )
+void generate_syscall( pid_t pid, int_ptr base_memory )
 {
-    sc_num=translate_syscall( pid, sc_num );
-
     platform::process_state *state = linux::get_process_state(pid);
 
-    if( sc_num!=-1 ) {
-        state->registers.rax = sc_num;
-        state->dirty = true;
-
-        switch( state->type ) {
-        case cpu_types::amd64:
-            /* 64 bit syscall instruction */
-            return set_pc( pid, base_memory-mem_offset+syscall_instr64_offset )==0;
-        case cpu_types::i386:
-            /* 32 bit syscall instruction */
-            return set_pc( pid, base_memory-mem_offset )==0;
-        default:
-            LOG_F() << "Unsupported CPU platform";
-            abort();
-        }
-    } else
-        return false;
+    switch( state->type ) {
+    case cpu_types::amd64:
+        /* 64 bit syscall instruction */
+        set_pc( pid, base_memory-mem_offset+syscall_instr64_offset );
+        break;
+    case cpu_types::i386:
+        /* 32 bit syscall instruction */
+        set_pc( pid, base_memory-mem_offset );
+        break;
+    default:
+        LOG_F() << "Unsupported CPU platform";
+        abort();
+    }
 }
 
 static decltype(user_regs_struct::rax) user_regs_struct::*arg_offset_32bit[]={

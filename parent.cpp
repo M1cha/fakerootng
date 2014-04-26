@@ -729,12 +729,13 @@ void pid_state::uses_buffers( pid_t pid )
     // Copy the instructions for generating a syscall to the newly created memory
     ptlib::set_mem( pid, ptlib::prepare_memory(), m_proc_mem.non_shared_addr, ptlib::prepare_memory_len() );
 
-    ptlib::generate_syscall( pid, ptlib::preferred::OPEN, m_proc_mem.non_shared_addr + ptlib::prepare_memory_len() );
+    ptlib::generate_syscall( pid, m_proc_mem.non_shared_addr + ptlib::prepare_memory_len() );
 
     // Continue the process until it actually runs the syscall code
     ptrace_syscall_wait( pid, 0 );
 
     // Fill in the parameters to open the same file
+    ptlib::set_syscall( pid, ptlib::preferred::OPEN );
     ptlib::set_string( pid, filename, m_proc_mem.non_shared_addr+ptlib::prepare_memory_len() );
     ptlib::set_argument( pid, 1, m_proc_mem.non_shared_addr+ptlib::prepare_memory_len() );
     ptlib::set_argument( pid, 2, O_RDONLY );
@@ -746,9 +747,10 @@ void pid_state::uses_buffers( pid_t pid )
     int remote_fd = ptlib::get_retval( pid );
 
     // MMap it
-    ptlib::generate_syscall( pid, ptlib::preferred::MMAP, m_proc_mem.non_shared_addr + ptlib::prepare_memory_len() );
+    ptlib::generate_syscall( pid, m_proc_mem.non_shared_addr + ptlib::prepare_memory_len() );
     ptrace_syscall_wait( pid, 0 );
 
+    ptlib::set_syscall( pid, ptlib::preferred::MMAP );
     ptlib::set_argument( pid, 1, 0 );
     ptlib::set_argument( pid, 2, shared_mem_size );
     ptlib::set_argument( pid, 3, PROT_READ|PROT_EXEC );
@@ -762,16 +764,17 @@ void pid_state::uses_buffers( pid_t pid )
     m_proc_mem.shared_addr = ptlib::get_retval( pid );
 
     // Close the file descriptor
-    ptlib::generate_syscall( pid, ptlib::preferred::CLOSE, m_proc_mem.shared_addr + ptlib::prepare_memory_len() );
+    ptlib::generate_syscall( pid, m_proc_mem.shared_addr + ptlib::prepare_memory_len() );
     ptrace_syscall_wait( pid, 0 );
 
+    ptlib::set_syscall( pid, ptlib::preferred::CLOSE );
     ptlib::set_argument( pid, 1, remote_fd );
     ptrace_syscall_wait( pid, 0 );
     verify_syscall_success( pid, ptlib::preferred::CLOSE,
             "Closing shared memory file failed in debugee. How is this even possible?" );
 
     // Function was entered just entering a system call. Return to the same state before restoring the state
-    ptlib::generate_syscall( pid, ptlib::preferred::NOP, m_proc_mem.shared_addr + ptlib::prepare_memory_len() );
+    ptlib::generate_syscall( pid, m_proc_mem.shared_addr + ptlib::prepare_memory_len() );
     ptrace_syscall_wait( pid, 0 );
 
     ptlib::restore_state( pid, &saved_state );
