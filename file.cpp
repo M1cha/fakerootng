@@ -26,6 +26,8 @@
 
 void sys_chown( int sc_num, pid_t pid, pid_state *state )
 {
+    state->uses_buffers( pid );
+
     state->ptrace_syscall_wait(pid, 0);
     LOG_D() << "Reporting uid " << state->m_uid;
     ptlib::set_retval( pid, state->m_uid );

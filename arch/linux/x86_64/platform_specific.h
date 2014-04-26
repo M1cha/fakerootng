@@ -86,6 +86,13 @@ typedef struct rusage extra_data;
 
 typedef user_regs_struct cpu_state;
 
+namespace preferred {
+static const int NOP = SYS_getuid;
+static const int MMAP = SYS_mmap;
+static const int OPEN = SYS_open;
+static const int CLOSE = SYS_close;
+};
+
 }; // End of namespace ptlib
 
 /* Platform specific format specifiers for printing pid, dev and inode */

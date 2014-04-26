@@ -36,14 +36,15 @@ namespace ptlib {
 
 typedef platform::process_state::types cpu_types;
 
-#define mem_offset 8
-static const unsigned char memory_image[mem_offset]=
+static const unsigned char memory_image[]=
 {
     0xcd, 0x80, /* int 0x80 - syscall for 32 bit */
     0x00, 0x00, /* Pad */
     0x0f, 0x05, /* syscall - 64 bit */
     0x00, 0x00, /* Pad */
 };
+
+static const size_t mem_offset = sizeof memory_image;
 
 static int syscall_instr64_offset=4;
 

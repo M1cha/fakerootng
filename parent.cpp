@@ -38,6 +38,7 @@
 #include "worker_queue.h"
 #include "daemon.h"
 #include "log.h"
+#include "scope_guard.h"
 
 #include "syscalls.h"
 
@@ -668,4 +669,117 @@ void pid_state::end_handling()
     m_state=state::NONE;
     m_task->ptrace_systrace(0);
     m_task=nullptr;
+}
+
+void pid_state::uses_buffers( pid_t pid )
+{
+    if( m_proc_mem.shared_addr != 0 )
+        return; // Process already has memory
+
+    ptlib::cpu_state saved_state = ptlib::save_state( pid );
+
+    // Allocate the private use area
+    ptlib::set_syscall( pid, ptlib::preferred::MMAP );
+    ptlib::set_argument( pid, 1, 0 );
+    ptlib::set_argument( pid, 2, PAGE_SIZE );
+    ptlib::set_argument( pid, 3, PROT_READ|PROT_WRITE|PROT_EXEC );
+    ptlib::set_argument( pid, 4, MAP_PRIVATE|MAP_ANONYMOUS );
+    ptlib::set_argument( pid, 5, -1 );
+    ptlib::set_argument( pid, 6, 0 );
+
+    ptrace_syscall_wait( pid, 0 );
+
+    // Check mmap's return value
+    verify_syscall_success( pid, ptlib::preferred::MMAP, "Mmap in debugee process failed" );
+
+    m_proc_mem.non_shared_addr = ptlib::get_retval( pid );
+
+    char filename[PAGE_SIZE];
+    const char *tmpdir=getenv("FAKEROOT_TMPDIR");
+
+    if( tmpdir==NULL )
+        tmpdir=getenv("TMPDIR");
+
+    if( tmpdir==NULL || strlen(tmpdir)>=sizeof(filename)-sizeof("/fakeroot-ng.XXXXXX") )
+        tmpdir=DEFAULT_TMPDIR;
+
+    int neededSize = snprintf(filename, sizeof(filename), "%s/fakeroot-ng.XXXXXX", tmpdir);
+    if( neededSize<0 )
+        throw std::system_error( errno, std::system_category(), "Formatting temporary path failed" );
+    if( size_t(neededSize) >= sizeof(filename) )
+        throw std::out_of_range( "Fakeroot temporary path too long" );
+
+    unique_fd fd( mkstemp(filename), "Failed to create shared mem file" );
+    auto rmfile_scope = makeScopeGuard([filename]() {unlink(filename);});
+
+    // Make sure that the file is big enough, but create it sparse
+    ftruncate( fd.get(), shared_mem_size );
+
+    // Map the file into the local address space
+    m_proc_mem.shared_ptr = unique_mmap("Failed to mmap shared mem file", fd.get(), shared_mem_size, 0,
+                PROT_READ|PROT_WRITE, MAP_SHARED);
+
+    // Fill in the memory with necessary commands and adjust the pointer
+    memcpy( m_proc_mem.shared_ptr.get<void>(), ptlib::prepare_memory(), ptlib::prepare_memory_len() );
+
+    strcpy( m_proc_mem.shared_ptr.get<char>()+ptlib::prepare_memory_len(), filename);
+
+    // The local shared memory is mapped. Now we need to map the remote end
+    // Generate a new system call
+    // Copy the instructions for generating a syscall to the newly created memory
+    ptlib::set_mem( pid, ptlib::prepare_memory(), m_proc_mem.non_shared_addr, ptlib::prepare_memory_len() );
+
+    ptlib::generate_syscall( pid, ptlib::preferred::OPEN, m_proc_mem.non_shared_addr + ptlib::prepare_memory_len() );
+
+    // Continue the process until it actually runs the syscall code
+    ptrace_syscall_wait( pid, 0 );
+
+    // Fill in the parameters to open the same file
+    ptlib::set_string( pid, filename, m_proc_mem.non_shared_addr+ptlib::prepare_memory_len() );
+    ptlib::set_argument( pid, 1, m_proc_mem.non_shared_addr+ptlib::prepare_memory_len() );
+    ptlib::set_argument( pid, 2, O_RDONLY );
+    ptrace_syscall_wait( pid, 0 );
+
+    // Test to see if the open was successful
+    verify_syscall_success( pid, ptlib::preferred::OPEN, "Opening shared memory file failed in debugee" );
+
+    int remote_fd = ptlib::get_retval( pid );
+
+    // MMap it
+    ptlib::generate_syscall( pid, ptlib::preferred::MMAP, m_proc_mem.non_shared_addr + ptlib::prepare_memory_len() );
+    ptrace_syscall_wait( pid, 0 );
+
+    ptlib::set_argument( pid, 1, 0 );
+    ptlib::set_argument( pid, 2, shared_mem_size );
+    ptlib::set_argument( pid, 3, PROT_READ|PROT_EXEC );
+    ptlib::set_argument( pid, 4, MAP_SHARED );
+    ptlib::set_argument( pid, 5, remote_fd );
+    ptlib::set_argument( pid, 6, 0 );
+
+    ptrace_syscall_wait( pid, 0 );
+    verify_syscall_success( pid, ptlib::preferred::MMAP, "Mapping shared memory file failed in debugee" );
+
+    m_proc_mem.shared_addr = ptlib::get_retval( pid );
+
+    // Close the file descriptor
+    ptlib::generate_syscall( pid, ptlib::preferred::CLOSE, m_proc_mem.shared_addr + ptlib::prepare_memory_len() );
+    ptrace_syscall_wait( pid, 0 );
+
+    ptlib::set_argument( pid, 1, remote_fd );
+    ptrace_syscall_wait( pid, 0 );
+    verify_syscall_success( pid, ptlib::preferred::CLOSE,
+            "Closing shared memory file failed in debugee. How is this even possible?" );
+
+    // Function was entered just entering a system call. Return to the same state before restoring the state
+    ptlib::generate_syscall( pid, ptlib::preferred::NOP, m_proc_mem.shared_addr + ptlib::prepare_memory_len() );
+    ptrace_syscall_wait( pid, 0 );
+
+    ptlib::restore_state( pid, &saved_state );
+}
+
+void pid_state::verify_syscall_success( pid_t pid, int sc_num, const char *exception_message ) const
+{
+    if( !ptlib::success( pid, sc_num ) )
+        throw std::system_error( ptlib::get_error( pid, ptlib::preferred::MMAP ), std::system_category(),
+                exception_message );
 }
