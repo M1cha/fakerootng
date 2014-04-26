@@ -27,6 +27,10 @@ struct stat_override {
     }
 };
 
+std::ostream &operator<< (std::ostream &strm, const stat_override &override);
+
+void apply( struct stat &lhs, const stat_override &rhs );
+
 std::unique_lock<std::mutex> lock();
 
 // Returns the information inside the database about a file with the given dev and inode

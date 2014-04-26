@@ -54,9 +54,9 @@ void sys_fchownat( int sc_num, pid_t pid, pid_state *state )
     auto file_list_lock = file_list::lock();
     file_list::stat_override *override = file_list::get_map( stat );
 
-    if( owner!=uid_t(-1l) )
+    if( owner!=uid_t(-1L) )
         override->uid = owner;
-    if( group!=gid_t(-1l) )
+    if( group!=gid_t(-1L) )
         override->gid = group;
 
     // Clear SUID and SGID of file due to ownership change
@@ -68,4 +68,38 @@ void sys_fchownat( int sc_num, pid_t pid, pid_state *state )
             " to "<<override->uid<<"."<<override->gid;
 
     state->end_handling();
+}
+
+static void real_stat( int sc_num, pid_t pid, pid_state *state, unsigned int buf_arg )
+{
+    int_ptr stat_addr = ptlib::get_argument( pid, buf_arg );
+
+    state->ptrace_syscall_wait(pid, 0);
+
+    if( ptlib::success( pid, sc_num ) ) {
+        // Check the result to see if we need to lie about this file
+        struct stat stat = ptlib::get_stat_result( pid, sc_num, stat_addr );
+        auto file_list_lock = file_list::lock();
+        file_list::stat_override *override = file_list::get_map( stat, false );
+
+        if( override ) {
+            file_list::apply( stat, *override );
+
+            ptlib::set_stat_result( pid, sc_num, stat_addr, &stat );
+
+            LOG_D() << "Reported false info for stat " << *override;
+        }
+    }
+
+    state->end_handling();
+}
+
+void sys_fstatat( int sc_num, pid_t pid, pid_state *state )
+{
+    real_stat( sc_num, pid, state, 3 );
+}
+
+void sys_stat( int sc_num, pid_t pid, pid_state *state )
+{
+    real_stat( sc_num, pid, state, 2 );
 }

@@ -49,9 +49,7 @@ DECLARE_SYSFUNC(sigreturn);
 
 // File handling
 DECLARE_SYSFUNC(stat);
-#ifdef SYS_fstatat64
-DECLARE_SYSFUNC(fstatat64);
-#endif
+DECLARE_SYSFUNC(fstatat);
 DECLARE_SYSFUNC(chmod);
 DECLARE_SYSFUNC(fchmod);
 DECLARE_SYSFUNC(chown);

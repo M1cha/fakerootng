@@ -1,5 +1,5 @@
 Infrstructure work plan:
-stat/chown
+stat/chown - done
 state file
 generate syscalls - done
 strace

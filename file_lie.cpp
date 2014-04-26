@@ -91,6 +91,31 @@ std::unique_lock<std::mutex> lock()
     return std::unique_lock<std::mutex>(map_mutex);
 }
 
+std::ostream &operator<< (std::ostream &strm, const stat_override &override)
+{
+    strm<<override.dev<<":"<<override.inode<<":"<<OCT_FORMAT(override.mode, 4)<<" uid: "<<
+            override.uid<<" gid: "<<override.gid;
+
+    if( S_ISBLK(override.mode) || S_ISCHR(override.mode) )
+        strm<<" device: "<<(override.dev_id>>8)<<","<<(override.dev_id&0xff);
+
+    return strm;
+}
+
+void apply( struct stat &lhs, const stat_override &rhs )
+{
+    ASSERT( override_key(lhs) == override_key(rhs) );
+
+    lhs.st_mode &= 0777;
+    lhs.st_mode |= rhs.mode&(S_IFMT|07000);
+    if( (lhs.st_mode & S_IFMT)==0 )
+        lhs.st_mode |= S_IFREG;
+
+    lhs.st_uid = rhs.uid;
+    lhs.st_gid = rhs.gid;
+    lhs.st_rdev = rhs.dev_id;
+}
+
 #define ASSERT_LOCKED ASSERT(!map_mutex.try_lock())
 struct stat_override *get_map( const struct ::stat &stat, bool create )
 {

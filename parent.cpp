@@ -400,6 +400,10 @@ static void register_handlers()
 
     // File
     DEF_SYS1(fchownat);
+    DEF_SYS2(newfstatat, fstatat);
+    DEF_SYS1(stat);
+    DEF_SYS2(lstat, stat);
+    DEF_SYS2(fstat, stat);
 }
 
 void init_globals()

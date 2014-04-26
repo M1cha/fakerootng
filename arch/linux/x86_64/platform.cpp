@@ -676,6 +676,19 @@ struct stat get_stat_result( pid_t pid, int sc_num, int_ptr stat_addr )
     return stat;
 }
 
+void set_stat_result( pid_t pid, int sc_num, int_ptr stat_addr, struct stat *stat )
+{
+    platform::process_state *state = linux::get_process_state(pid);
+
+    if( state->type == cpu_types::amd64 ) {
+        ASSERT( sc_num==SYS_stat || sc_num==SYS_fstat || sc_num==SYS_lstat || sc_num==SYS_newfstatat );
+
+        set_mem( pid, stat, stat_addr, sizeof(*stat) );
+    } else {
+        abort();
+    }
+}
+
 ssize_t get_cwd( pid_t pid, char *buffer, size_t buff_size )
 {
     return linux::get_cwd( pid, buffer, buff_size );

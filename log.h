@@ -23,6 +23,7 @@ void flush_log();
 #define LOG_F() BOOST_LOG_TRIVIAL(fatal) LOG_FILE_LOC
 
 #define HEX_FORMAT(val, width) std::setw(width) << std::setfill('0') << std::hex << (val) << std::setbase(0)
+#define OCT_FORMAT(val, width) std::setw(width) << std::setfill('0') << std::oct << (val) << std::setbase(0)
 
 #ifdef NDEBUG
 #define ASSERT(cond)
