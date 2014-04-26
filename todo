@@ -1,7 +1,7 @@
 Infrstructure work plan:
 stat/chown
 state file
-generate syscalls
+generate syscalls - done
 strace
 chroot
 

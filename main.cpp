@@ -65,7 +65,7 @@ int parse_options( int argc, char *argv[] )
     const char * logfile=NULL;
     bool log_flush=false;
 
-    while( (opt=getopt(argc, argv, "+p:l:dvfh" ))!=-1 ) {
+    while( (opt=getopt(argc, argv, "+p:l:dvVfh" ))!=-1 ) {
         switch( opt ) {
         case 'p': // Persist file
             persistent_file=optarg;
@@ -89,7 +89,7 @@ int parse_options( int argc, char *argv[] )
         case 'd':
             nodetach=true;
             break;
-        case 'v':
+        case 'V':
             print_version();
             return -2;
         case 'h':

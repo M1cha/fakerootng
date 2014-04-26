@@ -1,9 +1,9 @@
-.TH FAKEROOT\-NG 1 "April 1, 2013" "Shachar Shemesh" "Fakeroot Next Gen User Manual"
+.TH FAKEROOT\-NG 1 "April 26, 2014" "Shachar Shemesh" "Fakeroot Next Gen User Manual"
 .\" Please adjust this date whenever revising the manpage.
 .SH NAME
 fakeroot\-ng \- run a command while making it believe it is running as root
 .SH SYNOPSIS
-\fBfakeroot\-ng\fP [ \fB\-l\fIlogfile\fP [\fB\-f\fP] ] [ \fB\-p\fIpersist_file\fP ] [\-d] \fIcommand line\fP
+\fBfakeroot\-ng\fP [ \fIoptions\fP... ] [ [\fB\-\-\fP] \fIcommand line\fP ]
 .SH DESCRIPTION
 This manual page documents the \fBfakeroot\-ng\fP command.
 .PP
@@ -13,6 +13,9 @@ intercepting certain system calls the process performs and manipulating their re
 for the effect to be complete enough, previous manipulations have to be remembered, and
 consistent results returned.
 .PP
+If run without arguments, opens a new "root" shell. With arguments, run the arguments under "root"
+permissions.
+.PP
 The idea behind fakroot\-ng was first implemented by a tool called fakeroot(1). This tool used
 LD_PRELOAD of the dynamic linking to glibc in order to intercept the system calls. While this
 approach is very rebust and very platform independent, it does suffer in scope. In particular,
@@ -21,7 +24,7 @@ emulating other operations (mainly the chroot(2) system call) to not be supporte
 .PP
 Fakeroot\-ng strives to fill those gaps by using a totally different technology for system call
 interception. Instead of using LD_PRELOAD, ptrace(2) is being used.
-.SH PARAMETERS
+.SH OPTIONS
 .TP
 \fB\-p\fIstate_file\fP
 Before the first process is being run, loads from \fIstate_file\fP the
@@ -34,6 +37,9 @@ the two instances will share state and their processes will see the same picture
 Causes fakeroot\-ng to dump to \fIlog_file\fP internal state and processing information. This is
 mostly useful for cases where fakeroot\-ng fails to act as expected.
 .TP
+\fB-v\fP
+Increases the log verbosity level. If provided more than once, will increase it further.
+.TP
 \fB-f\fP
 Causes the log file to be flushed after every print. Guarantees that the important hint as to why
 the crash happened will be in the actual file, but has non-negligent performance effect. Only has
@@ -44,8 +50,11 @@ Tells fakeroot\-ng not to completely daemonize itself. This is mostly useful in 
 cause a core dump, as the debugger would normally change directory to root, which would prevent a
 core file from being created.
 .TP
-\fB\-v\fP
+\fB\-V\fP
 Print out the version number and copyright info and exit without doing anything.
+
+Note: up until version 0.18, this option was invoked with \fB\-v\fP (lowercase). This was changed for
+the sake of consistency with established standard practices.
 .TP
 \fB\-h\fP
 Print out a short help screen and exit.
@@ -67,15 +76,12 @@ use it to create the temporary files, rather than /tmp. The problem with using \
 for creating temporary files is that fakeroot\-ng is not the only one to use it. For that reason,
 if the environment has a variable called \fBFAEKROOT_TMPDIR\fP, its value will override that
 of either \fBTMPDIR\fP or the default /tmp directory.
-
-On Linux, it is usually entirely safe to point \fBFAKEROOT_TMPDIR\fP to \fB/dev/shm\fP, which
-usually lives up to expectations regarding mount mode and writability.
 .SH SECURITY CONSIDERATIONS
 Fakeroot\-ng is a non-SUID executable, and does not modify any sensitive data. It, therefor,
 does not affect the overall security of the system. One may be tempted, however, to use
-fakeroot\-ng as a security tool, for running processes with reduced privileges or inside
+fakeroot\-ng as a security tool for running processes with reduced privileges or inside
 a chroot jail. In addition to all the warnings that usually apply to using chroot jails as a security
-tool (in a nutshell - don't), the following should be understood.
+tool (in a nutshell \- don't), the following should be understood.
 .PP
 Unlike previous implementations, fakeroot\-ng uses a technology that leaves the traced process
 no choice regarding whether it will use fakeroot\-ng's "services" or not. Compiling a program
