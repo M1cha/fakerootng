@@ -1,6 +1,8 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
+#include <sys/stat.h>
+
 /** 
  * \file platform.h
  * ptlib interface definitions.
@@ -175,6 +177,10 @@ int set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len )
 /* Copy a NULL terminated string. "get" returns the number of bytes copied, including the NULL */
 int get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen );
 int set_string( pid_t pid, const char *local_ptr, int_ptr process_ptr );
+
+/* Stat related data processing */
+struct stat get_stat_result( pid_t pid, int sc_num, int_ptr stat_addr );
+void set_stat_result( pid_t pid, int sc_num, int_ptr stat_addr, struct stat *stat );
 
 /* Get a process' current directory and open fds */
 /* Return value is as for "readlink" */

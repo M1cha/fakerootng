@@ -79,7 +79,9 @@ static const bool SUPPORTS_CLONE=true;
 
 static const bool PARENT_CAN_WAIT=true;
 
-/* This is defined to 1 if the platform sends a SIGTRAP to the process after a successful execve if it's being traced */
+/* This is defined to true if the platform sends a SIGTRAP to the process after a successful execve if it's being
+ * traced
+ */
 static const bool TRAP_AFTER_EXEC=true;
 
 constexpr size_t prepare_memory_len = 8;
@@ -93,6 +95,7 @@ static const int NOP = SYS_getuid;
 static const int MMAP = SYS_mmap;
 static const int OPEN = SYS_open;
 static const int CLOSE = SYS_close;
+static const int FSTATAT = SYS_newfstatat;
 };
 
 }; // End of namespace ptlib
@@ -103,14 +106,5 @@ static const int CLOSE = SYS_close;
 #define INODE_F "%ld"
 #define UID_F "%u"
 #define GID_F "%u"
-
-/* Preferred stat functions to use */
-#define PREF_STAT SYS_stat
-#define PREF_LSTAT SYS_lstat
-#define PREF_FSTAT SYS_fstat
-#define PREF_FSTATAT SYS_newfstatat
-
-#define PREF_NOP SYS_getuid
-#define PREF_MMAP SYS_mmap
 
 #endif /* PLATFORM_SPECIFIC_H */

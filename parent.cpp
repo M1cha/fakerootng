@@ -381,11 +381,14 @@ static void register_handlers()
     // A macro for defining a system call with the same syscall and handler names
 #define DEF_SYS1( syscall ) DEF_SYS2( syscall, syscall )
 
+    // Credentials
     DEF_SYS1(getuid);
     DEF_SYS1(geteuid);
     DEF_SYS1(getresuid);
 #if defined(SYS_getuid16)
     DEF_SYS2(getuid16, getuid);
+
+    // Process
 #endif
     DEF_SYS1(execve);
 #if defined(SYS_fexecve)
@@ -394,6 +397,9 @@ static void register_handlers()
 #if defined(SYS_clone)
     DEF_SYS1(clone);
 #endif
+
+    // File
+    DEF_SYS1(fchownat);
 }
 
 void init_globals()

@@ -3,6 +3,8 @@
 
 #include <mutex>
 
+#include <sys/stat.h>
+
 // Define functions for mapping the real files on disk to what they should be as far as the fake environment is concerned
 
 namespace file_list {
@@ -13,24 +15,24 @@ struct stat_override {
     uid_t uid;
     gid_t gid;
     dev_t dev_id;
-};
 
-struct override_key {
-    dev_t dev;
-    ino_t inode;
-
-    override_key( dev_t _dev, ino_t _inode ) : dev(_dev), inode(_inode)
+    explicit stat_override( const struct stat &stat ) :
+        dev( stat.st_dev ),
+        inode( stat.st_ino ),
+        mode( stat.st_mode ),
+        uid( stat.st_uid ),
+        gid( stat.st_gid ),
+        dev_id( stat.st_rdev )
     {
     }
-
-    bool operator==( const override_key &rhs ) const { return dev==rhs.dev && inode==rhs.inode; }
 };
 
 std::unique_lock<std::mutex> lock();
 
 // Returns the information inside the database about a file with the given dev and inode
 // returns "false" if no such file exists
-bool get_map( dev_t dev, ino_t inode, struct stat_override *stat );
+struct stat_override *get_map( dev_t dev, ino_t inode, bool create = true );
+struct stat_override *get_map( const struct ::stat &stat, bool create = true );
 
 void set_map( const struct stat_override *stat );
 

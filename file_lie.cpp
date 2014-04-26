@@ -24,12 +24,61 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "log.h"
+
 #include "file_lie.h"
 
 namespace file_list {
 
+struct override_key {
+    dev_t dev;
+    ino_t inode;
+
+    override_key( dev_t _dev, ino_t _inode ) : dev(_dev), inode(_inode)
+    {
+    }
+
+    explicit override_key( const stat_override &override ) : override_key( override.dev, override.inode )
+    {
+    }
+
+    explicit override_key( const struct stat &stat ) : override_key( stat.st_dev, stat.st_ino )
+    {
+    }
+
+    bool operator==( const override_key &rhs ) const { return dev==rhs.dev && inode==rhs.inode; }
+};
+
+bool operator==( const override_key &lhs, const stat_override &rhs )
+{
+    return lhs==override_key(rhs);
+}
+
+std::ostream &operator<<( std::ostream &strm, const override_key &key )
+{
+    return strm<<key.dev<<":"<<key.inode;
+}
+
+// Operator to sanity check that the override struct points to the same file as a stat struct
+bool operator==( const stat_override &lhs, const struct stat &rhs )
+{
+    return override_key(lhs)==override_key(rhs) &&
+            (lhs.mode&0777) == (rhs.st_mode&0777) &&
+            (
+                (lhs.mode&S_IFMT) == (rhs.st_mode&S_IFMT) ||
+                (
+                    (rhs.st_mode&S_IFMT) == S_IFREG &&
+                    (
+                        (lhs.mode&S_IFMT) == 0 ||
+                        (lhs.mode&S_IFMT) == S_IFBLK ||
+                        (lhs.mode&S_IFMT) == S_IFCHR
+                    )
+                )
+            );
+}
+
 struct db_key_hash {
-    size_t operator()(const override_key &key) const { return key.inode; };
+    size_t operator()(const override_key &key) const { return key.inode + key.dev; };
 };
 
 typedef std::unordered_map<const override_key, stat_override, db_key_hash> file_hash;
@@ -42,24 +91,37 @@ std::unique_lock<std::mutex> lock()
     return std::unique_lock<std::mutex>(map_mutex);
 }
 
-#if 0
-bool get_map( dev_t dev, ino_t inode, stat_override *stat )
+#define ASSERT_LOCKED ASSERT(!map_mutex.try_lock())
+struct stat_override *get_map( const struct ::stat &stat, bool create )
 {
-    file_hash::iterator i(map_hash.find( override_key( dev, inode) ));
+    ASSERT_LOCKED;
 
-    if( i!=map_hash.end() ) {
-        *stat=i->second;
-        return true;
-    } else {
-        return false;
+    override_key key(stat);
+
+    auto iter = map_hash.find( key );
+
+    if( iter == map_hash.end() ) {
+        if( create )
+            return &(map_hash.emplace( key, stat_override(stat) ).first->second);
+        else
+            return nullptr;
     }
+
+    ASSERT( key == iter->second );
+    if( ! (iter->second==stat) ) {
+        // The file probably changed outside of fakeroot-ng (or so we hope...)
+        // Either way, there is a mismatch between the file on disk and the file in our database.
+        // Erase the file from the database and start over.
+        LOG_W() << "File "<<key<<" mismatch between the disk and the database - erasing from the database";
+        map_hash.erase(iter);
+
+        return get_map( stat, create );
+    }
+
+    return &iter->second;
 }
 
-void set_map( const stat_override *stat )
-{
-    map_hash[override_key(stat->dev, stat->inode)]=*stat;
-}
-
+#if 0
 void remove_map( dev_t dev, ino_t inode )
 {
     file_hash::iterator i(map_hash.find( override_key( dev, inode) ));
