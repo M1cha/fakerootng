@@ -28,7 +28,10 @@ static ios::stream_buffer<decltype(log_file)> log_streambuf;
 bool init_log( const char * file_name, bool enabled, bool flush )
 {
     if( !enabled ) {
-        logging::core::get()->set_logging_enabled(false);
+        logging::core::get()->set_filter
+                (
+                 logging::trivial::severity >= logging::trivial::fatal
+                );
         return true;
     }
 

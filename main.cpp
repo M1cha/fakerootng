@@ -196,7 +196,7 @@ static int real_perform_child( daemonCtrl &daemon_ctrl, char *argv[] )
 
         perror("Fakeroot-ng exec failed");
     } catch( const std::exception &exception ) {
-        fprintf(stderr, "Fatal error: %s\n", exception.what() );
+        LOG_F() << "Fatal error: " << exception.what();
     }
 
     return 2;
@@ -293,6 +293,6 @@ int main(int argc, char *argv[])
 
         return perform_child( daemon_ctrl, argv+opt_offset );
     } catch( const std::exception &exception ) {
-        fprintf( stderr, "Execution failed with error %s\n", exception.what() );
+        LOG_F() << "Execution failed with error: " << exception.what();
     }
 }
