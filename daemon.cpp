@@ -262,7 +262,7 @@ daemonProcess::daemonProcess( const std::string &path, unique_fd &state_file, un
 {
     namespace ios = boost::iostreams;
 
-    ios::file_descriptor_sink state_file_handle( state_fd.get(), ios::never_close_handle );
+    ios::file_descriptor_source state_file_handle( state_fd.get(), ios::never_close_handle );
     ios::stream_buffer<decltype(state_file_handle)> state_streambuf(state_file_handle);
     std::istream state_stream(&state_streambuf);
 
