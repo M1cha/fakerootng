@@ -170,6 +170,9 @@ void load_map( std::istream &file )
                 ",rdev=" >> override.st_rdev;
 
         if( file ) {
+            if( (S_IFMT & override.st_ino)==0 )
+                override.st_ino |= S_IFREG;
+
             get_map( override, true );
         }
     }
@@ -182,10 +185,15 @@ void save_map( std::ostream &file )
     for( auto i : map_hash ) {
         const stat_override override( i.second );
         if( !override.transient ) {
+            mode_t mode_mask = ~0L;
+
+            if( S_ISREG(override.mode) )
+                mode_mask = ~mode_t(S_IFMT);
+
             file <<
                     "dev=" << override.dev <<
                     ",ino=" << override.inode <<
-                    ",mode=" <<std::oct << override.mode << std::dec <<
+                    ",mode=" << "0" << OCT_FORMAT(override.mode & mode_mask, 3) <<
                     ",uid=" << override.uid <<
                     ",gid=" << override.gid <<
                     ",rdev=" << override.dev_id <<
