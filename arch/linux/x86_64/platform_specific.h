@@ -84,7 +84,7 @@ static const bool PARENT_CAN_WAIT=true;
  */
 static const bool TRAP_AFTER_EXEC=true;
 
-constexpr size_t prepare_memory_len = 8;
+constexpr const size_t prepare_memory_len = 8;
 
 typedef struct rusage extra_data;
 
@@ -102,9 +102,5 @@ static const int FSTATAT = SYS_newfstatat;
 
 /* Platform specific format specifiers for printing pid, dev and inode */
 #define PID_F "%d"
-#define DEV_F "%lx"
-#define INODE_F "%ld"
-#define UID_F "%u"
-#define GID_F "%u"
 
 #endif /* PLATFORM_SPECIFIC_H */

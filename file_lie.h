@@ -2,6 +2,7 @@
 #define FILE_LIE_H
 
 #include <mutex>
+#include <iostream>
 
 #include <sys/stat.h>
 
@@ -15,6 +16,8 @@ struct stat_override {
     uid_t uid;
     gid_t gid;
     dev_t dev_id;
+
+    bool transient = false;
 
     explicit stat_override( const struct stat &stat ) :
         dev( stat.st_dev ),
@@ -42,8 +45,8 @@ void set_map( const struct stat_override *stat );
 
 void remove_map( dev_t dev, ino_t inode );
 
-void load_map( FILE *file );
-void save_map( FILE *file );
+void load_map( std::istream &file );
+void save_map( std::ostream &file );
 
 };
 

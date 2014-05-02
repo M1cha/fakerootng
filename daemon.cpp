@@ -24,6 +24,7 @@
 
 #include <memory>
 #include <iostream>
+#include <fstream>
 
 #include <stdio.h>
 #include <assert.h>
@@ -37,6 +38,9 @@
 #include <sys/ptrace.h>
 #include <fcntl.h>
 #include <unistd.h>
+
+#include <boost/iostreams/device/file_descriptor.hpp>
+#include <boost/iostreams/stream.hpp>
 
 #if HAVE_SYS_PRCTL_H
 #include <sys/prctl.h>
@@ -256,9 +260,14 @@ daemonProcess::daemonProcess( const std::string &path, unique_fd &state_file, un
     state_path( path ), master_socket( std::move(master_fd) ), state_fd( std::move(state_file) ),
     master_thread( pthread_self() )
 {
-    FILE *state_file_handle=fdopen( dup(state_fd.get()), "rt" );
-    //load_map( state_file_handle );
-    fclose(state_file_handle);
+    namespace ios = boost::iostreams;
+
+    ios::file_descriptor_source state_file_handle( state_fd.get(), ios::never_close_handle );
+    ios::stream_buffer<decltype(state_file_handle)> state_streambuf(state_file_handle);
+    std::istream state_stream(&state_streambuf);
+
+    file_list::load_map( state_stream );
+
     recalc_select_mask();
 }
 
@@ -268,14 +277,14 @@ daemonProcess::~daemonProcess()
         std::string tmp_path( state_path );
         tmp_path+=".tmp";
 
-        FILE * new_state = fopen( tmp_path.c_str(), "wt" );
-        if( new_state==NULL ) {
+        std::ofstream new_state( tmp_path.c_str(), std::ios_base::trunc );
+        if( !new_state ) {
             LOG_E() << "Failed to open state file for saving: " << strerror(errno);
 
             return;
         }
-        //save_map( new_state );
-        fclose( new_state );
+        file_list::save_map( new_state );
+        new_state.close();
 
         if( rename( tmp_path.c_str(), state_path.c_str() )<0 ) {
             LOG_E() << "Rename of temporary file failed: " << strerror(errno);

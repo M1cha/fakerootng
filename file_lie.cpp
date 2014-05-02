@@ -25,6 +25,7 @@
 #include <unistd.h>
 
 #include "log.h"
+#include "input_stream.h"
 
 #include "file_lie.h"
 
@@ -146,6 +147,53 @@ struct stat_override *get_map( const struct ::stat &stat, bool create )
     return &iter->second;
 }
 
+void load_map( std::istream &file )
+{
+    struct stat override;
+
+    /* TODO Does it make sense to hold the lock during the entire load process? Then again, there should be
+       no contention during that time...
+     */
+
+    std::skipws(file);
+
+    auto lock_guard( lock() );
+
+    while( file )
+    {
+        file >>
+                "dev=" >> override.st_dev >>
+                ",ino=" >> override.st_ino >>
+                ",mode=" >> std::oct >> override.st_mode >> std::dec >>
+                ",uid=" >> override.st_uid >>
+                ",gid=" >> override.st_gid >>
+                ",rdev=" >> override.st_rdev;
+
+        if( file ) {
+            get_map( override, true );
+        }
+    }
+}
+
+void save_map( std::ostream &file )
+{
+    auto lock_guard( lock() );
+
+    for( auto i : map_hash ) {
+        const stat_override override( i.second );
+        if( !override.transient ) {
+            file <<
+                    "dev=" << override.dev <<
+                    ",ino=" << override.inode <<
+                    ",mode=" <<std::oct << override.mode << std::dec <<
+                    ",uid=" << override.uid <<
+                    ",gid=" << override.gid <<
+                    ",rdev=" << override.dev_id <<
+                    "\n";
+        }
+    }
+}
+
 #if 0
 void remove_map( dev_t dev, ino_t inode )
 {
@@ -155,30 +203,6 @@ void remove_map( dev_t dev, ino_t inode )
         map_hash.erase(i);
 }
 
-void load_map( FILE *file )
-{
-    stat_override override;
-    int params;
-
-    while( (params=fscanf(file, "dev=" DEV_F ", ino=" INODE_F ", mode=%o, uid=%d, gid=%d, rdev=" DEV_F " \n", &override.dev, &override.inode,
-            &override.mode, &override.uid, &override.gid, &override.dev_id ))==6 )
-    {
-        set_map( &override );
-    }
-}
-
-void save_map( FILE *file )
-{
-    for( file_hash::const_iterator i=map_hash.begin(); i!=map_hash.end() ; ++i ) {
-        const struct stat_override *override;
-
-        override=&(i->second);
-        if( !override->transient ) {
-            fprintf( file, "dev=" DEV_F ",ino=" INODE_F ",mode=%o,uid=%d,gid=%d,rdev=" DEV_F "\n", override->dev, override->inode,
-                    override->mode, override->uid, override->gid, override->dev_id );
-        }
-    }
-}
 #endif
 
 };
