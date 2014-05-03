@@ -31,7 +31,6 @@ void flush_log();
 
 #define ASSERT(cond) if(!(cond)) { \
     LOG_F()<<"Assertion failed "<<__FILE__<<":"<<__LINE__<<" at "<<__func__<<": " #cond; \
-    flush_log(); \
     abort(); \
 }
 

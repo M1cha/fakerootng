@@ -10,6 +10,7 @@
 #include "worker_queue.h"
 
 #include "unique_mmap.h"
+#include "log.h"
 
 class daemonProcess;
 
@@ -76,13 +77,13 @@ public:
 
     void setStateNewInstance()
     {
-        assert(m_state==state::INIT);
+        ASSERT(m_state==state::INIT);
         m_state=state::NEW;
     }
 
     void setStateKernel()
     {
-        assert(m_state==state::NONE);
+        ASSERT(m_state==state::NONE);
         m_state=state::KERNEL;
     }
 

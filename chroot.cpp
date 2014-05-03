@@ -17,6 +17,7 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
+#if 0
 #include "config.h"
 
 #include <sys/types.h>
@@ -103,7 +104,7 @@ static std::string chroot_parse_path_recursion( const pid_state *state, char *pa
             dlog("chroot_parse_path: dir part \"%s\" with file part \"..\" has no way to go one up\n", dir_part.c_str());
             dlog(NULL);
 
-            assert( last!=std::string::npos );
+            ASSERT( last!=std::string::npos );
         }
 
         // Eliminate repeats
@@ -319,3 +320,4 @@ bool sys_generic_chroot_support_param2( int sc_num, pid_t pid, pid_state *state 
 
     return true;
 }
+#endif

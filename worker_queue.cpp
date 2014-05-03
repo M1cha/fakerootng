@@ -57,7 +57,7 @@ worker_queue::~worker_queue()
 {
     std::unique_lock<std::mutex> queue_lock( m_queue_lock );
 
-    assert(m_queue.empty());
+    ASSERT(m_queue.empty());
 
     m_terminate=true;
     m_queue_condition.notify_all();
@@ -115,7 +115,7 @@ void worker_queue::worker()
 void worker_queue::schedule_task( worker_task * task )
 {
     // If the following assert fails, we created the queue but did not call "start".
-    assert(m_threads.size()!=0);
+    ASSERT(m_threads.size()!=0);
     std::unique_lock<std::mutex> queue_lock( m_queue_lock );
     m_queue.push_back( std::unique_ptr<worker_task>(task) );
 

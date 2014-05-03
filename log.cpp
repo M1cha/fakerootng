@@ -81,5 +81,5 @@ void close_log()
 
 void flush_log()
 {
-    // TODO Implement
+    logging::core::get()->flush();
 }

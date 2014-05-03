@@ -238,7 +238,7 @@ void daemonCtrl::cmd_attach()
     try {
 #if HAVE_DECL_PR_SET_PTRACER
         // We need to tell the kernel it is okay for the debugger to attach to us
-        assert( daemon_pid!=0 );
+        ASSERT( daemon_pid!=0 );
         prctl( PR_SET_PTRACER, daemon_pid, 0, 0, 0 );
 #endif // HAVE_DECL_PR_SET_PTRACER
         send_std_cmd( CMD_ATTACH, response );
@@ -535,7 +535,7 @@ void daemonProcess::register_thread_socket( int fd )
         std::lock_guard<std::mutex> lockGuard( thread_fds_mutex );
         LOG_D() << "Registering thread socket " << fd;
         std::pair< decltype(thread_fds)::iterator, bool > result = thread_fds.insert( fd );
-        assert(result.second);
+        ASSERT(result.second);
     }
 
     recalc_select_mask();
@@ -553,7 +553,7 @@ void daemonProcess::unregister_thread_socket( int fd )
 
 void daemonProcess::handle_new_connection()
 {
-    assert(master_socket);
+    ASSERT(master_socket);
     unique_fd connection_fd( ::accept( master_socket.get(), NULL, NULL ) );
     if( !connection_fd ) {
         LOG_W() << "Accept failed: " << strerror(errno);

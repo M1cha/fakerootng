@@ -131,7 +131,7 @@ void DebuggerThreads::thread_shutdown()
     m_pthreadRequestSocketsLock.lock();
     auto sockpair = m_pthreadRequestSockets.find( std::this_thread::get_id() );
     m_pthreadRequestSocketsLock.unlock();
-    assert( sockpair!=m_pthreadRequestSockets.end() );
+    ASSERT( sockpair!=m_pthreadRequestSockets.end() );
     
     m_daemonProcess->unregister_thread_socket( sockpair->second.getMainSocket() );
     m_pthreadRequestSockets.erase( sockpair );
@@ -171,12 +171,13 @@ class SyscallHandlerTask : public worker_queue::worker_task
 {
 public:
     SyscallHandlerTask( pid_t pid, pid_state *proc_state, ptlib::WAIT_RET ptlib_status, int wait_status,
-            long parsed_status ) :
+            long parsed_status, syscall_hook *handler = nullptr ) :
         m_pid( pid ),
         m_proc_state( proc_state ),
         m_ptlib_status( ptlib_status ),
         m_wait_status( wait_status ),
-        m_parsed_status( parsed_status )
+        m_parsed_status( parsed_status ),
+        m_handler_function( handler )
     {
     }
 
@@ -186,6 +187,7 @@ private:
     ptlib::WAIT_RET m_ptlib_status;
     int m_wait_status;
     long m_parsed_status;
+    syscall_hook *m_handler_function;
 public:
     virtual void run()
     {
@@ -194,23 +196,10 @@ public:
                 return;
         }
 
-        switch( m_ptlib_status ) {
-        case ptlib::WAIT_RET::SIGNAL:
-            process_signal();
-            break;
-        case ptlib::WAIT_RET::EXIT:
-        case ptlib::WAIT_RET::SIGEXIT:
-            LOG_F() << "BUG - EXIT and SIGEXIT were meant to be handled by the master thread";
-            assert(false);
-            break;
-        case ptlib::WAIT_RET::SYSCALL:
-            process_syscall();
-            break;
-        case ptlib::WAIT_RET::NEWPROCESS:
-            LOG_F() << "Should never happen";
-            assert(false);
-            break;
-        }
+        ASSERT( m_proc_state->get_state() == pid_state::state::NONE );
+        ASSERT( m_ptlib_status == ptlib::WAIT_RET::SYSCALL );
+
+        process_syscall();
     }
 
     static void proxy_call ( const std::function< void() > &worker_function )
@@ -283,7 +272,7 @@ private:
     {
         if( m_ptlib_status!=ptlib::WAIT_RET::SIGNAL || m_parsed_status!=SIGSTOP ) {
             LOG_W() << "Process " << m_pid << " reports with something other than SIGSTOP!";
-            assert(false);
+            ASSERT(false);
             return true;
         }
 
@@ -298,7 +287,7 @@ private:
             // New root process
             m_proc_state->setStateNone();
 
-            assert(ptlib::TRAP_AFTER_EXEC);
+            ASSERT(ptlib::TRAP_AFTER_EXEC);
             // Process is still within the fakeroot-ng code. Let it continue.
             // The process will receive a bogus TRAP after execve
             ptrace_continue(0);
@@ -310,26 +299,15 @@ private:
         return false;
     }
 
-    void process_signal()
-    {
-        assert( m_ptlib_status==ptlib::WAIT_RET::SIGNAL );
-        LOG_T() << "pid " << m_pid << " received signal " << m_parsed_status;
-        ptrace_systrace( m_parsed_status );
-    }
-
     void process_syscall()
     {
-        auto handler = syscalls.find(m_parsed_status);
-        if( handler == syscalls.end() ) {
-            // No specific handler for this syscall
-            LOG_T() << "pid " << m_pid << " system call " << m_parsed_status;
-            m_proc_state->setStateKernel();
-            ptrace_systrace( 0 );
-        } else {
-            LOG_T() << "pid " << m_pid << " system call " << handler->second.name;
-            m_proc_state->start_handling( this );
-            handler->second.func( m_parsed_status, m_pid, m_proc_state);
+        if( !m_handler_function ) {
+            auto handler = syscalls.find(m_parsed_status);
+            ASSERT( handler != syscalls.end() );
+            m_handler_function = &handler->second;
         }
+
+        m_handler_function->func( m_parsed_status, m_pid, m_proc_state);
     }
 };
 
@@ -353,7 +331,7 @@ static void handle_new_process( pid_t parent_id, pid_t child_id )
     if( parent_id==-1 ) {
         child->setStateNewInstance();
     } else {
-        assert( false ); // TODO implement the other case
+        ASSERT( false ); // TODO implement the other case
     }
 }
 
@@ -445,6 +423,11 @@ static pid_state *lookup_state_create( pid_t pid )
     return ret;
 }
 
+static void delete_state( pid_t pid )
+{
+    children.erase(pid);
+}
+
 void init_debugger( daemonProcess *daemonProcess )
 {
     // Initialize the ptlib library
@@ -462,15 +445,62 @@ void shutdown_debugger()
     workQ=nullptr;
 }
 
-static void process_exit( pid_t pid, ptlib::WAIT_RET wait_state, int status, long ret )
+static void process_exit( pid_t pid, pid_state *proc_state, ptlib::WAIT_RET wait_state, int status, long ret )
 {
+    ASSERT(proc_state->get_state()==pid_state::state::NONE || proc_state->get_state()==pid_state::state::KERNEL);
     num_processes--;
     LOG_I() << "pid " << pid << " exit";
+    delete_state( pid );
 }
 
-static void process_syscall( pid_t pid, pid_state *proc_state, ptlib::WAIT_RET wait_state, int status, long ret )
+static void process_signal( pid_t pid, pid_state *proc_state, ptlib::WAIT_RET wait_state, int status, long signal )
 {
-    workQ->schedule_task( new SyscallHandlerTask( pid, proc_state, wait_state, status, ret ) );
+    if( proc_state->get_state()==pid_state::state::INIT || proc_state->get_state()==pid_state::state::NEW ) {
+        workQ->schedule_task( new SyscallHandlerTask( pid, proc_state, wait_state, status, signal ) );
+        return;
+    }
+
+    LOG_T() << "pid " << pid << " received signal " << signal;
+    ptlib::cont( PTRACE_SYSCALL, pid, signal );
+}
+
+static void process_syscall( pid_t pid, pid_state *proc_state, ptlib::WAIT_RET wait_state, int status, long sc_num )
+{
+    LOG_T() << "Process " << pid << " in state " << proc_state->get_state();
+
+    switch( proc_state->get_state() ) {
+    case pid_state::state::INIT:
+    case pid_state::state::NEW:
+        workQ->schedule_task( new SyscallHandlerTask( pid, proc_state, wait_state, status, sc_num ) );
+        break;
+    case pid_state::state::NONE:
+        {
+            auto handler = syscalls.find(sc_num);
+            if( handler == syscalls.end() ) {
+                // No specific handler for this syscall
+                LOG_T() << "pid " << pid << " performing unhandled syscall " << sc_num;
+                proc_state->setStateKernel();
+                ptlib::cont( PTRACE_SYSCALL, pid, 0 );
+            } else {
+                LOG_T() << "pid " << pid << " performing syscall " << handler->second.name;
+                SyscallHandlerTask *task =
+                        new SyscallHandlerTask( pid, proc_state, wait_state, status, sc_num, &handler->second );
+                proc_state->start_handling( task );
+                workQ->schedule_task( task );
+            }
+        }
+        break;
+    case pid_state::state::KERNEL:
+        ptlib::cont( PTRACE_SYSCALL, pid, 0 );
+        proc_state->setStateNone();
+        break;
+    case pid_state::state::WAITING:
+        proc_state->wakeup( wait_state, status, sc_num );
+        break;
+    case pid_state::state::WAKEUP:
+        ASSERT(false);
+        break;
+    }
 }
 
 // ret is the signal (if applicable) or status (if a child exit)
@@ -480,32 +510,20 @@ static void process_sigchld( pid_t pid, ptlib::WAIT_RET wait_state, int status, 
             " status " << HEX_FORMAT(status, 8) << " ret " << HEX_FORMAT(ret, 8);
     pid_state *proc_state=lookup_state_create(pid);
 
-    // Handle process exits synchronously
-    if( wait_state==ptlib::WAIT_RET::EXIT || wait_state==ptlib::WAIT_RET::SIGEXIT ) {
-        process_exit( pid, wait_state, status, ret );
-
-        return;
-    }
-
-    LOG_T() << "Process " << pid << " in state " << proc_state->get_state();
-    switch( proc_state->get_state() ) {
-    case pid_state::state::INIT:
-    case pid_state::state::NEW:
-    case pid_state::state::NONE:
+    switch( wait_state )
+    {
+    case ptlib::WAIT_RET::EXIT:
+    case ptlib::WAIT_RET::SIGEXIT:
+        process_exit( pid, proc_state, wait_state, status, ret );
+        break;
+    case ptlib::WAIT_RET::SIGNAL:
+        process_signal( pid, proc_state, wait_state, status, ret );
+        break;
+    case ptlib::WAIT_RET::SYSCALL:
         process_syscall( pid, proc_state, wait_state, status, ret );
         break;
-    case pid_state::state::KERNEL:
-        if( wait_state==ptlib::WAIT_RET::SYSCALL ) {
-            ptlib::cont( PTRACE_SYSCALL, pid, 0 );
-            proc_state->setStateNone();
-        } else
-            workQ->schedule_task( new SyscallHandlerTask( pid, proc_state, wait_state, status, ret ) );
-        break;
-    case pid_state::state::WAITING:
-        proc_state->wakeup( wait_state, status, ret );
-        break;
-    case pid_state::state::WAKEUP:
-        assert(false);
+    case ptlib::WAIT_RET::NEWPROCESS:
+        ASSERT(false);
         break;
     }
 }
@@ -587,7 +605,7 @@ static void handle_threadreq_ptrace( int fd, const thread_request *req )
 
     if( send( fd, &reply, sizeof(reply), 0 )<0 ) {
         LOG_F() << "Writing to socket " << fd << " failed: " << strerror(errno);
-        assert(false);
+        ASSERT(false);
     }
 }
 
@@ -599,7 +617,7 @@ static void handle_threadreq_proxy( int fd, const thread_request *req )
 
     if( send( fd, &reply, sizeof(reply), 0 )<0 ) {
         LOG_F() << "Writing to socket " << fd << " failed: " << strerror(errno);
-        assert(false);
+        ASSERT(false);
     }
 }
 
@@ -614,7 +632,7 @@ void handle_thread_request( int fd )
         return;
     }
 
-    assert( size==sizeof(request) );
+    ASSERT( size==sizeof(request) );
 
     switch( request.request ) {
     case thread_request::THREADREQ_PTRACE:
@@ -656,7 +674,7 @@ void pid_state::wakeup( ptlib::WAIT_RET wait_state, int status, long parsed_stat
 {
     std::unique_lock<decltype(m_wait_lock)> lock(m_wait_lock);
 
-    assert( m_state==state::WAITING );
+    ASSERT( m_state==state::WAITING );
     m_state=state::WAKEUP;
 
     m_wait_state=wait_state;
@@ -676,7 +694,7 @@ void pid_state::ptrace_syscall_wait( pid_t pid, int signal )
 
 void pid_state::start_handling( SyscallHandlerTask *task )
 {
-    assert( m_task==nullptr );
+    ASSERT( m_task==nullptr );
     m_task = task;
 }
 

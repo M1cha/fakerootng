@@ -452,7 +452,7 @@ int get_syscall( pid_t pid )
     case cpu_types::i386:
         // Need to translate the 32 bit syscalls to 64 bit ones
         syscall = state->registers.orig_rax;
-        assert(syscall>=0);
+        ASSERT(syscall>=0);
         if( (unsigned long)syscall < ARRAY_SIZE(syscall_32_to_64) ) {
             syscall=syscall_32_to_64[syscall];
         } else {
@@ -481,7 +481,7 @@ static int translate_syscall( pid_t pid, int sc_num )
     if( state->type == cpu_types::amd64 )
         return sc_num;
 
-    assert( state->type == cpu_types::i386 );
+    ASSERT( state->type == cpu_types::i386 );
     int sc=sc_num+SYS_X86_32_OFFSET;
 
     if( (sc-SYS_X86_32_OFFSET)!=-1 && sc>=0 && (unsigned int)sc<ARRAY_SIZE(syscall_64_to_32) ) {
