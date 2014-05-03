@@ -25,5 +25,9 @@ Makefile.in
 /docs
 /compile
 
+# Eclipse project files
+/.project
+/.cproject
+
 # Out of tree build directories
 /build_*

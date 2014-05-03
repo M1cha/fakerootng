@@ -671,14 +671,18 @@ void pid_state::ptrace_syscall_wait( pid_t pid, int signal )
 
 void pid_state::start_handling( SyscallHandlerTask *task )
 {
+    assert( m_task==nullptr );
     m_task = task;
 }
 
 void pid_state::end_handling()
 {
-    m_state=state::NONE;
-    m_task->ptrace_systrace(0);
-    m_task=nullptr;
+    SyscallHandlerTask::proxy_call( [this]()
+            {
+                m_task->ptrace_systrace(0);
+                m_state=state::NONE;
+                m_task=nullptr;
+            } );
 }
 
 void pid_state::uses_buffers( pid_t pid )

@@ -57,9 +57,9 @@ private:
     SyscallHandlerTask *m_task = nullptr;
     std::mutex m_wait_lock;
     std::condition_variable m_wait_condition;
-    ptlib::WAIT_RET m_wait_state;
-    int m_wait_status;
-    long m_wait_parsed_status;
+    ptlib::WAIT_RET m_wait_state = ptlib::WAIT_RET::NEWPROCESS;
+    int m_wait_status = 0;
+    long m_wait_parsed_status = 0;
 
 public:
     pid_state();
