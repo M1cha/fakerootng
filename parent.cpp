@@ -468,6 +468,11 @@ static void process_exit( pid_t pid, ptlib::WAIT_RET wait_state, int status, lon
     LOG_I() << "pid " << pid << " exit";
 }
 
+static void process_syscall( pid_t pid, pid_state *proc_state, ptlib::WAIT_RET wait_state, int status, long ret )
+{
+    workQ->schedule_task( new SyscallHandlerTask( pid, proc_state, wait_state, status, ret ) );
+}
+
 // ret is the signal (if applicable) or status (if a child exit)
 static void process_sigchld( pid_t pid, ptlib::WAIT_RET wait_state, int status, long ret )
 {
@@ -487,7 +492,7 @@ static void process_sigchld( pid_t pid, ptlib::WAIT_RET wait_state, int status, 
     case pid_state::state::INIT:
     case pid_state::state::NEW:
     case pid_state::state::NONE:
-        workQ->schedule_task( new SyscallHandlerTask( pid, proc_state, wait_state, status, ret ) );
+        process_syscall( pid, proc_state, wait_state, status, ret );
         break;
     case pid_state::state::KERNEL:
         if( wait_state==ptlib::WAIT_RET::SYSCALL ) {

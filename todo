@@ -5,3 +5,4 @@ generate syscalls - done
 strace
 chroot
 new process support
+handle trivial cases in main thread
