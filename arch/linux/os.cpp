@@ -222,6 +222,14 @@ WAIT_RET reinterpret( WAIT_RET prevstate, pid_t pid, int status, long *ret )
 
 int get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
 {
+    if( std::this_thread::get_id()!=ptlib::linux::master_thread ) {
+        int ret;
+
+        thread_proxy.callback( [=,&ret]() { ret = get_mem( pid, process_ptr, local_ptr, len ); } );
+
+        return ret;
+    }
+
     errno=0;
 
     size_t offset=((int_ptr)process_ptr)%sizeof(long);
@@ -256,6 +264,14 @@ int get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
 
 int set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len )
 {
+    if( std::this_thread::get_id()!=ptlib::linux::master_thread ) {
+        int ret;
+
+        thread_proxy.callback( [=,&ret]() { ret = set_mem( pid, local_ptr, process_ptr, len ); } );
+
+        return ret;
+    }
+
     long buffer;
     size_t offset=((int_ptr)process_ptr)%sizeof(long);
     process_ptr-=offset; // Make the process PTR aligned
@@ -301,6 +317,14 @@ int set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len )
 
 int get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen )
 {
+    if( std::this_thread::get_id()!=ptlib::linux::master_thread ) {
+        int ret;
+
+        thread_proxy.callback( [=,&ret]() { ret = get_string( pid, process_ptr, local_ptr, maxlen ); } );
+
+        return ret;
+    }
+
     /* Are we aligned on the "start" front? */
     unsigned int offset=((unsigned long)process_ptr)%sizeof(long);
     process_ptr-=offset;
