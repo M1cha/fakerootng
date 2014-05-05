@@ -39,6 +39,7 @@
 #include "daemon.h"
 #include "log.h"
 #include "scope_guard.h"
+#include "epoll_event_handlers.h"
 
 #include "syscalls.h"
 
@@ -621,15 +622,17 @@ static void handle_threadreq_proxy( int fd, const thread_request *req )
     }
 }
 
-void handle_thread_request( int fd )
+bool thread_fd::handle()
 {
+    int fd = get_fd();
+
     thread_request request;
 
     ssize_t size = recv( fd, &request, sizeof(request), 0 );
     if( size<0 ) {
         LOG_E() << "thread request recv failed on fd " << fd << ": " << strerror(errno);
 
-        return;
+        return false;
     }
 
     ASSERT( size==sizeof(request) );
@@ -645,6 +648,8 @@ void handle_thread_request( int fd )
         LOG_E() << "Unknown thread request " << request.request << " on fd " << fd;
         break;
     };
+
+    return false;
 }
 
 pid_state::pid_state() :

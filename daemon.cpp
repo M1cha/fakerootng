@@ -34,7 +34,7 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
-#include <sys/select.h>
+#include <sys/epoll.h>
 #include <sys/ptrace.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -248,17 +248,19 @@ void daemonCtrl::cmd_attach()
     }
 }
 
-daemonProcess::daemonProcess( int session_fd ) : max_fd(0), master_thread( pthread_self() )
+daemonProcess::daemonProcess( int session_fd ) :
+    epoll_fd(::epoll_create1(EPOLL_CLOEXEC), "epoll fd creation failed"),
+    master_thread( pthread_self() )
 {
     unique_fd session(session_fd);
     set_client_sock_options(session_fd);
-    FD_ZERO( &file_set );
-    register_session( session );
+    register_session( std::move(session) );
 }
 
-daemonProcess::daemonProcess( const std::string &path, unique_fd &state_file, unique_fd &master_fd ) :
-    state_path( path ), master_socket( std::move(master_fd) ), state_fd( std::move(state_file) ),
-    master_thread( pthread_self() )
+daemonProcess::daemonProcess( const std::string &path, unique_fd &&state_file, unique_fd &&master_fd ) :
+    epoll_fd(::epoll_create1(EPOLL_CLOEXEC), "epoll fd creation failed"), state_path( path ),
+    master_socket( new master_socket_fd( std::move(master_fd), this ) ),
+    state_fd( std::move(state_file) ), master_thread( pthread_self() )
 {
     namespace ios = boost::iostreams;
 
@@ -268,7 +270,7 @@ daemonProcess::daemonProcess( const std::string &path, unique_fd &state_file, un
 
     file_list::load_map( state_stream );
 
-    recalc_select_mask();
+    recalc_select_mask( mask_ops::add, master_socket.get() );
 }
 
 daemonProcess::~daemonProcess()
@@ -293,11 +295,11 @@ daemonProcess::~daemonProcess()
     }
 }
 
-void daemonProcess::register_session( unique_fd &fd )
+void daemonProcess::register_session( unique_fd &&fd )
 {
     LOG_I() << "Added session " << fd.get();
-    session_fds.push_back( std::move(fd) );
-    recalc_select_mask();
+    auto i = session_fds.insert( new session_fd(std::move(fd), this) );
+    recalc_select_mask( mask_ops::add, i.first->get() );
 }
 
 int daemonProcess::create( bool nodetach )
@@ -366,7 +368,8 @@ void daemonProcess::create( const char *state_file_path, bool nodetach )
 
     if( daemonize( nodetach, state_file.get(), master_socket.get() ) ) {
         // We are the daemon
-        daemon_process=std::unique_ptr<daemonProcess>(new daemonProcess( absolute_state_path, state_file, master_socket ));
+        daemon_process=std::unique_ptr<daemonProcess>(
+                new daemonProcess( absolute_state_path, std::move(state_file), std::move(master_socket) ));
         daemon_process->start();
         daemon_process.reset();
         exit(0);
@@ -456,14 +459,8 @@ void daemonProcess::start()
         process_children( this );
         LOG_I() << "Debugger done";
 
-        struct timeval timeout;
-        timeout.tv_sec=GRACE_NEW_CONNECTION_TIMEOUT;
-        timeout.tv_usec=0;
-
-        fd_set read_set=file_set;
-        fd_set except_set=file_set;
-
-        int result=select( max_fd, &read_set, NULL, &except_set, &timeout );
+        epoll_event event;
+        int result=epoll_wait( epoll_fd.get(), &event, 1, GRACE_NEW_CONNECTION_TIMEOUT*1000);
         repeat=(result>0);
     } while(repeat);
 
@@ -474,50 +471,21 @@ void daemonProcess::start()
 
 bool daemonProcess::handle_request( const sigset_t *sigmask, bool existing_children )
 {
-    bool ret=session_fds.size()>0;
-    fd_set read_set=file_set;
-    fd_set except_set=file_set;
-    struct timespec timeout;
-    timeout.tv_sec=0;
-    timeout.tv_nsec=0;
+    bool ret = !session_fds.empty();
+    static const size_t CONCURRENT_EVENTS = 5;
+    epoll_event events[CONCURRENT_EVENTS];
 
     // Wait nothing if we are about to exit, indefinitely if we have reason to stay
-    int result=pselect( max_fd, &read_set, NULL, &except_set, (ret || existing_children) ? NULL : &timeout, sigmask );
+    int result=epoll_pwait( epoll_fd.get(), events, CONCURRENT_EVENTS, (ret || existing_children) ? -1 : 0,
+            sigmask );
     if( result<0 )
         return ret;
 
-    if( master_socket && FD_ISSET( master_socket.get(), &read_set ) ) {
-        result--;
-        handle_new_connection();
-        ret=true;
-    }
-
-    if( result>=0 ) {
-        auto i=session_fds.begin();
-        while( i!=session_fds.end() ) {
-            auto current=i;
-            // handling might erase i, so we make sure to perform the loop increment before everything else
-            ++i;
-
-            try {
-                if( FD_ISSET( current->get(), &read_set ) || FD_ISSET( current->get(), &except_set ) )
-                    handle_connection_request( current );
-            } catch( const std::system_error &except ) {
-                LOG_E() << "Read from session socket " << current->get() << " failed: " << except.what() <<
-                        " (" << except.code() << ")";
-            } catch( const daemonCtrl::terminal_error &except ) {
-                close_session(current);
-            }
-        }
-
-        for( auto i : thread_fds ) {
-            try {
-                if( FD_ISSET( i, &read_set ) )
-                    handle_thread_request( i );
-            } catch( const std::exception &except ) {
-                LOG_E() << "Read from thread socket " << i << " failed: " << except.what();
-            }
-        }
+    ASSERT( size_t(result)<=CONCURRENT_EVENTS );
+    for( int i=0; i<result; ++i ) {
+        boost::intrusive_ptr<epoll_event_handler>
+                ptr( reinterpret_cast<epoll_event_handler *>(events[i].data.ptr) );
+        ret = ptr->handle() || ret;
     }
 
     return ret;
@@ -531,79 +499,93 @@ void daemonProcess::set_client_sock_options( int fd )
 
 void daemonProcess::register_thread_socket( int fd )
 {
+    boost::intrusive_ptr<thread_fd> new_fd( new thread_fd( unique_fd(fd) ) ); 
     {
         std::lock_guard<std::mutex> lockGuard( thread_fds_mutex );
         LOG_D() << "Registering thread socket " << fd;
-        std::pair< decltype(thread_fds)::iterator, bool > result = thread_fds.insert( fd );
-        ASSERT(result.second);
+        thread_fds.push_back( new_fd );
     }
 
-    recalc_select_mask();
+    recalc_select_mask( mask_ops::add, new_fd.get() );
 }
 
 void daemonProcess::unregister_thread_socket( int fd )
 {
+    decltype(thread_fds)::iterator removed;
+
     {
         std::lock_guard<std::mutex> lockGuard( thread_fds_mutex );
-        thread_fds.erase( fd );
+        // A list is a much simpler being than anything else we might use here. The only down side
+        // is that a removal takes O(n). Since we shouldn't have too many threads, and since removal is
+        // rare, we pay that price.
+        removed = std::find_if( thread_fds.begin(), thread_fds.end(),
+                [fd](const boost::intrusive_ptr<thread_fd> &i) { return i->get_fd() == fd; } );
+
+        ASSERT(removed != thread_fds.end());
     }
 
-    recalc_select_mask();
+    recalc_select_mask( mask_ops::remove, removed->get() );
 }
 
-void daemonProcess::handle_new_connection()
+bool master_socket_fd::handle()
 {
-    ASSERT(master_socket);
-    unique_fd connection_fd( ::accept( master_socket.get(), NULL, NULL ) );
+    boost::intrusive_ptr<session_fd> connection_fd(
+            new session_fd(unique_fd( ::accept(get_fd(), NULL, NULL) ), m_daemon) );
     if( !connection_fd ) {
         LOG_W() << "Accept failed: " << strerror(errno);
-        return;
+        return false;
     }
 
-    set_client_sock_options( connection_fd.get() );
+    m_daemon->set_client_sock_options( connection_fd->get_fd() );
 
-    session_fds.push_back(std::move(connection_fd));
+    auto new_fd = m_daemon->session_fds.insert( std::move(connection_fd) );
     LOG_D() << "Received new session, socket #" << connection_fd.get();
-    recalc_select_mask();
+    m_daemon->recalc_select_mask( daemonProcess::mask_ops::add, new_fd.first->get() );
+
+    return true;
 }
 
-void daemonProcess::handle_connection_request( decltype(session_fds)::iterator & element )
+bool session_fd::handle()
 {
+    // Some of the calls in this function remove a pointer to this. In order for our instance not to be deallocated
+    // from under us, we hold a smart pointer to ourselves until the function exits
+    boost::intrusive_ptr<session_fd> _this(this);
+
     ipcMessage<daemonCtrl::request> request;
-    LOG_T() << "Request on session " << element->get();
+    LOG_T() << "Request on session " << get_fd();
 
     try {
-        request.recv( element->get() );
+        request.recv( get_fd() );
 
         switch( request->command ) {
         case daemonCtrl::CMD_RESERVE:
-            handle_cmd_reserve( element, request );
+            handle_cmd_reserve( request );
             break;
         case daemonCtrl::CMD_ATTACH:
-            handle_cmd_attach( element, request );
+            handle_cmd_attach( request );
             break;
         default:
-            LOG_E() << "Session " << element->get() << " sent unknown command " << request->command;
-            close_session(element);
+            LOG_E() << "Session " << get_fd() << " sent unknown command " << request->command;
+            m_daemon->close_session(this);
         };
     } catch( const daemonCtrl::remote_hangup_exception &exception ) {
-        LOG_E() << "Session " << element->get() << " hung up";
-        close_session(element);
+        LOG_E() << "Session " << get_fd() << " hung up";
+        m_daemon->close_session(this);
     }
+
+    return false;
 }
 
-void daemonProcess::handle_cmd_reserve( decltype(session_fds)::iterator & element,
-        const ipcMessage<daemonCtrl::request> &message )
+void session_fd::handle_cmd_reserve( const ipcMessage<daemonCtrl::request> &message )
 {
     LOG_T() << "Reserving";
     ipcMessage<daemonCtrl::response> response;
     response->command=daemonCtrl::CMD_RESERVE;
     response->result=0;
-    response.send(element->get());
+    response.send( get_fd() );
 }
 
-void daemonProcess::handle_cmd_attach( decltype(session_fds)::iterator & element,
-        const ipcMessage<daemonCtrl::request> &message )
+void session_fd::handle_cmd_attach( const ipcMessage<daemonCtrl::request> &message )
 {
     LOG_T() << "Attaching";
     ipcMessage<daemonCtrl::response> response;
@@ -615,44 +597,36 @@ void daemonProcess::handle_cmd_attach( decltype(session_fds)::iterator & element
         response->result=exception.code().value();
     }
 
-    response.send(element->get());
+    response.send( get_fd() );
 }
 
-void daemonProcess::recalc_select_mask()
+void daemonProcess::recalc_select_mask( mask_ops op, epoll_event_handler *handler )
 {
-    std::unique_lock<std::mutex> lockGuard(thread_fds_mutex);
+    ASSERT(epoll_fd);
 
-    FD_ZERO(&file_set);
-    max_fd=-1;
+    int epoll_op;
 
-    for( auto i=session_fds.begin(); i!=session_fds.end(); ++i ) {
-        FD_SET(i->get(), &file_set);
-        if( i->get()>max_fd )
-            max_fd=i->get();
+    switch(op) {
+    case mask_ops::add:
+        epoll_op = EPOLL_CTL_ADD;
+        break;
+    case mask_ops::remove:
+        epoll_op = EPOLL_CTL_DEL;
+        break;
     }
 
-    for( auto i=thread_fds.begin(); i!=thread_fds.end(); ++i ) {
-        FD_SET(*i, &file_set);
-        if( *i>max_fd )
-            max_fd=*i;
-    }
+    epoll_event event;
+    event.events = EPOLLIN;
+    event.data.ptr = handler;
 
-    if( master_socket ) {
-        FD_SET(master_socket.get(), &file_set);
-        if( master_socket.get()>max_fd )
-            max_fd=master_socket.get();
-    }
-
-    max_fd++;
-
-    // The master thread might be performing a pselect right now - wake it up so it gets the new mask.
-    pthread_kill(master_thread, SIGCHLD);
+    if( epoll_ctl(epoll_fd.get(), epoll_op, handler->get_fd(), &event )<0 )
+        throw errno_exception( "Epoll command failed" );
 }
 
-void daemonProcess::close_session( decltype(session_fds)::iterator & element )
+void daemonProcess::close_session(session_fd *element )
 {
-    LOG_I() << "Session " << element->get() << " closed";
+    LOG_I() << "Session " << element->get_fd() << " closed";
+
+    recalc_select_mask( mask_ops::remove, element );
     session_fds.erase(element);
-
-    recalc_select_mask();
 }
