@@ -15,12 +15,21 @@ void flush_log();
 #define LOG_FILE_LOC
 #endif
 
+#ifndef DISABLE_LOGS
 #define LOG_T() BOOST_LOG_TRIVIAL(trace) <<__FILE__<<":"<<__LINE__<<":"
 #define LOG_D() BOOST_LOG_TRIVIAL(debug) LOG_FILE_LOC
 #define LOG_I() BOOST_LOG_TRIVIAL(info) LOG_FILE_LOC
 #define LOG_W() BOOST_LOG_TRIVIAL(warning) LOG_FILE_LOC
 #define LOG_E() BOOST_LOG_TRIVIAL(error) LOG_FILE_LOC
 #define LOG_F() BOOST_LOG_TRIVIAL(fatal) LOG_FILE_LOC
+#else
+#define LOG_T() if(false) std::cerr
+#define LOG_D() if(false) std::cerr
+#define LOG_I() if(false) std::cerr
+#define LOG_W() if(false) std::cerr
+#define LOG_E() if(false) std::cerr
+#define LOG_F() if(false) std::cerr
+#endif
 
 #define HEX_FORMAT(val, width) std::setw(width) << std::setfill('0') << std::hex << (val) << std::setbase(0)
 #define OCT_FORMAT(val, width) std::setw(width) << std::setfill('0') << std::oct << (val) << std::setbase(0)
