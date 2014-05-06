@@ -40,6 +40,7 @@ int main()
     }
 
     munmap( map+PAGE_SIZE, PAGE_SIZE );
+    mprotect( map+2*PAGE_SIZE, PAGE_SIZE, PROT_NONE );
 
     pid_t child = fork();
 
@@ -98,13 +99,45 @@ int main()
 
         strcpy(buffer, "Hello, world\n");
         errno=0;
-        int written = write( mem_fd, buffer, 20 );
-        printf("Writing 20 bytes to legal read only location returned %d (errno %d: %s)\n", written, errno,
+        int written = write( mem_fd, buffer, 13 );
+        printf("Writing 13 bytes to legal read only location returned %d (errno %d: %s)\n", written, errno,
                 strerror(errno));
 
-        printf("Memory contains %c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c\n", map[0], map[1], map[2], map[3],
+        printf("Memory contains %c%c%c%c%c%c%c%c%c%c%c%c%c\n", map[0], map[1], map[2], map[3],
                 map[4], map[5], map[6], map[7], map[8], map[9], map[10], map[11], map[12],
-                map[13], map[14], map[15], map[16], map[17], map[18], map[19] );
+                map[13] );
+    }
+
+    strcpy( buffer, "Long placeholder text to make sure we actually read something" );
+    if( lseek( mem_fd, (size_t)map, SEEK_SET )<0 ) {
+        perror("Seek to legal location failed");
+    } else {
+        printf("Seek to legal location is fine\n");
+
+        errno=0;
+        int numread = read( mem_fd, buffer, 13 );
+        printf("Reading 13 bytes from legal read only location returned %d (errno %d: %s)\n", numread, errno,
+                strerror(errno));
+
+        printf("Memory contains %c%c%c%c%c%c%c%c%c%c%c%c%c\n", map[0], map[1], map[2], map[3],
+                map[4], map[5], map[6], map[7], map[8], map[9], map[10], map[11], map[12],
+                map[13] );
+    }
+
+    strcpy( buffer, "Long placeholder text to make sure we actually read something" );
+    if( lseek( mem_fd, (size_t)map+2*PAGE_SIZE, SEEK_SET )<0 ) {
+        perror("Seek to legal location failed");
+    } else {
+        printf("Seek to legal location is fine\n");
+
+        errno=0;
+        int numread = read( mem_fd, buffer, 13 );
+        printf("Reading 13 bytes from legal unreadable location returned %d (errno %d: %s)\n", numread, errno,
+                strerror(errno));
+
+        printf("Memory contains %c%c%c%c%c%c%c%c%c%c%c%c%c\n", map[0], map[1], map[2], map[3],
+                map[4], map[5], map[6], map[7], map[8], map[9], map[10], map[11], map[12],
+                map[13] );
     }
 
     ptrace(PTRACE_KILL, child);
