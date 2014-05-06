@@ -1,4 +1,4 @@
-noinst_PROGRAMS=fbomb wait_test exercise calc_defaults pwd getsiginfo thread vfork
+noinst_PROGRAMS=fbomb wait_test exercise calc_defaults pwd getsiginfo thread vfork procmem
 
 wait_test_SOURCES=wait_test.cpp
 fbomb_SOURCES=fbomb.cpp
@@ -9,3 +9,4 @@ getsiginfo_SOURCES=getsiginfo.c
 thread_SOURCES=thread.c
 thread_LDFLAGS=-pthread
 vfork_SOURCES=vfork.c
+procmem_SOURCES=procmem.c
