@@ -142,5 +142,17 @@ int main()
 
     ptrace(PTRACE_KILL, child);
 
+    if( stat( "/etc", ((struct stat *)map) )<0 ) {
+        perror("stat to read only memory");
+    }
+
+    if( stat( "/etc", ((struct stat *)map+PAGE_SIZE) )<0 ) {
+        perror("stat to unmapped memory");
+    }
+
+    if( stat( "/etc", ((struct stat *)map+2*PAGE_SIZE) )<0 ) {
+        perror("stat to no access memory");
+    }
+
     return 0;
 }
