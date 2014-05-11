@@ -6,6 +6,8 @@
 #include <sys/types.h>
 #include <assert.h>
 
+#include <semaphore.h>
+
 #include "arch/platform.h"
 #include "worker_queue.h"
 
@@ -138,6 +140,45 @@ struct syscall_hook {
     syscall_hook( sys_callback _func, const char *_name ) : func(_func), name(_name)
     {
     }
+};
+
+class proxy_function {
+public:
+    class node {
+        std::function<void()> function;
+        int error;
+
+        struct node *next;
+
+        sem_t semaphore;
+
+        node( const node &rhs ) = delete;
+        node &operator=( const node &rhs ) = delete;
+
+        friend class proxy_function;
+    public:
+        template <typename T>
+            explicit node( const T &func ) : function(func), error(0), next(nullptr)
+        {
+            sem_init(&semaphore, false, 0);
+        }
+
+        ~node()
+        {
+            ASSERT( next==nullptr );
+            sem_destroy(&semaphore);
+        }
+
+        node *run();
+    };
+
+    node *get_job_list();
+
+    void submit( node *job );
+
+private:
+    node *m_first = nullptr, *m_last = nullptr;
+    std::mutex m_lock;
 };
 
 #endif // PARENT_H

@@ -843,3 +843,51 @@ void pid_state::proxy_close(const char *exception_message, pid_t pid,
 
     verify_syscall_success( pid, ptlib::preferred::OPEN, exception_message );
 }
+
+proxy_function::node *proxy_function::node::run()
+{
+    errno = 0;
+
+    function();
+
+    error = errno;
+
+    node *ret = next;
+    next = nullptr;
+
+    sem_post( &semaphore );
+
+    return ret;
+}
+
+proxy_function::node *proxy_function::get_job_list()
+{
+    std::unique_lock<std::mutex> guard(m_lock);
+
+    node *ret = m_first;
+    m_first = nullptr;
+    m_last = nullptr;
+
+    return ret;
+}
+
+void proxy_function::submit( node *job )
+{
+    {
+        // Scope in the queue's lock
+        std::unique_lock<std::mutex> guard(m_lock);
+
+        if( m_last==nullptr ) {
+            ASSERT( m_first==nullptr );
+            m_first = job;
+            m_last = job;
+        } else {
+            m_last->next = job;
+            m_last = job;
+        }
+    }
+
+    sem_wait( &job->semaphore );
+
+    errno = job->error;
+}
