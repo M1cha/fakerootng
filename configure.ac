@@ -136,14 +136,7 @@ AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
 )
 
 dnl C++ only header check
-AC_CHECK_HEADER([boost/log/trivial.hpp],,[AC_ERROR([boost.log has to be installed])])
-LIBS="$LIBS -lboost_log -lboost_log_setup -lboost_thread -lboost_system -lboost_iostreams"
-CPPFLAGS="$CPPFLAGS -DBOOST_LOG_DYN_LINK"
-AC_LINK_IFELSE(
-  [AC_LANG_PROGRAM([#include <boost/log/trivial.hpp>],
-    [BOOST_LOG_TRIVIAL(trace)<<"Testing";])],
-  ,
-  [AC_MSG_ERROR([Boost log is a required dependency])])
+LIBS="$LIBS -lboost_iostreams"
 
 AC_LANG_POP
 

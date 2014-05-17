@@ -21,6 +21,7 @@
 
 #include <string>
 #include <memory>
+#include <vector>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -112,7 +113,7 @@ int parse_options( int argc, char *argv[] )
         return -1;
     }
 
-    if( ! init_log( logfile, logfile!=NULL, log_flush ) ) {
+    if( ! logging::init( logfile, logfile!=NULL, log_flush ) ) {
         perror( "Failed to create log file" );
 
         return -1;
@@ -186,12 +187,13 @@ static bool sanity_check()
 static int real_perform_child( daemonCtrl &daemon_ctrl, char *argv[] )
 {
     // Don't leave the log file open for the program to come
-    close_log();
+    logging::close();
 
     try {
         daemon_ctrl.cmd_attach();
 
         LOG_I()<<"Parent performing exec";
+        logging::close();
         execvp(argv[0], argv);
 
         perror("Fakeroot-ng exec failed");

@@ -21,6 +21,8 @@
 
 #include "worker_queue.h"
 
+#include <atomic>
+
 #include <assert.h>
 
 #include "log.h"
@@ -78,8 +80,12 @@ void worker_queue::thread_shutdown()
 {
 }
 
+static std::atomic_uint worker_index;
+
 void worker_queue::worker()
 {
+    snprintf( logging::thread_name, sizeof(logging::thread_name), "W%u", ++worker_index );
+
     LOG_I()<<"Worker thread started";
     thread_init();
 

@@ -380,6 +380,7 @@ void daemonProcess::create( const char *state_file_path, bool nodetach )
 
 bool daemonProcess::daemonize( bool nodetach, int skip_fd1, int skip_fd2 )
 {
+    logging::flush();
     pid_t debugger=fork();
     if( debugger<0 )
         throw errno_exception("Failed to create debugger process");
@@ -410,6 +411,10 @@ bool daemonProcess::daemonize( bool nodetach, int skip_fd1, int skip_fd2 )
         _exit(0);
     }
 
+    // Set the logging name
+    logging::process_name = 'F'; // Fakeroot-ng
+    strcpy( logging::thread_name, "D" ); // Debugger
+
 #if STRACE_WAITER
     // Print the debugger's PID and sleep for 10 seconds, allowing external attach with strace before we actually do
     // anything.
@@ -426,7 +431,7 @@ bool daemonProcess::daemonize( bool nodetach, int skip_fd1, int skip_fd2 )
         // Close all open file descriptors except our skip_fds and the debug_log (if it exists)
         // Do not close the file handles, nor chdir to root, if in debug mode. This is so that more debug info
         // come out and that core can be dumped
-        int fd=get_log_fd();
+        int fd=logging::get_fd();
 
         int fd_limit=getdtablesize();
         for( int i=0; i<fd_limit; ++i ) {

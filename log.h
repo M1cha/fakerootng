@@ -1,13 +1,68 @@
 #ifndef LOG_H
 #define LOG_H
 
-#include <boost/log/trivial.hpp>
+#include <iostream>
 #include <iomanip>
+#include <mutex>
 
-bool init_log( const char * file_name, bool enabled, bool flush );
-int get_log_fd();
-void close_log();
-void flush_log();
+namespace logging {
+
+bool init( const char * file_name, bool enabled, bool flush );
+int get_fd();
+void close();
+void flush();
+
+enum class severity {
+    FATAL,
+    ERROR,
+    WARN,
+    INFO,
+    DEBUG,
+    TRACE
+};
+
+static inline std::ostream &operator<< (std::ostream &strm, severity level)
+{
+#define PRODUCE_CASE(level) case severity::level: strm<<#level; break
+    switch( level ) {
+        PRODUCE_CASE(FATAL);
+        PRODUCE_CASE(ERROR);
+        PRODUCE_CASE(WARN);
+        PRODUCE_CASE(INFO);
+        PRODUCE_CASE(DEBUG);
+        PRODUCE_CASE(TRACE);
+    }
+#undef PRODUCE_CASE
+
+    return strm;
+}
+
+extern severity filter_level;
+extern bool auto_flush;
+extern char process_name;
+extern thread_local char thread_name[20];
+extern std::ostream *logstream;
+extern std::mutex log_lock;
+
+class log_cleanup {
+    std::ostream &logstream;
+    bool unconditional_flush;
+    std::lock_guard<std::mutex> guard;
+public:
+    log_cleanup( std::ostream *stream, bool flush ) : logstream(*stream), unconditional_flush(flush),
+        guard(log_lock)
+    {}
+
+    ~log_cleanup()
+    {
+        if(auto_flush || unconditional_flush)
+            logstream<<std::endl;
+        else
+            logstream<<"\n";
+    }
+};
+
+}; // namespace logging
 
 #if 0
 #define LOG_FILE_LOC <<__FILE__<<":"<<__LINE__<<":"
@@ -15,21 +70,16 @@ void flush_log();
 #define LOG_FILE_LOC
 #endif
 
-#ifndef DISABLE_LOGS
-#define LOG_T() BOOST_LOG_TRIVIAL(trace) <<__FILE__<<":"<<__LINE__<<":"
-#define LOG_D() BOOST_LOG_TRIVIAL(debug) LOG_FILE_LOC
-#define LOG_I() BOOST_LOG_TRIVIAL(info) LOG_FILE_LOC
-#define LOG_W() BOOST_LOG_TRIVIAL(warning) LOG_FILE_LOC
-#define LOG_E() BOOST_LOG_TRIVIAL(error) LOG_FILE_LOC
-#define LOG_F() BOOST_LOG_TRIVIAL(fatal) LOG_FILE_LOC
-#else
-#define LOG_T() if(false) std::cerr
-#define LOG_D() if(false) std::cerr
-#define LOG_I() if(false) std::cerr
-#define LOG_W() if(false) std::cerr
-#define LOG_E() if(false) std::cerr
-#define LOG_F() if(false) std::cerr
-#endif
+#define LOG_LEVEL_HELPER(level, flush) if( logging::filter_level>=logging::severity::level ) \
+                                    (logging::log_cleanup(logging::logstream, flush), *logging::logstream) \
+                                            << logging::process_name << ":" << logging::thread_name << ":" \
+                                            << logging::severity::level << ":"
+#define LOG_T() LOG_LEVEL_HELPER(TRACE, false)
+#define LOG_D() LOG_LEVEL_HELPER(DEBUG, false)
+#define LOG_I() LOG_LEVEL_HELPER(INFO, false)
+#define LOG_W() LOG_LEVEL_HELPER(WARN, false)
+#define LOG_E() LOG_LEVEL_HELPER(ERROR, false)
+#define LOG_F() LOG_LEVEL_HELPER(FATAL, true)
 
 #define HEX_FORMAT(val, width) std::setw(width) << std::setfill('0') << std::hex << (val) << std::setbase(0)
 #define OCT_FORMAT(val, width) std::setw(width) << std::setfill('0') << std::oct << (val) << std::setbase(0)

@@ -338,7 +338,7 @@ static void handle_new_process( pid_t parent_id, pid_t child_id )
 
 bool attach_debugger( pid_t child )
 {
-    flush_log();
+    logging::flush();
 
     // Attach a debugger to the child
     if( ptrace(PTRACE_ATTACH, child, 0, 0)!=0 ) {

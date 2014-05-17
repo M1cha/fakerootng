@@ -1,11 +1,5 @@
 #include "config.h"
-
-#include <boost/log/core.hpp>
-#include <boost/log/sinks/sync_frontend.hpp>
-#include <boost/log/sinks/text_ostream_backend.hpp>
-#include <boost/log/utility/setup/common_attributes.hpp>
-#include <boost/log/expressions.hpp>
-#include <boost/log/support/date_time.hpp>
+#include "log.h"
 
 #include <boost/iostreams/device/file_descriptor.hpp>
 #include <boost/iostreams/stream.hpp>
@@ -15,23 +9,25 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include "log.h"
-#include "arch/platform.h"
-
-namespace logging = boost::log;
-namespace expr = boost::log::expressions;
 namespace ios = boost::iostreams;
+
+namespace logging {
 
 static ios::file_descriptor_sink log_file;
 static ios::stream_buffer<decltype(log_file)> log_streambuf;
 
-bool init_log( const char * file_name, bool enabled, bool flush )
+severity filter_level;
+bool auto_flush;
+char process_name;
+thread_local char thread_name[20];
+std::ostream *logstream;
+std::mutex log_lock;
+
+bool init( const char * file_name, bool enabled, bool flush )
 {
     if( !enabled ) {
-        logging::core::get()->set_filter
-                (
-                 logging::trivial::severity >= logging::trivial::fatal
-                );
+        filter_level = severity::FATAL;
+        logstream = &std::cerr;
         return true;
     }
 
@@ -39,34 +35,21 @@ bool init_log( const char * file_name, bool enabled, bool flush )
         int fd = open(file_name, O_WRONLY|O_CREAT|O_APPEND, 0666);
         log_file = std::move( ios::file_descriptor_sink(fd, ios::close_handle) );
 
-        // Allocate a log sink
-        typedef logging::sinks::synchronous_sink< logging::sinks::text_ostream_backend > text_sink;
-        boost::shared_ptr< text_sink > sink = boost::make_shared< text_sink >();
-
         // Add a stream to write log to
         log_streambuf.open(log_file);
-        sink->locked_backend()->add_stream( boost::make_shared<std::ostream>( &log_streambuf ) );
-        sink->locked_backend()->auto_flush(flush);
+        logstream = new std::ostream( &log_streambuf );
+        auto_flush = flush;
 
-        logging::add_common_attributes();
+        filter_level = severity::TRACE;
 
-        sink->set_formatter
-        (
-            expr::stream
-                // << expr::format_date_time< boost::posix_time::ptime >("TimeStamp", "%H%M%S") << ":"
-                << expr::attr< logging::attributes::current_thread_id::value_type >("ThreadID") << ":"
-                << expr::attr< logging::trivial::severity_level >("Severity") << ":"
-                << expr::message
-        );
-
-        // Register the sink in the logging core
-        logging::core::get()->add_sink(sink);
+        process_name = 'C';
+        strcpy( thread_name, "M" );
     }
 
     return true;
 }
 
-int get_log_fd()
+int get_fd()
 {
     if( log_file.is_open() )
         return log_file.handle();
@@ -74,12 +57,15 @@ int get_log_fd()
         return -1;
 }
 
-void close_log()
+void close()
 {
     // TODO Implement
+    flush();
 }
 
-void flush_log()
+void flush()
 {
-    logging::core::get()->flush();
+    std::flush( *logstream );
 }
+
+}; // namespace logging
