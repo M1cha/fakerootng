@@ -12,7 +12,7 @@ bin_PROGRAMS=fakeroot-ng
 man1_MANS = fakeroot-ng.man
 
 fakeroot_ng_SOURCES=main.cpp log.cpp daemon.cpp worker_queue.cpp file_lie.cpp parent.cpp credentials.cpp process.cpp \
-                    file.cpp input_stream.cpp lockless_event.cpp
+                    file.cpp input_stream.cpp lockless_event.cpp proxy_function.cpp
 # ptrace.cpp chroot.cpp
 
 #fakeroot_ng_LDFLAGS=-Larch/$(target_os)/$(target_cpu)

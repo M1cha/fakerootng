@@ -23,8 +23,6 @@
 
 #include <atomic>
 
-#include <assert.h>
-
 #include "log.h"
 
 worker_queue::worker_task::~worker_task()

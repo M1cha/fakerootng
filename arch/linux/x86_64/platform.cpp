@@ -382,7 +382,7 @@ static constexpr size_t MAP_SIZE_32_64 = ARRAY_SIZE(syscall_32_to_64)+SYS_X86_32
 static int syscall_64_to_32[MAP_SIZE_32_64];
 
 /* We init the reverse map when the library loads */
-void init( const callback_initiator &callback )
+void init( callback_initiator callback )
 {
     unsigned int i;
     for( i=0; i<ARRAY_SIZE(syscall_64_to_32); ++i )

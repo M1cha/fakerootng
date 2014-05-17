@@ -22,7 +22,6 @@
 #include <string.h>
 #include <errno.h>
 #include <limits.h>
-#include <assert.h>
 
 #include <unordered_map>
 
@@ -40,6 +39,8 @@
 #include "log.h"
 #include "scope_guard.h"
 #include "epoll_event_handlers.h"
+#include "proxy_function.h"
+#include "lockless_event.h"
 
 #include "syscalls.h"
 
@@ -64,28 +65,6 @@ static bool alarm_happened=false;
 
 class DebuggerThreads : public worker_queue {
 private:
-    class socketpair {
-    private:
-        unique_fd m_mainSocket, m_threadSocket;
-    public:
-        socketpair( int mainSocket, int threadSocket ) :
-            m_mainSocket( mainSocket ), m_threadSocket( threadSocket )
-        {
-            fcntl( m_mainSocket.get(), F_SETFL, O_NONBLOCK );
-        }
-
-        int getThreadSocket() const
-        {
-            return m_threadSocket.get();
-        }
-
-        int getMainSocket() const
-        {
-            return m_mainSocket.get();
-        }
-    };
-    std::mutex m_pthreadRequestSocketsLock;
-    std::unordered_map< std::thread::id, socketpair > m_pthreadRequestSockets;
     daemonProcess *m_daemonProcess;
 public:
     DebuggerThreads( daemonProcess *daemonProcess ) :
@@ -97,76 +76,24 @@ protected:
     virtual void thread_shutdown();
 };
 
-thread_local int t_threadSocket = -1;
-
 void DebuggerThreads::thread_init()
 {
-    int sockets[2];
-
     // Only the main thread should receive the interesting signals
     sigset_t child_signals;
     sigemptyset( &child_signals );
     sigaddset( &child_signals, SIGCHLD );
     sigaddset( &child_signals, SIGALRM );
     pthread_sigmask( SIG_BLOCK, &child_signals, NULL );
-
-    if( ::socketpair( PF_UNIX, SOCK_SEQPACKET, 0, sockets )<0 )
-        throw errno_exception( "Failed to create intra-thread socket pair" );
-
-    m_pthreadRequestSocketsLock.lock();
-    auto insertResult = m_pthreadRequestSockets.insert(
-            decltype(m_pthreadRequestSockets)::value_type(
-                std::this_thread::get_id(), socketpair( sockets[0], sockets[1] )
-                )
-            );
-    m_pthreadRequestSocketsLock.unlock();
-    if( ! insertResult.second )
-        throw detailed_exception( "Failed to add intra-thread socket pair to hash: already exists" );
-
-    m_daemonProcess->register_thread_socket( insertResult.first->second.getMainSocket() );
-    t_threadSocket=insertResult.first->second.getThreadSocket();
 }
 
 void DebuggerThreads::thread_shutdown()
 {
-    m_pthreadRequestSocketsLock.lock();
-    auto sockpair = m_pthreadRequestSockets.find( std::this_thread::get_id() );
-    m_pthreadRequestSocketsLock.unlock();
-    ASSERT( sockpair!=m_pthreadRequestSockets.end() );
-    
-    m_daemonProcess->unregister_thread_socket( sockpair->second.getMainSocket() );
-    m_pthreadRequestSockets.erase( sockpair );
 }
 
+// Classes for handling task distribution
 static std::unique_ptr<DebuggerThreads> workQ;
-
-struct thread_request {
-    enum request_type {
-        THREADREQ_PTRACE,
-        THREADREQ_PROXYCALL,
-    } request;
-
-    union {
-        struct {
-            __ptrace_request request;
-            pid_t pid;
-            void *addr;
-            void *data;
-        } ptrace;
-        struct {
-            const std::function< void() > *worker;
-        } proxy;
-    } u;
-};
-
-struct result_ptrace {
-    long ret;
-    int error;
-};
-
-struct result_generic {
-    int placeholder;
-};
+static proxy_function parent_tasks;
+static lockless_event parent_wakeup;
 
 class SyscallHandlerTask : public worker_queue::worker_task
 {
@@ -203,24 +130,18 @@ public:
         process_syscall();
     }
 
-    static void proxy_call ( const std::function< void() > &worker_function )
+    static void proxy_call_node ( proxy_function::node_base *node )
     {
-        thread_request req;
-        req.request = thread_request::THREADREQ_PROXYCALL;
-        req.u.proxy.worker = &worker_function;
+        parent_tasks.submit( node );
+        parent_wakeup.signal();
+        node->wait_done();
+    }
 
-        ssize_t len = send( t_threadSocket, &req, sizeof(req), 0 );
-        if( len<0 )
-            throw errno_exception( "Send proxy call to master thread failed" );
-
-        result_generic res;
-        len = recv( t_threadSocket, &res, sizeof(res), 0 );
-
-        if( len<0 )
-            throw errno_exception( "Recv proxy call from master thread failed" );
-
-        if( static_cast<size_t>(len)<sizeof(res) )
-            throw detailed_exception( "Short proxy call response from master thread" );
+    template <typename F>
+            static void proxy_call ( const F &function )
+    {
+        proxy_function::node<F> node( function );
+        proxy_call_node(&node);
     }
 
     void ptrace_systrace( int signal )
@@ -235,37 +156,6 @@ public:
                     ptlib::cont( PTRACE_CONT, m_pid, 0 );
                     //SyscallHandlerTask::ptrace( PTRACE_CONT, m_pid, nullptr, nullptr );
                 } );
-    }
-
-    static long ptrace( __ptrace_request request, pid_t pid, void *addr, void *data )
-    {
-        thread_request req;
-        req.request = thread_request::THREADREQ_PTRACE;
-        req.u.ptrace.request = request;
-        req.u.ptrace.pid = pid;
-        req.u.ptrace.addr = addr;
-        req.u.ptrace.data = data;
-
-        ssize_t len = send( t_threadSocket, &req, sizeof(req), 0 );
-        if( len<0 )
-            throw errno_exception( "Send ptrace to master thread failed" );
-
-        result_ptrace res;
-        len = recv( t_threadSocket, &res, sizeof(res), 0 );
-
-        if( len<0 )
-            throw errno_exception( "Recv ptrace from master thread failed" );
-
-        if( static_cast<size_t>(len)<sizeof(res) )
-            throw detailed_exception( "Short ptrace response from master thread" );
-
-        errno = res.error;
-        return res.ret;
-    }
-
-    static long ptrace( __ptrace_request request, pid_t pid, void *addr, long signal )
-    {
-        return ptrace( request, pid, addr, (void *)signal );
     }
 
 private:
@@ -316,6 +206,7 @@ private:
 // Do nothing signal handler for sigchld
 static void sigchld_handler(int signum)
 {
+    parent_wakeup.signal_from_sighandler();
 }
 
 // Signal handler for SIGALARM
@@ -338,10 +229,10 @@ static void handle_new_process( pid_t parent_id, pid_t child_id )
 
 bool attach_debugger( pid_t child )
 {
-    logging::flush();
-
     // Attach a debugger to the child
-    if( ptrace(PTRACE_ATTACH, child, 0, 0)!=0 ) {
+    long ret;
+    SyscallHandlerTask::proxy_call( [&ret, child]() { ret=ptrace(PTRACE_ATTACH, child, 0, 0); } );
+    if( ret!=0 ) {
         LOG_E() << "Could not start trace of process " << child << ": " << strerror(errno);
 
         throw errno_exception( "Could not start trace of process" );
@@ -432,13 +323,26 @@ static void delete_state( pid_t pid )
 void init_debugger( daemonProcess *daemonProcess )
 {
     // Initialize the ptlib library
-    ptlib::init(SyscallHandlerTask::proxy_call);
+    ptlib::init( &SyscallHandlerTask::proxy_call_node );
 
     register_handlers();
     init_globals();
 
     workQ=std::unique_ptr<DebuggerThreads>( new DebuggerThreads(daemonProcess) );
     workQ->start();
+
+    // Prepare the signal masks so we do not lose SIGCHLD while we wait
+    struct sigaction action;
+    memset( &action, 0, sizeof( action ) );
+
+    action.sa_handler=sigchld_handler;
+    sigemptyset( &action.sa_mask );
+    action.sa_flags=0;
+
+    sigaction( SIGCHLD, &action, NULL );
+
+    action.sa_handler=sigalrm_handler;
+    sigaction( SIGALRM, &action, NULL );
 }
 
 void shutdown_debugger()
@@ -531,35 +435,7 @@ static void process_sigchld( pid_t pid, ptlib::WAIT_RET wait_state, int status, 
 
 int process_children( daemonProcess *daemon )
 {
-    LOG_I() << "Begin the process loop";
-
-    // Prepare the signal masks so we do not lose SIGCHLD while we wait
-
-    struct sigaction action;
-    memset( &action, 0, sizeof( action ) );
-
-    action.sa_handler=sigchld_handler;
-    sigemptyset( &action.sa_mask );
-    action.sa_flags=0;
-
-    sigaction( SIGCHLD, &action, NULL );
-
-    action.sa_handler=sigalrm_handler;
-    sigaction( SIGALRM, &action, NULL );
-
-    sigset_t orig_signals, child_signals;
-
-    sigemptyset( &child_signals );
-    sigaddset( &child_signals, SIGCHLD );
-    sigaddset( &child_signals, SIGALRM );
-    sigprocmask( SIG_BLOCK, &child_signals, &orig_signals );
-
-    sigdelset( &orig_signals, SIGCHLD );
-    sigdelset( &orig_signals, SIGALRM );
-
-    bool clientsockets=true;
-
-    while(num_processes>0 || clientsockets) {
+    while(num_processes>0 || daemon->client_sockets()) {
         int status;
         pid_t pid;
         long ret;
@@ -573,7 +449,12 @@ int process_children( daemonProcess *daemon )
             process_sigchld( pid, wait_state, status, ret );
         } else {
             if( errno==EAGAIN || (errno==ECHILD && num_processes==0) ) {
-                clientsockets=daemon->handle_request( &orig_signals, num_processes>0 );
+                // Carry out all pending tasks
+                proxy_function::node_base *node = parent_tasks.get_job_list();
+                while( node!=nullptr ) {
+                    node = node->run();
+                }
+                parent_wakeup.wait();
 
                 // Did an alarm signal arrive?
                 if( alarm_happened ) {
@@ -592,64 +473,6 @@ int process_children( daemonProcess *daemon )
     }
 
     return 0;
-}
-
-static void handle_threadreq_ptrace( int fd, const thread_request *req )
-{
-    errno=0;
-    long res = ptrace( req->u.ptrace.request, req->u.ptrace.pid, req->u.ptrace.addr, req->u.ptrace.data );
-
-    result_ptrace reply = {
-        res,
-        errno
-    };
-
-    if( send( fd, &reply, sizeof(reply), 0 )<0 ) {
-        LOG_F() << "Writing to socket " << fd << " failed: " << strerror(errno);
-        ASSERT(false);
-    }
-}
-
-static void handle_threadreq_proxy( int fd, const thread_request *req )
-{
-    (*req->u.proxy.worker)();
-
-    result_generic reply = { 0 };
-
-    if( send( fd, &reply, sizeof(reply), 0 )<0 ) {
-        LOG_F() << "Writing to socket " << fd << " failed: " << strerror(errno);
-        ASSERT(false);
-    }
-}
-
-bool thread_fd::handle()
-{
-    int fd = get_fd();
-
-    thread_request request;
-
-    ssize_t size = recv( fd, &request, sizeof(request), 0 );
-    if( size<0 ) {
-        LOG_E() << "thread request recv failed on fd " << fd << ": " << strerror(errno);
-
-        return false;
-    }
-
-    ASSERT( size==sizeof(request) );
-
-    switch( request.request ) {
-    case thread_request::THREADREQ_PTRACE:
-        handle_threadreq_ptrace( fd, &request );
-        break;
-    case thread_request::THREADREQ_PROXYCALL:
-        handle_threadreq_proxy( fd, &request );
-        break;
-    default:
-        LOG_E() << "Unknown thread request " << request.request << " on fd " << fd;
-        break;
-    };
-
-    return false;
 }
 
 pid_state::pid_state() :
@@ -842,52 +665,4 @@ void pid_state::proxy_close(const char *exception_message, pid_t pid,
     ptrace_syscall_wait( pid, 0 );
 
     verify_syscall_success( pid, ptlib::preferred::OPEN, exception_message );
-}
-
-proxy_function::node *proxy_function::node::run()
-{
-    errno = 0;
-
-    function();
-
-    error = errno;
-
-    node *ret = next;
-    next = nullptr;
-
-    sem_post( &semaphore );
-
-    return ret;
-}
-
-proxy_function::node *proxy_function::get_job_list()
-{
-    std::unique_lock<std::mutex> guard(m_lock);
-
-    node *ret = m_first;
-    m_first = nullptr;
-    m_last = nullptr;
-
-    return ret;
-}
-
-void proxy_function::submit( node *job )
-{
-    {
-        // Scope in the queue's lock
-        std::unique_lock<std::mutex> guard(m_lock);
-
-        if( m_last==nullptr ) {
-            ASSERT( m_first==nullptr );
-            m_first = job;
-            m_last = job;
-        } else {
-            m_last->next = job;
-            m_last = job;
-        }
-    }
-
-    sem_wait( &job->semaphore );
-
-    errno = job->error;
 }

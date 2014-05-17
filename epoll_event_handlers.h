@@ -58,30 +58,20 @@ private:
     unique_fd m_fd;
 };
 
-class thread_fd : public epoll_event_handler
-{
-public:
-    explicit thread_fd( unique_fd &&fd ) : epoll_event_handler( std::move(fd) )
-    {
-    }
-
-    virtual bool handle();
-};
-
-class daemonProcess;
+class socket_handler;
 
 class master_socket_fd : public epoll_event_handler
 {
 public:
-    explicit master_socket_fd( unique_fd &&fd, daemonProcess *daemon ) :
-        epoll_event_handler( std::move(fd) ), m_daemon( daemon )
+    explicit master_socket_fd( unique_fd &&fd, socket_handler *handler ) :
+        epoll_event_handler( std::move(fd) ), m_handler( handler )
     {
     }
 
     virtual bool handle();
 
 private:
-    daemonProcess *m_daemon;
+    socket_handler *m_handler;
 };
 
 #endif // EPOLL_EVENT_HANDLERS_H

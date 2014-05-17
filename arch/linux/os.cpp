@@ -60,12 +60,15 @@ static class {
     callback_initiator m_callback;
 
 public:
-    void callback( std::function<void ()> cb_function ) const
+    template <typename F>
+    void callback( const F &cb_function ) const
     {
         if( std::this_thread::get_id()==ptlib::linux::master_thread )
             cb_function();
-        else
-            m_callback( cb_function );
+        else {
+            proxy_function::node<F> node(cb_function);
+            m_callback( &node );
+        }
     }
 
     void set_callback( const callback_initiator &cb_init )
@@ -105,7 +108,7 @@ platform::process_state *get_process_state( pid_t pid, bool create )
     return ret;
 }
 
-void init( const callback_initiator &callback )
+void init( callback_initiator callback )
 {
     thread_proxy.set_callback( callback );
     master_thread = std::this_thread::get_id();

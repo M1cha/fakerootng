@@ -27,12 +27,14 @@ lockless_event::lockless_event() : m_sync_var(UNSIGNALLED)
 
 void lockless_event::wait()
 {
-    int oldstate = m_sync_var.exchange(WAITING);
-    if( oldstate==UNSIGNALLED ) {
-        if( futex(&m_sync_var, FUTEX_WAIT_PRIVATE, WAITING )<0 )
-        {
-            if( errno!=EINTR && errno!=EAGAIN ) {
-                throw errno_exception("futex wait failed");
+    if( m_sync_var==UNSIGNALLED ) {
+        int oldstate = m_sync_var.exchange(WAITING);
+        if( oldstate==UNSIGNALLED ) {
+            if( futex(&m_sync_var, FUTEX_WAIT_PRIVATE, WAITING )<0 )
+            {
+                if( errno!=EINTR && errno!=EAGAIN ) {
+                    throw errno_exception("futex wait failed");
+                }
             }
         }
     }

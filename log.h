@@ -64,12 +64,6 @@ public:
 
 }; // namespace logging
 
-#if 0
-#define LOG_FILE_LOC <<__FILE__<<":"<<__LINE__<<":"
-#else
-#define LOG_FILE_LOC
-#endif
-
 #define LOG_LEVEL_HELPER(level, flush) if( logging::filter_level>=logging::severity::level ) \
                                     (logging::log_cleanup(logging::logstream, flush), *logging::logstream) \
                                             << logging::process_name << ":" << logging::thread_name << ":" \

@@ -19,7 +19,7 @@ namespace platform {
 namespace linux {
 platform::process_state *get_process_state( pid_t pid, bool create = true );
 
-void init( const callback_initiator &callback );
+void init( callback_initiator callback );
 void cont( __ptrace_request request, pid_t pid, int signal );
 void prepare( pid_t pid );
 bool wait( pid_t *pid, int *status, extra_data *data, int async );

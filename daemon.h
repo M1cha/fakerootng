@@ -9,6 +9,7 @@
 #include <string>
 #include <unordered_set>
 #include <mutex>
+#include <thread>
 
 class daemonProcess;
 class session_fd;
@@ -19,7 +20,7 @@ class daemonCtrl {
     daemonCtrl( const daemonCtrl & )=delete;
     daemonCtrl & operator=( const daemonCtrl & )=delete;
 
-    friend class daemonProcess;
+    friend class socket_handler;
     friend class session_fd;
 
     enum commands {
@@ -77,42 +78,59 @@ private:
 class session_fd : public epoll_event_handler
 {
 public:
-    explicit session_fd( unique_fd &&fd, daemonProcess *daemon ) :
-        epoll_event_handler( std::move(fd) ), m_daemon( daemon )
+    explicit session_fd( unique_fd &&fd, socket_handler *handler ) :
+        epoll_event_handler( std::move(fd) ), m_handler( handler )
     {
     }
 
     virtual bool handle();
 
 private:
-    daemonProcess *m_daemon;
+    socket_handler *m_handler;
 
     void handle_cmd_reserve( const ipcMessage<daemonCtrl::request> &message );
     void handle_cmd_attach( const ipcMessage<daemonCtrl::request> &message );
 };
 
-class daemonProcess {
+class socket_handler {
+    socket_handler( const socket_handler &rhs ) = delete;
+    socket_handler &operator=( const socket_handler &rhs ) = delete;
+public:
+    explicit socket_handler( int session_fd ); // Constructor for non-persistent daemon
+    // Constructor for persistent daemon
+    socket_handler( const std::string &path, unique_fd &&state_file, unique_fd &&master_fd );
+
+    void start();
+
+    bool test_shutdown( int timeout );
+    bool client_sockets() const;
+private:
     friend class master_socket_fd;
     friend class session_fd;
-
-    daemonProcess( const daemonProcess & )=delete;
-    daemonProcess & operator=( const daemonProcess & )=delete;
+    size_t num_clients = 0;
 
     std::unordered_set<boost::intrusive_ptr<session_fd>, epoll_event_handler::hash> session_fds;
     unique_fd epoll_fd;
-    std::list<boost::intrusive_ptr<thread_fd>> thread_fds;
     std::mutex thread_fds_mutex;
 
-    std::string state_path;
     boost::intrusive_ptr<master_socket_fd> master_socket;
-    unique_fd state_fd;
-    pthread_t master_thread;
 
-    static bool daemonize( bool nodetach, int skip_fd1=-1, int skip_fd2=-1 );
+    bool handle_request( const sigset_t *sigmask );
+    static void set_client_sock_options( int fd );
 
-    explicit daemonProcess( int session_fd ); // Constructor for non-persistent daemon
-    // Constructor for persistent daemon
-    daemonProcess( const std::string &path, unique_fd &&state_file, unique_fd &&master_fd );
+    enum class mask_ops { add, remove };
+
+    void register_session( unique_fd &&fd );
+    void unregister_session( int fd );
+    void recalc_select_mask( mask_ops op, epoll_event_handler *handler );
+    void close_session( session_fd *element );
+    // Report when the last client closed connection, cause the session thread to close
+    void report_last_client();
+};
+
+class daemonProcess {
+    daemonProcess( const daemonProcess & )=delete;
+    daemonProcess & operator=( const daemonProcess & )=delete;
 
 public:
     ~daemonProcess();
@@ -121,19 +139,24 @@ public:
     static int create( bool nodetach );
     static void create( const char *state_file_path, bool nodetach );
 
-    bool handle_request( const sigset_t *sigmask, bool existing_children );
-    static void set_client_sock_options( int fd );
-
-    void register_thread_socket( int fd );
-    void unregister_thread_socket( int fd );
+    // Check whether there are any connected pre-exec clients
+    bool client_sockets() const
+    {
+        return sock_handler && sock_handler->client_sockets();
+    }
 private:
-    enum class mask_ops { add, remove };
+    std::string state_path;
+    unique_fd state_fd;
+    std::unique_ptr<socket_handler> sock_handler;
+    std::thread sock_handler_thread;
+
+    static bool daemonize( bool nodetach, int skip_fd1=-1, int skip_fd2=-1 );
+
+    explicit daemonProcess( int session_fd ); // Constructor for non-persistent daemon
+    // Constructor for persistent daemon
+    daemonProcess( const std::string &path, unique_fd &&state_file, unique_fd &&master_fd );
 
     void start();
-    void register_session( unique_fd &&fd );
-    void unregister_session( int fd );
-    void recalc_select_mask( mask_ops op, epoll_event_handler *handler );
-    void close_session( session_fd *element );
 };
 
 #endif // DAEMON_H

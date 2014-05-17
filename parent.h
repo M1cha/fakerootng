@@ -142,43 +142,4 @@ struct syscall_hook {
     }
 };
 
-class proxy_function {
-public:
-    class node {
-        std::function<void()> function;
-        int error;
-
-        struct node *next;
-
-        sem_t semaphore;
-
-        node( const node &rhs ) = delete;
-        node &operator=( const node &rhs ) = delete;
-
-        friend class proxy_function;
-    public:
-        template <typename T>
-            explicit node( const T &func ) : function(func), error(0), next(nullptr)
-        {
-            sem_init(&semaphore, false, 0);
-        }
-
-        ~node()
-        {
-            ASSERT( next==nullptr );
-            sem_destroy(&semaphore);
-        }
-
-        node *run();
-    };
-
-    node *get_job_list();
-
-    void submit( node *job );
-
-private:
-    node *m_first = nullptr, *m_last = nullptr;
-    std::mutex m_lock;
-};
-
 #endif // PARENT_H

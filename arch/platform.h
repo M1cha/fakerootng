@@ -20,6 +20,8 @@
 #include <functional>
 #include <iostream>
 
+#include "../proxy_function.h"
+
 /* Platform specific definitinos go in a special file */
 #include "platform_specific.h"
 
@@ -30,7 +32,7 @@ namespace ptlib {
 
 /* Functions for abstracting the details of registers and memory layout for interpreting ptrace stacks and memory */
 
-typedef std::function < void( const std::function< void () > &thread_callback ) > callback_initiator;
+typedef void (*callback_initiator)( proxy_function::node_base *callback_node );
 /* Called once before any other call to ptlib functions.
    callback - a function returning void. It is used to proxy execute arbitrary code inside the debugger thread
         callback has the following parameters:
@@ -44,7 +46,7 @@ typedef std::function < void( const std::function< void () > &thread_callback ) 
   @param callback Callback function for trampoline code - should execute provided code in main thread
   @see callback_initiator
  */
-void init( const callback_initiator &callback );
+void init( callback_initiator callback );
 
 /**
   @brief Continue (or detach) a halted process.

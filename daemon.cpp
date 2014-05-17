@@ -25,6 +25,7 @@
 #include <memory>
 #include <iostream>
 #include <fstream>
+#include <functional>
 
 #include <stdio.h>
 #include <assert.h>
@@ -248,19 +249,135 @@ void daemonCtrl::cmd_attach()
     }
 }
 
-daemonProcess::daemonProcess( int session_fd ) :
-    epoll_fd(::epoll_create1(EPOLL_CLOEXEC), "epoll fd creation failed"),
-    master_thread( pthread_self() )
+socket_handler::socket_handler( int session_fd ) :
+    epoll_fd(::epoll_create1(EPOLL_CLOEXEC), "epoll fd creation failed")
 {
     unique_fd session(session_fd);
     set_client_sock_options(session_fd);
     register_session( std::move(session) );
 }
 
+socket_handler::socket_handler( const std::string &path, unique_fd &&state_file, unique_fd &&master_fd ) :
+    epoll_fd(::epoll_create1(EPOLL_CLOEXEC), "epoll fd creation failed"),
+    master_socket( new master_socket_fd( std::move(master_fd), this ) )
+{
+    recalc_select_mask( mask_ops::add, master_socket.get() );
+}
+
+void socket_handler::start()
+{
+    strcpy( logging::thread_name, "SOCK" );
+    LOG_I() << "Socket handling thread started";
+    while( handle_request( NULL ) || master_socket )
+        ;
+    LOG_I() << "Socket handling thread finished";
+
+    ASSERT(num_clients == 0);
+}
+
+bool socket_handler::test_shutdown( int timeout )
+{
+    epoll_event event;
+    int result=epoll_wait( epoll_fd.get(), &event, 1, timeout);
+    return result>0;
+}
+
+bool socket_handler::client_sockets() const
+{
+    return num_clients>0;
+}
+
+bool socket_handler::handle_request( const sigset_t *sigmask )
+{
+    bool ret = !session_fds.empty();
+    static const size_t CONCURRENT_EVENTS = 5;
+    epoll_event events[CONCURRENT_EVENTS];
+
+    // Wait nothing if we are about to exit, indefinitely if we have reason to stay
+    int result=epoll_pwait( epoll_fd.get(), events, CONCURRENT_EVENTS, -1, sigmask );
+    if( result<0 )
+        return ret;
+
+    ASSERT( size_t(result)<=CONCURRENT_EVENTS );
+    for( int i=0; i<result; ++i ) {
+        boost::intrusive_ptr<epoll_event_handler>
+                ptr( reinterpret_cast<epoll_event_handler *>(events[i].data.ptr) );
+        ret = ptr->handle() || ret;
+    }
+
+    return ret;
+}
+
+void socket_handler::set_client_sock_options( int fd )
+{
+    daemonCtrl::set_client_sock_options(fd);
+    fcntl( fd, F_SETFL, O_NONBLOCK );
+}
+
+void socket_handler::register_session( unique_fd &&fd )
+{
+    LOG_I() << "Added session " << fd.get();
+
+    set_client_sock_options( fd.get() );
+
+    auto i = session_fds.insert( new session_fd(std::move(fd), this) );
+    recalc_select_mask( mask_ops::add, i.first->get() );
+
+    num_clients++;
+}
+
+void socket_handler::recalc_select_mask( mask_ops op, epoll_event_handler *handler )
+{
+    ASSERT(epoll_fd);
+
+    int epoll_op;
+
+    switch(op) {
+    case mask_ops::add:
+        epoll_op = EPOLL_CTL_ADD;
+        break;
+    case mask_ops::remove:
+        epoll_op = EPOLL_CTL_DEL;
+        break;
+    }
+
+    epoll_event event;
+    event.events = EPOLLIN;
+    event.data.ptr = handler;
+
+    if( epoll_ctl(epoll_fd.get(), epoll_op, handler->get_fd(), &event )<0 )
+        throw errno_exception( "Epoll command failed" );
+}
+
+void socket_handler::close_session(session_fd *element )
+{
+    LOG_I() << "Session " << element->get_fd() << " closed";
+
+    recalc_select_mask( mask_ops::remove, element );
+    session_fds.erase(element);
+
+    ASSERT(num_clients>0);
+    num_clients--;
+
+    if(num_clients == 0 && !master_socket)
+        report_last_client();
+}
+
+void socket_handler::report_last_client()
+{
+    // TODO implement
+}
+
+daemonProcess::daemonProcess( int session_fd ) :
+    sock_handler( new socket_handler( session_fd ) ),
+    sock_handler_thread( std::mem_fn( &socket_handler::start ), sock_handler.get() )
+{
+}
+
 daemonProcess::daemonProcess( const std::string &path, unique_fd &&state_file, unique_fd &&master_fd ) :
-    epoll_fd(::epoll_create1(EPOLL_CLOEXEC), "epoll fd creation failed"), state_path( path ),
-    master_socket( new master_socket_fd( std::move(master_fd), this ) ),
-    state_fd( std::move(state_file) ), master_thread( pthread_self() )
+    state_path( path ), state_fd( std::move(state_file) ),
+    sock_handler( new socket_handler( path, std::move(state_file), std::move(master_fd) ) ),
+    sock_handler_thread( std::mem_fn( &socket_handler::start ), sock_handler.get() )
 {
     namespace ios = boost::iostreams;
 
@@ -269,8 +386,6 @@ daemonProcess::daemonProcess( const std::string &path, unique_fd &&state_file, u
     std::istream state_stream(&state_streambuf);
 
     file_list::load_map( state_stream );
-
-    recalc_select_mask( mask_ops::add, master_socket.get() );
 }
 
 daemonProcess::~daemonProcess()
@@ -293,13 +408,6 @@ daemonProcess::~daemonProcess()
         }
         unlink((state_path+".run").c_str());
     }
-}
-
-void daemonProcess::register_session( unique_fd &&fd )
-{
-    LOG_I() << "Added session " << fd.get();
-    auto i = session_fds.insert( new session_fd(std::move(fd), this) );
-    recalc_select_mask( mask_ops::add, i.first->get() );
 }
 
 int daemonProcess::create( bool nodetach )
@@ -458,94 +566,27 @@ void daemonProcess::start()
 {
     init_debugger( this );
 
-    bool repeat = false;
     do {
         LOG_I() << "Debugger init loop";
         process_children( this );
         LOG_I() << "Debugger done";
-
-        epoll_event event;
-        int result=epoll_wait( epoll_fd.get(), &event, 1, GRACE_NEW_CONNECTION_TIMEOUT*1000);
-        repeat=(result>0);
-    } while(repeat);
+    } while( sock_handler && sock_handler->test_shutdown(GRACE_NEW_CONNECTION_TIMEOUT*1000) );
 
     shutdown_debugger();
 
     LOG_I() << "Daemon done";
 }
 
-bool daemonProcess::handle_request( const sigset_t *sigmask, bool existing_children )
-{
-    bool ret = !session_fds.empty();
-    static const size_t CONCURRENT_EVENTS = 5;
-    epoll_event events[CONCURRENT_EVENTS];
-
-    // Wait nothing if we are about to exit, indefinitely if we have reason to stay
-    int result=epoll_pwait( epoll_fd.get(), events, CONCURRENT_EVENTS, (ret || existing_children) ? -1 : 0,
-            sigmask );
-    if( result<0 )
-        return ret;
-
-    ASSERT( size_t(result)<=CONCURRENT_EVENTS );
-    for( int i=0; i<result; ++i ) {
-        boost::intrusive_ptr<epoll_event_handler>
-                ptr( reinterpret_cast<epoll_event_handler *>(events[i].data.ptr) );
-        ret = ptr->handle() || ret;
-    }
-
-    return ret;
-}
-
-void daemonProcess::set_client_sock_options( int fd )
-{
-    daemonCtrl::set_client_sock_options(fd);
-    fcntl( fd, F_SETFL, O_NONBLOCK );
-}
-
-void daemonProcess::register_thread_socket( int fd )
-{
-    boost::intrusive_ptr<thread_fd> new_fd( new thread_fd( unique_fd(fd) ) ); 
-    {
-        std::lock_guard<std::mutex> lockGuard( thread_fds_mutex );
-        LOG_D() << "Registering thread socket " << fd;
-        thread_fds.push_back( new_fd );
-    }
-
-    recalc_select_mask( mask_ops::add, new_fd.get() );
-}
-
-void daemonProcess::unregister_thread_socket( int fd )
-{
-    decltype(thread_fds)::iterator removed;
-
-    {
-        std::lock_guard<std::mutex> lockGuard( thread_fds_mutex );
-        // A list is a much simpler being than anything else we might use here. The only down side
-        // is that a removal takes O(n). Since we shouldn't have too many threads, and since removal is
-        // rare, we pay that price.
-        removed = std::find_if( thread_fds.begin(), thread_fds.end(),
-                [fd](const boost::intrusive_ptr<thread_fd> &i) { return i->get_fd() == fd; } );
-
-        ASSERT(removed != thread_fds.end());
-    }
-
-    recalc_select_mask( mask_ops::remove, removed->get() );
-}
-
 bool master_socket_fd::handle()
 {
-    boost::intrusive_ptr<session_fd> connection_fd(
-            new session_fd(unique_fd( ::accept(get_fd(), NULL, NULL) ), m_daemon) );
+    unique_fd connection_fd( ::accept(get_fd(), NULL, NULL) );
     if( !connection_fd ) {
         LOG_W() << "Accept failed: " << strerror(errno);
         return false;
     }
 
-    m_daemon->set_client_sock_options( connection_fd->get_fd() );
-
-    auto new_fd = m_daemon->session_fds.insert( std::move(connection_fd) );
     LOG_D() << "Received new session, socket #" << connection_fd.get();
-    m_daemon->recalc_select_mask( daemonProcess::mask_ops::add, new_fd.first->get() );
+    m_handler->register_session( std::move(connection_fd) );
 
     return true;
 }
@@ -571,11 +612,12 @@ bool session_fd::handle()
             break;
         default:
             LOG_E() << "Session " << get_fd() << " sent unknown command " << request->command;
-            m_daemon->close_session(this);
+            m_handler->close_session(this);
+            break;
         };
     } catch( const daemonCtrl::remote_hangup_exception &exception ) {
         LOG_E() << "Session " << get_fd() << " hung up";
-        m_daemon->close_session(this);
+        m_handler->close_session(this);
     }
 
     return false;
@@ -605,33 +647,3 @@ void session_fd::handle_cmd_attach( const ipcMessage<daemonCtrl::request> &messa
     response.send( get_fd() );
 }
 
-void daemonProcess::recalc_select_mask( mask_ops op, epoll_event_handler *handler )
-{
-    ASSERT(epoll_fd);
-
-    int epoll_op;
-
-    switch(op) {
-    case mask_ops::add:
-        epoll_op = EPOLL_CTL_ADD;
-        break;
-    case mask_ops::remove:
-        epoll_op = EPOLL_CTL_DEL;
-        break;
-    }
-
-    epoll_event event;
-    event.events = EPOLLIN;
-    event.data.ptr = handler;
-
-    if( epoll_ctl(epoll_fd.get(), epoll_op, handler->get_fd(), &event )<0 )
-        throw errno_exception( "Epoll command failed" );
-}
-
-void daemonProcess::close_session(session_fd *element )
-{
-    LOG_I() << "Session " << element->get_fd() << " closed";
-
-    recalc_select_mask( mask_ops::remove, element );
-    session_fds.erase(element);
-}

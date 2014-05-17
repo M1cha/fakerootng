@@ -257,7 +257,7 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
             // Let's see what was asked for
             pid_t wait_pid=(pid_t)state->context_state[0];
             std::list<pid_state::wait_state>::iterator child=state->waiting_signals.begin();
-            assert(child!=state->waiting_signals.end());
+            ASSERT(child!=state->waiting_signals.end());
 
             pid_state *child_state=NULL;
 
@@ -269,7 +269,7 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
                     if( (++child)!=state->waiting_signals.end() )
                     {
                         child_state=lookup_state(child->pid());
-                        assert(child_state!=NULL);
+                        ASSERT(child_state!=NULL);
                     }
                 }
             } else if( wait_pid==-1 ) {
@@ -282,7 +282,7 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
                     if( (++child)!=state->waiting_signals.end() )
                     {
                         child_state=lookup_state(child->pid());
-                        assert(child_state!=NULL);
+                        ASSERT(child_state!=NULL);
                     }
                 }
             } else {
@@ -295,10 +295,10 @@ static bool real_wait4( int sc_num, pid_t pid, pid_state *state, pid_t param1, i
                 // We have what to report
                 if( child_state==NULL ) {
                     child_state=lookup_state(child->pid());
-                    assert(child_state!=NULL);
+                    ASSERT(child_state!=NULL);
                 }
 
-                assert( child_state->state!=pid_state::INIT );
+                ASSERT( child_state->state!=pid_state::INIT );
                
                 if( child_state->state==pid_state::ZOMBIE ) {
                     // We can dispense with the pid entry
