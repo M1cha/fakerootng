@@ -16,6 +16,7 @@ class lockless_event {
     };
 
     std::atomic_int m_sync_var;
+    unsigned spurious_wakeup_count = 0;
 
     lockless_event( const lockless_event &rhs ) = delete;
     lockless_event &operator=( const lockless_event &rhs ) = delete;

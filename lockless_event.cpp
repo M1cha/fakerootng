@@ -27,7 +27,9 @@ lockless_event::lockless_event() : m_sync_var(UNSIGNALLED)
 
 void lockless_event::wait()
 {
-    if( m_sync_var==UNSIGNALLED ) {
+    if( ++spurious_wakeup_count >= 50 ) {
+        spurious_wakeup_count = 0;
+
         int oldstate = m_sync_var.exchange(WAITING);
         if( oldstate==UNSIGNALLED ) {
             if( futex(&m_sync_var, FUTEX_WAIT_PRIVATE, WAITING )<0 )
@@ -39,7 +41,9 @@ void lockless_event::wait()
         }
     }
 
-    m_sync_var = UNSIGNALLED;
+    int oldstate = m_sync_var.exchange(UNSIGNALLED);
+    if( oldstate!=UNSIGNALLED )
+        spurious_wakeup_count = 0; // This wakeup isn't spurious
 }
 
 
@@ -53,5 +57,5 @@ void lockless_event::signal()
 
 void lockless_event::signal_from_sighandler()
 {
-    m_sync_var = SIGNALLED;
+    signal();
 }
