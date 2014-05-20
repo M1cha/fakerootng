@@ -419,8 +419,8 @@ int daemonProcess::create( bool nodetach )
     try {
         if( daemonize( nodetach, sockets[0] ) ) {
             // We are the daemon
+            close(sockets[1]); // Probably closed already by daemonize, but better safe than sorry
             daemon_process=std::unique_ptr<daemonProcess>(new daemonProcess(sockets[0]));
-            close(sockets[1]);
             daemon_process->start();
             daemon_process.reset();
             exit(0);

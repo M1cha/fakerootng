@@ -38,9 +38,15 @@ public:
     // Destructor
     ~unique_fd()
     {
-        if( _fd>=0 )
-            if( close(_fd)<0 )
-                LOG_E() << "Close failed: " << strerror(errno);
+        if( _fd>=0 ) {
+            if( close(_fd)<0 ) {
+                LOG_E() << "Close failed fd " << _fd << ": " << strerror(errno);
+                // It is generally considered bad to throw from a destructor, as we might be inside stack unwind,
+                // in which case the program will terminate. It is, however, better to risk double exception than to
+                // let crucial errors go unreported.
+                throw errno_exception("Close failed");
+            }
+        }
     }
 
     int get() const { return _fd; }
