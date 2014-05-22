@@ -83,6 +83,9 @@ void DebuggerThreads::thread_init()
     sigemptyset( &child_signals );
     sigaddset( &child_signals, SIGCHLD );
     sigaddset( &child_signals, SIGALRM );
+    sigaddset( &child_signals, SIGHUP );
+    sigaddset( &child_signals, SIGTERM );
+    sigaddset( &child_signals, SIGINT );
     pthread_sigmask( SIG_BLOCK, &child_signals, NULL );
 }
 
@@ -215,6 +218,10 @@ static void sigalrm_handler(int signum)
     alarm_happened=true;
 }
 
+// Empty handler
+static void signop_handler(int signum)
+{
+}
 
 static void handle_new_process( pid_t parent_id, pid_t child_id )
 {
@@ -343,6 +350,9 @@ void init_debugger( daemonProcess *daemonProcess )
 
     action.sa_handler=sigalrm_handler;
     sigaction( SIGALRM, &action, NULL );
+
+    action.sa_handler=signop_handler;
+    sigaction( SIGHUP, &action, NULL );
 }
 
 void shutdown_debugger()

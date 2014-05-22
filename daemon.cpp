@@ -53,6 +53,8 @@
 #include "parent.h"
 #include "file_lie.h"
 
+static bool shutting_down = false;
+
 template <class T>
 class ipcMessage {
     T _payload;
@@ -249,7 +251,8 @@ void daemonCtrl::cmd_attach()
     }
 }
 
-socket_handler::socket_handler( int session_fd ) :
+socket_handler::socket_handler( daemonProcess *daemon, int session_fd ) :
+    m_daemonProcess( daemon ),
     epoll_fd(::epoll_create1(EPOLL_CLOEXEC), "epoll fd creation failed")
 {
     unique_fd session(session_fd);
@@ -257,7 +260,9 @@ socket_handler::socket_handler( int session_fd ) :
     register_session( std::move(session) );
 }
 
-socket_handler::socket_handler( const std::string &path, unique_fd &&state_file, unique_fd &&master_fd ) :
+socket_handler::socket_handler( daemonProcess *daemon, const std::string &path, unique_fd &&state_file,
+        unique_fd &&master_fd ) :
+    m_daemonProcess( daemon ),
     epoll_fd(::epoll_create1(EPOLL_CLOEXEC), "epoll fd creation failed"),
     master_socket( new master_socket_fd( std::move(master_fd), this ) )
 {
@@ -268,11 +273,35 @@ void socket_handler::start()
 {
     strcpy( logging::thread_name, "SOCK" );
     LOG_I() << "Socket handling thread started";
-    while( handle_request( NULL ) || master_socket )
-        ;
+
+    sigset_t sigmask;
+    // Get the current signal mask
+    sigemptyset(&sigmask);
+    sigaddset(&sigmask, SIGHUP);
+    sigaddset(&sigmask, SIGCHLD);
+    sigaddset(&sigmask, SIGALRM);
+    sigaddset(&sigmask, SIGTERM);
+    sigaddset(&sigmask, SIGINT);
+    errno = pthread_sigmask(SIG_BLOCK, &sigmask, NULL);
+    if( errno!=0 )
+        throw errno_exception( "Failed to set signal mask" );
+
+    // Clear the SIGHUP when inside the pwait
+    sigdelset(&sigmask, SIGHUP);
+
+    while( !shutting_down && (!session_fds.empty() || master_socket) )
+        handle_request( &sigmask );
     LOG_I() << "Socket handling thread finished";
 
     ASSERT(num_clients == 0);
+    report_last_client();
+}
+
+void daemonProcess::cleanup_sock_handler()
+{
+    sock_handler_thread.join();
+    sock_handler.reset();
+    sock_handler_wants_out = false;
 }
 
 bool socket_handler::test_shutdown( int timeout )
@@ -287,25 +316,23 @@ bool socket_handler::client_sockets() const
     return num_clients>0;
 }
 
-bool socket_handler::handle_request( const sigset_t *sigmask )
+void socket_handler::handle_request( const sigset_t *sigmask )
 {
-    bool ret = !session_fds.empty();
     static const size_t CONCURRENT_EVENTS = 5;
     epoll_event events[CONCURRENT_EVENTS];
 
-    // Wait nothing if we are about to exit, indefinitely if we have reason to stay
     int result=epoll_pwait( epoll_fd.get(), events, CONCURRENT_EVENTS, -1, sigmask );
     if( result<0 )
-        return ret;
+        return;
 
     ASSERT( size_t(result)<=CONCURRENT_EVENTS );
     for( int i=0; i<result; ++i ) {
         boost::intrusive_ptr<epoll_event_handler>
                 ptr( reinterpret_cast<epoll_event_handler *>(events[i].data.ptr) );
-        ret = ptr->handle() || ret;
+        ptr->handle();
     }
 
-    return ret;
+    return;
 }
 
 void socket_handler::set_client_sock_options( int fd )
@@ -358,25 +385,22 @@ void socket_handler::close_session(session_fd *element )
 
     ASSERT(num_clients>0);
     num_clients--;
-
-    if(num_clients == 0 && !master_socket)
-        report_last_client();
 }
 
 void socket_handler::report_last_client()
 {
-    // TODO implement
+    m_daemonProcess->sock_handler_exits();
 }
 
 daemonProcess::daemonProcess( int session_fd ) :
-    sock_handler( new socket_handler( session_fd ) ),
+    sock_handler( new socket_handler( this, session_fd ) ),
     sock_handler_thread( std::mem_fn( &socket_handler::start ), sock_handler.get() )
 {
 }
 
 daemonProcess::daemonProcess( const std::string &path, unique_fd &&state_file, unique_fd &&master_fd ) :
     state_path( path ), state_fd( std::move(state_file) ),
-    sock_handler( new socket_handler( path, std::move(state_file), std::move(master_fd) ) ),
+    sock_handler( new socket_handler( this, path, std::move(state_file), std::move(master_fd) ) ),
     sock_handler_thread( std::mem_fn( &socket_handler::start ), sock_handler.get() )
 {
     namespace ios = boost::iostreams;
@@ -486,6 +510,11 @@ void daemonProcess::create( const char *state_file_path, bool nodetach )
     // We are the "child" (technically - parent) - nothing more to do
 }
 
+void daemonProcess::sock_handler_exits()
+{
+    sock_handler_wants_out = true;
+}
+
 bool daemonProcess::daemonize( bool nodetach, int skip_fd1, int skip_fd2 )
 {
     logging::flush();
@@ -570,28 +599,36 @@ void daemonProcess::start()
         LOG_I() << "Debugger init loop";
         process_children( this );
         LOG_I() << "Debugger done";
+
+        if( sock_handler_wants_out ) {
+            cleanup_sock_handler();
+        }
     } while( sock_handler && sock_handler->test_shutdown(GRACE_NEW_CONNECTION_TIMEOUT*1000) );
 
+    // Shut down the socket handler
+    shutting_down = true;
+    if( sock_handler ) {
+        pthread_kill( sock_handler_thread.native_handle(), SIGHUP );
+        cleanup_sock_handler();
+    }
     shutdown_debugger();
 
     LOG_I() << "Daemon done";
 }
 
-bool master_socket_fd::handle()
+void master_socket_fd::handle()
 {
     unique_fd connection_fd( ::accept(get_fd(), NULL, NULL) );
     if( !connection_fd ) {
         LOG_W() << "Accept failed: " << strerror(errno);
-        return false;
+        return;
     }
 
     LOG_D() << "Received new session, socket #" << connection_fd.get();
     m_handler->register_session( std::move(connection_fd) );
-
-    return true;
 }
 
-bool session_fd::handle()
+void session_fd::handle()
 {
     // Some of the calls in this function remove a pointer to this. In order for our instance not to be deallocated
     // from under us, we hold a smart pointer to ourselves until the function exits
@@ -619,8 +656,6 @@ bool session_fd::handle()
         LOG_E() << "Session " << get_fd() << " hung up";
         m_handler->close_session(this);
     }
-
-    return false;
 }
 
 void session_fd::handle_cmd_reserve( const ipcMessage<daemonCtrl::request> &message )

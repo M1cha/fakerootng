@@ -83,7 +83,7 @@ public:
     {
     }
 
-    virtual bool handle();
+    virtual void handle();
 
 private:
     socket_handler *m_handler;
@@ -96,9 +96,9 @@ class socket_handler {
     socket_handler( const socket_handler &rhs ) = delete;
     socket_handler &operator=( const socket_handler &rhs ) = delete;
 public:
-    explicit socket_handler( int session_fd ); // Constructor for non-persistent daemon
+    socket_handler( daemonProcess *daemon, int session_fd ); // Constructor for non-persistent daemon
     // Constructor for persistent daemon
-    socket_handler( const std::string &path, unique_fd &&state_file, unique_fd &&master_fd );
+    socket_handler( daemonProcess *daemon, const std::string &path, unique_fd &&state_file, unique_fd &&master_fd );
 
     void start();
 
@@ -108,6 +108,7 @@ private:
     friend class master_socket_fd;
     friend class session_fd;
     size_t num_clients = 0;
+    daemonProcess *m_daemonProcess;
 
     std::unordered_set<boost::intrusive_ptr<session_fd>, epoll_event_handler::hash> session_fds;
     unique_fd epoll_fd;
@@ -115,7 +116,7 @@ private:
 
     boost::intrusive_ptr<master_socket_fd> master_socket;
 
-    bool handle_request( const sigset_t *sigmask );
+    void handle_request( const sigset_t *sigmask );
     static void set_client_sock_options( int fd );
 
     enum class mask_ops { add, remove };
@@ -144,11 +145,14 @@ public:
     {
         return sock_handler && sock_handler->client_sockets();
     }
+
+    void sock_handler_exits();
 private:
     std::string state_path;
     unique_fd state_fd;
     std::unique_ptr<socket_handler> sock_handler;
     std::thread sock_handler_thread;
+    bool sock_handler_wants_out = false;
 
     static bool daemonize( bool nodetach, int skip_fd1=-1, int skip_fd2=-1 );
 
@@ -157,6 +161,8 @@ private:
     daemonProcess( const std::string &path, unique_fd &&state_file, unique_fd &&master_fd );
 
     void start();
+
+    void cleanup_sock_handler();
 };
 
 #endif // DAEMON_H

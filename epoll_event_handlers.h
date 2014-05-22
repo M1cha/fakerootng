@@ -17,7 +17,7 @@ public:
     virtual ~epoll_event_handler()
     {}
 
-    virtual bool handle() = 0;
+    virtual void handle() = 0;
 
     int get_fd() const
     {
@@ -68,7 +68,7 @@ public:
     {
     }
 
-    virtual bool handle();
+    virtual void handle();
 
 private:
     socket_handler *m_handler;
