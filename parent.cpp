@@ -122,6 +122,8 @@ private:
 public:
     virtual void run()
     {
+        std::unique_lock<std::mutex> state_guard( m_proc_state->lock() );
+
         if( m_proc_state->get_state()==pid_state::state::INIT || m_proc_state->get_state()==pid_state::state::NEW ) {
             if( ! process_initial_signal() )
                 return;
@@ -238,15 +240,18 @@ bool attach_debugger( pid_t child )
 {
     // Attach a debugger to the child
     long ret;
-    SyscallHandlerTask::proxy_call( [&ret, child]() { ret=ptrace(PTRACE_ATTACH, child, 0, 0); } );
+    SyscallHandlerTask::proxy_call( [&ret, child]() {
+        ret=ptrace(PTRACE_ATTACH, child, 0, 0);
+        if( ret==0 )
+            handle_new_process( -1, child ); // No parent - a root process
+    } );
+
     if( ret!=0 ) {
         LOG_E() << "Could not start trace of process " << child << ": " << strerror(errno);
 
         throw errno_exception( "Could not start trace of process" );
     }
     LOG_I() << "Debugger successfully attached to process " << child;
-
-    handle_new_process( -1, child ); // No parent - a root process
 
     return true;
 }

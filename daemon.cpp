@@ -291,7 +291,7 @@ void socket_handler::start()
 
     while( !shutting_down && (!session_fds.empty() || master_socket) )
         handle_request( &sigmask );
-    LOG_I() << "Socket handling thread finished";
+    LOG_I() << "Socket handling thread done";
 
     ASSERT(num_clients == 0);
     report_last_client();

@@ -58,6 +58,7 @@ public:
 private:
     enum state m_state = state::INIT;
     SyscallHandlerTask *m_task = nullptr;
+    std::mutex m_state_lock;
     std::mutex m_wait_lock;
     std::condition_variable m_wait_condition;
     ptlib::WAIT_RET m_wait_state = ptlib::WAIT_RET::NEWPROCESS;
@@ -66,6 +67,11 @@ private:
 
 public:
     pid_state();
+
+    std::unique_lock<std::mutex> lock()
+    {
+        return std::unique_lock<std::mutex>( m_state_lock );
+    }
 
     enum state get_state() const
     {
