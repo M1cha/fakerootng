@@ -53,7 +53,7 @@
 #include "parent.h"
 #include "file_lie.h"
 
-static bool shutting_down = false;
+static const int GRACE_NEW_CONNECTION_TIMEOUT = 3;
 
 template <class T>
 class ipcMessage {
@@ -181,11 +181,14 @@ void daemonCtrl::connect( const char * state_file_path )
     sa.sun_family=AF_UNIX;
     snprintf( sa.sun_path, sizeof(sa.sun_path), "%s.run", state_file_path );
 
+    LOG_I() << "Connecting to daemon on socket " << sa.sun_path;
     if( ::connect(client_socket, (const struct sockaddr *) &sa, sizeof(sa) )<0 ) {
+        LOG_W() << "Connection failed: " << strerror(errno);
         close( client_socket );
         // No daemon running
         return;
     }
+    LOG_I() << "Connected to daemon";
 
     try {
         set_client_sock_options(client_socket);
@@ -253,8 +256,10 @@ void daemonCtrl::cmd_attach()
 
 socket_handler::socket_handler( daemonProcess *daemon, int session_fd ) :
     m_daemonProcess( daemon ),
-    epoll_fd(::epoll_create1(EPOLL_CLOEXEC), "epoll fd creation failed")
+    epoll_fd(::epoll_create1(EPOLL_CLOEXEC), "epoll fd creation failed"),
+    state(shutdown_state::handling)
 {
+    ASSERT(state.is_lock_free());
     unique_fd session(session_fd);
     set_client_sock_options(session_fd);
     register_session( std::move(session) );
@@ -264,8 +269,10 @@ socket_handler::socket_handler( daemonProcess *daemon, const std::string &path, 
         unique_fd &&master_fd ) :
     m_daemonProcess( daemon ),
     epoll_fd(::epoll_create1(EPOLL_CLOEXEC), "epoll fd creation failed"),
-    master_socket( new master_socket_fd( std::move(master_fd), this ) )
+    master_socket( new master_socket_fd( std::move(master_fd), this ) ),
+    state(shutdown_state::handling)
 {
+    ASSERT(state.is_lock_free());
     recalc_select_mask( mask_ops::add, master_socket.get() );
 }
 
@@ -289,8 +296,10 @@ void socket_handler::start()
     // Clear the SIGHUP when inside the pwait
     sigdelset(&sigmask, SIGHUP);
 
-    while( !shutting_down && (!session_fds.empty() || master_socket) )
+    state = shutdown_state::handling;
+    while( (!session_fds.empty() || state!=shutdown_state::shutdown) ) {
         handle_request( &sigmask );
+    }
     LOG_I() << "Socket handling thread done";
 
     ASSERT(num_clients == 0);
@@ -304,16 +313,14 @@ void daemonProcess::cleanup_sock_handler()
     sock_handler_wants_out = false;
 }
 
-bool socket_handler::test_shutdown( int timeout )
+void socket_handler::debugger_idle()
 {
-    epoll_event event;
-    int result=epoll_wait( epoll_fd.get(), &event, 1, timeout);
-    return result>0;
+    state = shutdown_state::idle;
 }
 
-bool socket_handler::client_sockets() const
+bool socket_handler::test_should_exit() const
 {
-    return num_clients>0;
+    return num_clients>0 || state==shutdown_state::idle || state==shutdown_state::idle_wait;
 }
 
 void socket_handler::handle_request( const sigset_t *sigmask )
@@ -321,9 +328,29 @@ void socket_handler::handle_request( const sigset_t *sigmask )
     static const size_t CONCURRENT_EVENTS = 5;
     epoll_event events[CONCURRENT_EVENTS];
 
-    int result=epoll_pwait( epoll_fd.get(), events, CONCURRENT_EVENTS, -1, sigmask );
-    if( result<0 )
+    shutdown_state current_state = state;
+    if( !session_fds.empty() ) {
+        state = current_state = shutdown_state::handling;
+    } else if( current_state==shutdown_state::idle ) {
+        state.compare_exchange_strong( current_state, shutdown_state::idle_wait );
+    }
+
+    // Wait indefinitely if we have active sessions, grace timeout if waiting for new connections
+    int result=epoll_pwait( epoll_fd.get(), events, CONCURRENT_EVENTS,
+            current_state==shutdown_state::handling ? -1 : GRACE_NEW_CONNECTION_TIMEOUT*1000, sigmask );
+
+    if( result==0 && (current_state=state) == shutdown_state::idle_wait ) {
+        // Timed out while waiting for new clients. Time to exit
+        state.compare_exchange_strong( current_state, shutdown_state::shutdown );
+        // Since the debugger thread is idle, it should not be possible for it to change this value
+        ASSERT(current_state==shutdown_state::idle_wait);
+        parent_unconditional_wakeup();
+    }
+    if( result<=0 )
         return;
+
+    // Mark as still having active requests
+    state = shutdown_state::handling;
 
     ASSERT( size_t(result)<=CONCURRENT_EVENTS );
     for( int i=0; i<result; ++i ) {
@@ -590,7 +617,6 @@ bool daemonProcess::daemonize( bool nodetach, int skip_fd1, int skip_fd2 )
     return true;
 }
 
-#define GRACE_NEW_CONNECTION_TIMEOUT 3
 void daemonProcess::start()
 {
     init_debugger( this );
@@ -598,19 +624,17 @@ void daemonProcess::start()
     do {
         LOG_I() << "Debugger init loop";
         process_children( this );
-        LOG_I() << "Debugger done";
+        LOG_I() << "Debugger idle";
 
         if( sock_handler_wants_out ) {
             cleanup_sock_handler();
-        }
-    } while( sock_handler && sock_handler->test_shutdown(GRACE_NEW_CONNECTION_TIMEOUT*1000) );
+        } else {
+            sock_handler->debugger_idle();
 
-    // Shut down the socket handler
-    shutting_down = true;
-    if( sock_handler ) {
-        pthread_kill( sock_handler_thread.native_handle(), SIGHUP );
-        cleanup_sock_handler();
-    }
+            pthread_kill( sock_handler_thread.native_handle(), SIGHUP );
+        }
+    } while( sock_handler );
+
     shutdown_debugger();
 
     LOG_I() << "Daemon done";

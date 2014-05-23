@@ -450,7 +450,7 @@ static void process_sigchld( pid_t pid, ptlib::WAIT_RET wait_state, int status, 
 
 int process_children( daemonProcess *daemon )
 {
-    while(num_processes>0 || daemon->client_sockets()) {
+    while(num_processes>0 || daemon->test_should_exit()) {
         int status;
         pid_t pid;
         long ret;
@@ -488,6 +488,11 @@ int process_children( daemonProcess *daemon )
     }
 
     return 0;
+}
+
+void parent_unconditional_wakeup()
+{
+    parent_wakeup.signal();
 }
 
 pid_state::pid_state() :

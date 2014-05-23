@@ -26,6 +26,8 @@ void shutdown_debugger();
 int process_children( daemonProcess *daemon );
 // Requests to perform actions in the master thread
 void handle_thread_request( int fd );
+// Wake up the parent thread without submitting any particular job
+void parent_unconditional_wakeup();
 
 class SyscallHandlerTask;
 

@@ -10,6 +10,7 @@
 #include <unordered_set>
 #include <mutex>
 #include <thread>
+#include <atomic>
 
 class daemonProcess;
 class session_fd;
@@ -102,8 +103,8 @@ public:
 
     void start();
 
-    bool test_shutdown( int timeout );
-    bool client_sockets() const;
+    void debugger_idle();
+    bool test_should_exit() const;
 private:
     friend class master_socket_fd;
     friend class session_fd;
@@ -115,6 +116,14 @@ private:
     std::mutex thread_fds_mutex;
 
     boost::intrusive_ptr<master_socket_fd> master_socket;
+
+    enum class shutdown_state {
+        handling,       // Active clients being debugged
+        idle,           // Debugger idle
+        idle_wait,      // Debugger idle, socket handler going into a wait for new clients
+        shutdown        // No debugees. No new clients. Exit
+    };
+    std::atomic<shutdown_state> state;
 
     void handle_request( const sigset_t *sigmask );
     static void set_client_sock_options( int fd );
@@ -140,10 +149,10 @@ public:
     static int create( bool nodetach );
     static void create( const char *state_file_path, bool nodetach );
 
-    // Check whether there are any connected pre-exec clients
-    bool client_sockets() const
+    // Check whether the debugger should wait for more events to arrive
+    bool test_should_exit() const
     {
-        return sock_handler && sock_handler->client_sockets();
+        return sock_handler && sock_handler->test_should_exit();
     }
 
     void sock_handler_exits();
