@@ -257,7 +257,7 @@ void daemonCtrl::cmd_attach()
 socket_handler::socket_handler( daemonProcess *daemon, int session_fd ) :
     m_daemonProcess( daemon ),
     epoll_fd(::epoll_create1(EPOLL_CLOEXEC), "epoll fd creation failed"),
-    state(shutdown_state::handling)
+    state(shutdown_state::active)
 {
     ASSERT(state.is_lock_free());
     unique_fd session(session_fd);
@@ -270,7 +270,7 @@ socket_handler::socket_handler( daemonProcess *daemon, const std::string &path, 
     m_daemonProcess( daemon ),
     epoll_fd(::epoll_create1(EPOLL_CLOEXEC), "epoll fd creation failed"),
     master_socket( new master_socket_fd( std::move(master_fd), this ) ),
-    state(shutdown_state::handling)
+    state(shutdown_state::active)
 {
     ASSERT(state.is_lock_free());
     recalc_select_mask( mask_ops::add, master_socket.get() );
@@ -296,7 +296,7 @@ void socket_handler::start()
     // Clear the SIGHUP when inside the pwait
     sigdelset(&sigmask, SIGHUP);
 
-    state = shutdown_state::handling;
+    state = shutdown_state::active;
     while( (!session_fds.empty() || state!=shutdown_state::shutdown) ) {
         handle_request( &sigmask );
     }
@@ -315,12 +315,12 @@ void daemonProcess::cleanup_sock_handler()
 
 void socket_handler::debugger_idle()
 {
-    state = shutdown_state::idle;
+    state = shutdown_state::dbg_idle;
 }
 
 bool socket_handler::test_should_exit() const
 {
-    return num_clients>0 || state==shutdown_state::idle || state==shutdown_state::idle_wait;
+    return num_clients>0 || state==shutdown_state::dbg_idle || state==shutdown_state::both_idle;
 }
 
 void socket_handler::handle_request( const sigset_t *sigmask )
@@ -330,27 +330,27 @@ void socket_handler::handle_request( const sigset_t *sigmask )
 
     shutdown_state current_state = state;
     if( !session_fds.empty() ) {
-        state = current_state = shutdown_state::handling;
-    } else if( current_state==shutdown_state::idle ) {
-        state.compare_exchange_strong( current_state, shutdown_state::idle_wait );
+        state = current_state = shutdown_state::active;
+    } else if( current_state==shutdown_state::dbg_idle ) {
+        state.compare_exchange_strong( current_state, shutdown_state::both_idle );
     }
 
     // Wait indefinitely if we have active sessions, grace timeout if waiting for new connections
     int result=epoll_pwait( epoll_fd.get(), events, CONCURRENT_EVENTS,
-            current_state==shutdown_state::handling ? -1 : GRACE_NEW_CONNECTION_TIMEOUT*1000, sigmask );
+            current_state==shutdown_state::active ? -1 : GRACE_NEW_CONNECTION_TIMEOUT*1000, sigmask );
 
-    if( result==0 && (current_state=state) == shutdown_state::idle_wait ) {
+    if( result==0 && (current_state=state) == shutdown_state::both_idle ) {
         // Timed out while waiting for new clients. Time to exit
         state.compare_exchange_strong( current_state, shutdown_state::shutdown );
         // Since the debugger thread is idle, it should not be possible for it to change this value
-        ASSERT(current_state==shutdown_state::idle_wait);
+        ASSERT(current_state==shutdown_state::both_idle);
         parent_unconditional_wakeup();
     }
     if( result<=0 )
         return;
 
     // Mark as still having active requests
-    state = shutdown_state::handling;
+    state = shutdown_state::active;
 
     ASSERT( size_t(result)<=CONCURRENT_EVENTS );
     for( int i=0; i<result; ++i ) {

@@ -118,9 +118,9 @@ private:
     boost::intrusive_ptr<master_socket_fd> master_socket;
 
     enum class shutdown_state {
-        handling,       // Active clients being debugged
-        idle,           // Debugger idle
-        idle_wait,      // Debugger idle, socket handler going into a wait for new clients
+        active,         // Active clients being debugged
+        dbg_idle,       // Debugger idle
+        both_idle,      // Debugger idle, socket handler going into a wait for new clients
         shutdown        // No debugees. No new clients. Exit
     };
     std::atomic<shutdown_state> state;
