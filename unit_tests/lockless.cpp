@@ -75,7 +75,7 @@ int main()
     std::cout<<"Finished sending 10000 signals. Sleep for 1 second\n";
     sleep(1);
     std::cout<<"Sent 10000 signal request. Counter shows "<<handled_signals<<" \n";
-    assert(handled_signals=10000);
+    assert(handled_signals==10000);
     handled_signals=0;
 
     std::cout<<"Starting 3 threads to send jobs while signaling\n";

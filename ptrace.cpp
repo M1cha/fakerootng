@@ -17,6 +17,7 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
+#if 0
 #include "config.h"
 
 #include <sys/ptrace.h>
@@ -316,3 +317,4 @@ bool sys_ptrace( int sc_num, pid_t pid, pid_state *state )
 
     return ret;
 }
+#endif
