@@ -75,6 +75,8 @@ public:
 #define LOG_E() LOG_LEVEL_HELPER(ERROR, false)
 #define LOG_F() LOG_LEVEL_HELPER(FATAL, true)
 
+#define TRACEPOINT() LOG_T() << "Trace point " __FILE__ ":" << __LINE__
+
 #define HEX_FORMAT(val, width) std::setw(width) << std::setfill('0') << std::hex << (val) << std::setbase(0)
 #define OCT_FORMAT(val, width) std::setw(width) << std::setfill('0') << std::oct << (val) << std::setbase(0)
 

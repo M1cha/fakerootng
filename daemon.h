@@ -162,6 +162,7 @@ private:
     std::unique_ptr<socket_handler> sock_handler;
     std::thread sock_handler_thread;
     bool sock_handler_wants_out = false;
+    bool sock_handler_done = false;
 
     static bool daemonize( bool nodetach, int skip_fd1=-1, int skip_fd2=-1 );
 

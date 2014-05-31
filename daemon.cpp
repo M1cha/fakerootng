@@ -199,7 +199,6 @@ void daemonCtrl::connect( const char * state_file_path )
         LOG_E() << "Daemon connect failed: " << exception.what();
         close( client_socket );
         daemon_socket=-1;
-        throw;
     } catch( ... ) {
         close( client_socket );
         daemon_socket=-1;
@@ -309,8 +308,8 @@ void socket_handler::start()
 void daemonProcess::cleanup_sock_handler()
 {
     sock_handler_thread.join();
-    sock_handler.reset();
     sock_handler_wants_out = false;
+    sock_handler_done = true;
 }
 
 void socket_handler::debugger_idle()
@@ -633,7 +632,8 @@ void daemonProcess::start()
 
             pthread_kill( sock_handler_thread.native_handle(), SIGHUP );
         }
-    } while( sock_handler );
+    } while( !sock_handler_done );
+    LOG_I() << "Debugger done";
 
     shutdown_debugger();
 
