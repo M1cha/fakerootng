@@ -422,52 +422,6 @@ pid_t get_parent( pid_t pid )
     return ret;
 }
 
-#if 0
-int fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[STATE_SIZE],
-        int_ptr context[FORK_CONTEXT_SIZE] )
-{
-    abort(); // XXX TODO and other tags
-
-    /* Turn the fork/vfork into a clone */
-    int clone_flags=CLONE_PTRACE|SIGCHLD;
-
-    if( orig_sc==SYS_vfork ) {
-        clone_flags|=CLONE_VFORK|CLONE_VM;
-    }
-
-    // Store a copy of the arguments we change, in case they held something important
-    int_ptr *save_state=(int_ptr *)registers;
-    save_state[0]=get_syscall( pid );
-    save_state[1]=get_argument( pid, 1 );
-    save_state[2]=get_argument( pid, 2 );
-
-    set_syscall( pid, SYS_clone );
-    set_argument( pid, 1, clone_flags ); /* Flags */
-    set_argument( pid, 2, 0 ); /* Stack base (keep the same) */
-
-    /* We did change the system call in use */
-    return 0;
-}
-
-int fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] )
-{
-    int ret=0;
-
-    if( success( pid, SYS_clone ) ) {
-        ret=1;
-        *newpid=get_retval( pid );
-    }
-
-    /* Restore the clobbered registers */
-    const int_ptr *save_state=(const int_ptr *)registers;
-    set_syscall( pid, save_state[0] );
-    set_argument( pid, 1, save_state[1] );
-    set_argument( pid, 2, save_state[2] );
-
-    return ret;
-}
-#endif
-
 long ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *data)
 {
     long ret;

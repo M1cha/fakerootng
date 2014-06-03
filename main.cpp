@@ -210,63 +210,6 @@ static int perform_child( daemonCtrl & daemon_ctrl, char *argv[] )
         return real_perform_child( daemon_ctrl, argv );
     
     abort(); // Stale code
-
-#if 0
-    int pipes[2];
-    pipe(pipes);
-
-    pid_t child=fork();
-
-    if( child<0 ) {
-        perror("Failed to create child process");
-
-        return 2;
-    } else if( child==0 ) {
-        // We are the child
-        close( pipes[0] );
-        return real_perform_child( daemon_ctrl, argv, pipes[1] );
-    }
-
-    // We are the parent.
-
-    close( pipes[1] );
-
-    if( debug_log!=NULL ) {
-        fclose( debug_log );
-        debug_log=NULL;
-    }
-
-    int buffer;
-    int numret;
-    // Read from pipe to know when child finished talking to the debugger
-    read( pipes[0], &buffer, sizeof(buffer) );
-
-    close( pipes[0] );
-
-    // Cannot "wait" for child - instead listen on socket
-    if( (numret=read( child_socket, &buffer, sizeof(int) ))<(int)sizeof(int) ) {
-        if( numret>=0 ) {
-            fprintf(stderr, "Debugger terminated early\n");
-        } else {
-            perror("Parent: read failed");
-        }
-        exit(1);
-    }
-
-    // Why did "child" exit?
-    if( WIFEXITED(buffer) ) {
-        // Child has terminated. Terminate with same return code
-        return WEXITSTATUS(buffer);
-    }
-    if( WIFSIGNALED(buffer) ) {
-        // Child has terminated with a signal.
-        return WTERMSIG(buffer);
-    }
-
-    fprintf(stderr, "Child " PID_F " terminated with unknown termination status %x\n", child, buffer );
-
-    return 3;
-#endif
 }
 
 int main(int argc, char *argv[])

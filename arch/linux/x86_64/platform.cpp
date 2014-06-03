@@ -744,17 +744,4 @@ void process_state::post_load(pid_t pid)
 
 }; // End namespace platform
 
-#if 0
-int fork_enter( pid_t pid, int orig_sc, int_ptr process_mem, void *our_mem, void *registers[STATE_SIZE],
-        int_ptr context[FORK_CONTEXT_SIZE] )
-{
-    return linux::fork_enter( pid, orig_sc, process_mem, our_mem, registers, context );
-}
-
-int fork_exit( pid_t pid, pid_t *newpid, void *registers[STATE_SIZE], int_ptr context[FORK_CONTEXT_SIZE] )
-{
-    return linux::fork_exit( pid, newpid, registers, context );
-}
-#endif
-
 }; // End of namespace ptlib
