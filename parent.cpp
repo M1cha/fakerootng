@@ -279,6 +279,8 @@ static void register_handlers()
 #if defined(SYS_clone)
     DEF_SYS1(clone);
 #endif
+    DEF_SYS1(fork);
+    DEF_SYS2(vfork, fork);
 
     // File
     DEF_SYS1(fchownat);

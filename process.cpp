@@ -33,15 +33,15 @@
 // Not implemented functions:
 // acct
 
-#if 0
 void sys_fork( int sc_num, pid_t pid, pid_state *state )
 {
-    ptlib::fork_handler( pid, sc_num, [&](){
-        state->ptrace_syscall_wait(pid, 0);
-    } );
+    LOG_F() << "Fork is unhandled at this point in time. Failing the syscall";
+    // TODO unhandled system call. Just report failure for now
+    ptlib::set_syscall( pid, ptlib::preferred::NOP );
+    state->ptrace_syscall_wait( pid, 0 );
+    ptlib::set_error( pid, sc_num, ENOSYS );
     state->end_handling();
 }
-#endif
 
 #if defined(SYS_clone)
 void sys_clone( int sc_num, pid_t pid, pid_state *state )

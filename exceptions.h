@@ -15,6 +15,16 @@ public:
     }
 };
 
+// This class is thrown when it is the debugee that should get the error
+class debugee_exception : public std::system_error
+{
+public:
+    explicit debugee_exception( int error, const char * context ) :
+        std::system_error( error, std::system_category(), context )
+    {
+    }
+};
+
 class detailed_exception : public std::exception
 {
     const char * _message;
