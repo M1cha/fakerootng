@@ -136,7 +136,14 @@ AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
 )
 
 dnl C++ only header check
+AC_CHECK_HEADER([boost/iostreams/stream.hpp],,[AC_ERROR([boost.iostreams has to be installed])])
 LIBS="$LIBS -lboost_iostreams"
+AC_LINK_IFELSE(
+  [AC_LANG_PROGRAM([#include <boost/iostreams/device/file_descriptor.hpp>],
+    [boost::iostreams::file_descriptor_source source;])],
+  ,
+  [AC_MSG_ERROR([Boost iostreams is a required dependency])])
+
 
 AC_LANG_POP
 

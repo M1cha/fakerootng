@@ -3,6 +3,9 @@
 
 #include <set>
 
+#include <boost/intrusive_ptr.hpp>
+#include <boost/smart_ptr/intrusive_ref_counter.hpp>
+
 #include <sys/types.h>
 #include <assert.h>
 
@@ -15,7 +18,11 @@
 #include "log.h"
 
 class daemonProcess;
+class pid_state;
+class SyscallHandlerTask;
 
+// We know of a new process in the system
+pid_state *handle_new_process( pid_t process, pid_t parent, unsigned long flags, pid_state *creator_state );
 // Attach the debugger to a specific child
 bool attach_debugger( pid_t child );
 // Initialize the debugger environment
@@ -27,17 +34,22 @@ int process_children( daemonProcess *daemon );
 // Wake up the parent thread without submitting any particular job
 void parent_unconditional_wakeup();
 
-class SyscallHandlerTask;
+// handle_new_process flags
+static const unsigned long PROC_FLAGS_SAMEVM = 1,
+        PROC_FLAGS_CUSTOM_NOTIFY_PARENT = 2,
+        PROC_FLAGS_THREAD = 4;
 
-class pid_state {
+class pid_state : public boost::intrusive_ref_counter<pid_state>
+{
 public:
     enum class state {
-        INIT,     ///< Sanity - process should never actually do anything while in this state
-        NEW,      ///< New process, recently registered. Should see a SIGSTOP next
-        NONE,     ///< Idle state
-        KERNEL,   ///< Inside a system call
-        WAITING,  ///< A worker thread is waiting on this process
-        WAKEUP,
+        INIT,       ///< Sanity - process should never actually do anything while in this state
+        NEW_ROOT,   ///< New process, recently registered. Should see a SIGSTOP next
+        NEW_CHILD,  ///< New child process/thread. Should see SIGSTOP next
+        NONE,       ///< Idle state
+        KERNEL,     ///< Inside a system call
+        WAITING,    ///< A worker thread is waiting on this process
+        WAKEUP,     ///< Process is in the process of waking up waiter
     };
     
     // The credentials (including the Linux specific file system UID)
@@ -45,7 +57,10 @@ public:
     gid_t m_gid, m_egid, m_sgid, m_fsgid;
     std::set<gid_t> m_groups;
 
+    pid_t m_pid, m_ppid;
+
     struct process_memory {
+        // TODO add locking
         int_ptr non_shared_addr = 0;
         int_ptr shared_addr = 0;
         unique_mmap shared_ptr;
@@ -65,12 +80,22 @@ private:
     int m_wait_status = 0;
     long m_wait_parsed_status = 0;
 
+    unsigned long m_flags;
+    boost::intrusive_ptr<const pid_state> m_process_leader;
+
 public:
-    pid_state();
+    explicit pid_state(pid_t pid);
+    pid_state(const pid_state *parent, pid_t pid, unsigned long flags);
 
     std::unique_lock<std::mutex> lock()
     {
         return std::unique_lock<std::mutex>( m_state_lock );
+    }
+
+    void wait_initialized(std::unique_lock<std::mutex> &lock)
+    {
+    	ASSERT(m_state==state::INIT);
+    	m_wait_condition.wait(lock, [this]() { return m_state != state::INIT; });
     }
 
     enum state get_state() const
@@ -80,13 +105,29 @@ public:
 
     void setStateNone()
     {
+    	state oldstate = m_state;
+
         m_state=state::NONE;
+
+    	if( oldstate==state::INIT ) {
+    		m_wait_condition.notify_all();
+    	}
     }
 
-    void setStateNewInstance()
+    void setStateNewRoot()
     {
         ASSERT(m_state==state::INIT);
-        m_state=state::NEW;
+        m_state=state::NEW_ROOT;
+
+        m_wait_condition.notify_all();
+    }
+
+    void setStateNewChild()
+    {
+        ASSERT(m_state==state::INIT);
+        m_state=state::NEW_CHILD;
+
+        m_wait_condition.notify_all();
     }
 
     void setStateKernel()
@@ -124,7 +165,8 @@ static inline std::ostream &operator<< (std::ostream &strm, pid_state::state wai
 #define PRODUCE_CASE(_state) case pid_state::state::_state: strm<<#_state; break
     switch( wait_ret ) {
         PRODUCE_CASE(INIT);
-        PRODUCE_CASE(NEW);
+        PRODUCE_CASE(NEW_ROOT);
+        PRODUCE_CASE(NEW_CHILD);
         PRODUCE_CASE(NONE);
         PRODUCE_CASE(KERNEL);
         PRODUCE_CASE(WAITING);

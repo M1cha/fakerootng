@@ -49,7 +49,7 @@
 // Static function declarations
 static pid_state *lookup_state_create( pid_t pid );
 
-static std::unordered_map<pid_t,std::unique_ptr<pid_state>> children;
+static std::unordered_map<pid_t,boost::intrusive_ptr<pid_state>> children;
 
 // Keep track of handled syscalls
 static std::unordered_map<int, syscall_hook> syscalls;
@@ -58,7 +58,7 @@ static std::unordered_map<int, syscall_hook> syscalls;
 size_t static_mem_size, shared_mem_size;
 
 // Number of running processes
-static int num_processes;
+static std::atomic_int num_processes;
 
 // Signify whether an alarm was received while we were waiting
 static bool alarm_happened=false;
@@ -98,43 +98,25 @@ static std::unique_ptr<DebuggerThreads> workQ;
 static proxy_function parent_tasks;
 static lockless_event parent_wakeup;
 
-class SyscallHandlerTask : public worker_queue::worker_task
-{
-public:
-    SyscallHandlerTask( pid_t pid, pid_state *proc_state, ptlib::WAIT_RET ptlib_status, int wait_status,
-            long parsed_status, syscall_hook *handler = nullptr ) :
-        m_pid( pid ),
-        m_proc_state( proc_state ),
-        m_ptlib_status( ptlib_status ),
-        m_wait_status( wait_status ),
-        m_parsed_status( parsed_status ),
-        m_handler_function( handler )
+class HandlerTask : public worker_queue::worker_task {
+protected:
+    HandlerTask( pid_t pid, pid_state *proc_state, ptlib::WAIT_RET ptlib_status, int wait_status,
+            long parsed_status ) :
+                m_pid( pid ),
+                m_proc_state( proc_state ),
+                m_ptlib_status( ptlib_status ),
+                m_wait_status( wait_status ),
+                m_parsed_status( parsed_status )
     {
     }
 
-private:
     pid_t m_pid;
     pid_state *m_proc_state;
     ptlib::WAIT_RET m_ptlib_status;
     int m_wait_status;
     long m_parsed_status;
-    syscall_hook *m_handler_function;
+
 public:
-    virtual void run()
-    {
-        std::unique_lock<std::mutex> state_guard( m_proc_state->lock() );
-
-        if( m_proc_state->get_state()==pid_state::state::INIT || m_proc_state->get_state()==pid_state::state::NEW ) {
-            if( ! process_initial_signal() )
-                return;
-        }
-
-        ASSERT( m_proc_state->get_state() == pid_state::state::NONE );
-        ASSERT( m_ptlib_status == ptlib::WAIT_RET::SYSCALL );
-
-        process_syscall();
-    }
-
     static void proxy_call_node ( proxy_function::node_base *node )
     {
         parent_tasks.submit( node );
@@ -163,6 +145,71 @@ public:
                 } );
     }
 
+};
+
+class SyscallHandlerTask : public HandlerTask
+{
+public:
+    SyscallHandlerTask( pid_t pid, pid_state *proc_state, ptlib::WAIT_RET ptlib_status, int wait_status,
+            long parsed_status, syscall_hook *handler = nullptr ) :
+        HandlerTask( pid, proc_state, ptlib_status, wait_status, parsed_status ),
+        m_handler_function( handler )
+    {
+    }
+
+public:
+    virtual void run()
+    {
+        std::unique_lock<std::mutex> state_guard( m_proc_state->lock() );
+
+        ASSERT( m_proc_state->get_state() == pid_state::state::NONE );
+        ASSERT( m_ptlib_status == ptlib::WAIT_RET::SYSCALL );
+
+        process_syscall();
+    }
+
+private:
+    syscall_hook *m_handler_function;
+
+    void process_syscall()
+    {
+        if( !m_handler_function ) {
+            auto handler = syscalls.find(m_parsed_status);
+            ASSERT( handler != syscalls.end() );
+            m_handler_function = &handler->second;
+        }
+
+        m_handler_function->func( m_parsed_status, m_pid, m_proc_state);
+    }
+};
+
+class SignalHandlerTask : public HandlerTask
+{
+public:
+    SignalHandlerTask( pid_t pid, pid_state *proc_state, ptlib::WAIT_RET ptlib_status, int wait_status,
+            long parsed_status ) :
+        HandlerTask( pid, proc_state, ptlib_status, wait_status, parsed_status )
+    {
+    }
+
+    virtual void run()
+    {
+        std::unique_lock<std::mutex> state_guard( m_proc_state->lock() );
+
+        if( m_proc_state->get_state()==pid_state::state::INIT )
+            m_proc_state->wait_initialized(state_guard);
+
+        if( m_proc_state->get_state()==pid_state::state::NEW_ROOT ||
+                m_proc_state->get_state()==pid_state::state::NEW_CHILD )
+        {
+            if( ! process_initial_signal() )
+                return;
+        }
+
+        LOG_T() << "pid " << m_pid << " received signal " << m_parsed_status;
+        ptlib::cont( PTRACE_SYSCALL, m_pid, m_parsed_status );
+    }
+
 private:
     bool process_initial_signal()
     {
@@ -174,7 +221,7 @@ private:
 
         LOG_I() << "Received initial SIGSTOP on process " << m_pid;
 
-        if( m_proc_state->get_state()==pid_state::state::INIT || !ptlib::TRAP_AFTER_EXEC ) {
+        if( m_proc_state->get_state()==pid_state::state::NEW_CHILD || !ptlib::TRAP_AFTER_EXEC ) {
             // New organic process
             m_proc_state->setStateNone();
             ptrace_systrace( 0 );
@@ -189,24 +236,40 @@ private:
             ptrace_continue(0);
 
             // The process is now running the client's code - let it run and track syscalls
-            ptlib::cont( PTRACE_SYSCALL, m_pid, 0 );
+            ptrace_systrace( 0 );
         }
 
         return false;
     }
-
-    void process_syscall()
-    {
-        if( !m_handler_function ) {
-            auto handler = syscalls.find(m_parsed_status);
-            ASSERT( handler != syscalls.end() );
-            m_handler_function = &handler->second;
-        }
-
-        m_handler_function->func( m_parsed_status, m_pid, m_proc_state);
-    }
 };
 
+class ExitHandlerTask : public HandlerTask
+{
+public:
+    ExitHandlerTask( pid_t pid, pid_state *proc_state, ptlib::WAIT_RET ptlib_status, int wait_status,
+            long parsed_status ) :
+        HandlerTask( pid, proc_state, ptlib_status, wait_status, parsed_status )
+    {
+    }
+
+    virtual void run()
+    {
+        std::unique_lock<std::mutex> state_guard( m_proc_state->lock() );
+
+        ASSERT( m_ptlib_status == ptlib::WAIT_RET::EXIT || m_ptlib_status == ptlib::WAIT_RET::EXIT );
+        ASSERT( m_proc_state->get_state()==pid_state::state::NONE || m_proc_state->get_state()==pid_state::state::KERNEL );
+
+        num_processes--;
+        LOG_I() << "pid " << m_pid << " exit";
+        delete_state();
+    }
+
+private:
+    void delete_state()
+    {
+        children.erase(m_pid);
+    }
+};
 
 // Do nothing signal handler for sigchld
 static void sigchld_handler(int signum)
@@ -225,15 +288,38 @@ static void signop_handler(int signum)
 {
 }
 
-static void handle_new_process( pid_t parent_id, pid_t child_id )
+static void handle_new_process( pid_t child_id )
 {
     pid_state *child = lookup_state_create( child_id );
+    std::unique_lock<std::mutex> state_guard( child->lock() );
 
-    if( parent_id==-1 ) {
-        child->setStateNewInstance();
-    } else {
-        ASSERT( false ); // TODO implement the other case
-    }
+    child->setStateNewRoot();
+}
+
+pid_state *handle_new_process( pid_t process, pid_t parent, unsigned long flags, pid_state *creator_state )
+{
+    pid_state *child = lookup_state_create( process );
+    std::unique_lock<std::mutex> state_guard( child->lock() );
+
+    ASSERT(child->get_state() == pid_state::state::INIT);
+
+    child->m_gid = creator_state->m_gid;
+    child->m_egid = creator_state->m_egid;
+    child->m_sgid = creator_state->m_sgid;
+    child->m_fsgid = creator_state->m_fsgid;
+    child->m_groups = creator_state->m_groups;
+
+    child->m_uid = creator_state->m_uid;
+    child->m_euid = creator_state->m_euid;
+    child->m_suid = creator_state->m_suid;
+    child->m_fsuid = creator_state->m_fsuid;
+
+    child->m_ppid = parent;
+
+    // TODO do actual initializations
+    child->setStateNewChild();
+
+    return child;
 }
 
 bool attach_debugger( pid_t child )
@@ -243,7 +329,7 @@ bool attach_debugger( pid_t child )
     SyscallHandlerTask::proxy_call( [&ret, child]() {
         ret=ptrace(PTRACE_ATTACH, child, 0, 0);
         if( ret==0 )
-            handle_new_process( -1, child ); // No parent - a root process
+            handle_new_process( child );
     } );
 
     if( ret!=0 ) {
@@ -323,21 +409,16 @@ static pid_state *lookup_state_create( pid_t pid )
     num_processes++;
     ptlib::prepare( pid );
 
-    ret = new pid_state;
-    children.insert( std::make_pair( pid, std::unique_ptr<pid_state>( ret ) ) );
+    ret = new pid_state(pid);
+    children.insert( std::make_pair( pid, boost::intrusive_ptr<pid_state>( ret ) ) );
 
     return ret;
-}
-
-static void delete_state( pid_t pid )
-{
-    children.erase(pid);
 }
 
 void init_debugger( daemonProcess *daemonProcess )
 {
     // Initialize the ptlib library
-    ptlib::init( &SyscallHandlerTask::proxy_call_node );
+    ptlib::init( &HandlerTask::proxy_call_node );
 
     register_handlers();
     init_globals();
@@ -369,21 +450,13 @@ void shutdown_debugger()
 
 static void process_exit( pid_t pid, pid_state *proc_state, ptlib::WAIT_RET wait_state, int status, long ret )
 {
-    ASSERT(proc_state->get_state()==pid_state::state::NONE || proc_state->get_state()==pid_state::state::KERNEL);
-    num_processes--;
-    LOG_I() << "pid " << pid << " exit";
-    delete_state( pid );
+    workQ->schedule_task( new ExitHandlerTask( pid, proc_state, wait_state, status, ret ) );
 }
 
 static void process_signal( pid_t pid, pid_state *proc_state, ptlib::WAIT_RET wait_state, int status, long signal )
 {
-    if( proc_state->get_state()==pid_state::state::INIT || proc_state->get_state()==pid_state::state::NEW ) {
-        workQ->schedule_task( new SyscallHandlerTask( pid, proc_state, wait_state, status, signal ) );
+    workQ->schedule_task( new SignalHandlerTask( pid, proc_state, wait_state, status, signal ) );
         return;
-    }
-
-    LOG_T() << "pid " << pid << " received signal " << signal;
-    ptlib::cont( PTRACE_SYSCALL, pid, signal );
 }
 
 static void process_syscall( pid_t pid, pid_state *proc_state, ptlib::WAIT_RET wait_state, int status, long sc_num )
@@ -392,7 +465,6 @@ static void process_syscall( pid_t pid, pid_state *proc_state, ptlib::WAIT_RET w
 
     switch( proc_state->get_state() ) {
     case pid_state::state::INIT:
-    case pid_state::state::NEW:
         workQ->schedule_task( new SyscallHandlerTask( pid, proc_state, wait_state, status, sc_num ) );
         break;
     case pid_state::state::NONE:
@@ -419,6 +491,8 @@ static void process_syscall( pid_t pid, pid_state *proc_state, ptlib::WAIT_RET w
     case pid_state::state::WAITING:
         proc_state->wakeup( wait_state, status, sc_num );
         break;
+    case pid_state::state::NEW_ROOT:
+    case pid_state::state::NEW_CHILD:
     case pid_state::state::WAKEUP:
         ASSERT(false);
         break;
@@ -482,7 +556,7 @@ int process_children( daemonProcess *daemon )
 
             } else if( errno==ECHILD ) {
                 // We should never get here. If we have no more children, we should have known about it already
-                LOG_F() << "BUG - ptlib wait failed with " << strerror(errno) << " while numchildren is still " <<
+                LOG_F() << "BUG - ptlib wait failed with \"" << strerror(errno) << "\" while numchildren is still " <<
                         num_processes;
                 num_processes=0;
             }
@@ -497,10 +571,23 @@ void parent_unconditional_wakeup()
     parent_wakeup.signal();
 }
 
-pid_state::pid_state() :
+pid_state::pid_state(pid_t pid) :
     m_uid(0), m_euid(0), m_suid(0), m_fsuid(0),
-    m_gid(0), m_egid(0), m_sgid(0), m_fsgid(0)
+    m_gid(0), m_egid(0), m_sgid(0), m_fsgid(0),
+    m_pid(pid), m_ppid(0), m_flags(0)
 {
+}
+
+pid_state::pid_state(const pid_state *parent, pid_t pid, unsigned long flags) :
+            m_uid(parent->m_uid), m_euid(parent->m_euid), m_suid(parent->m_suid), m_fsuid(parent->m_fsuid),
+            m_gid(parent->m_gid), m_egid(parent->m_egid), m_sgid(parent->m_sgid), m_fsgid(parent->m_fsgid),
+            m_groups(parent->m_groups),
+            m_pid(pid), m_ppid(parent->m_pid), m_flags(flags)
+{
+    if( flags&PROC_FLAGS_THREAD ) {
+        m_ppid = 0;
+        m_process_leader = parent->m_process_leader ? parent->m_process_leader : parent;
+    }
 }
 
 void pid_state::wait( const std::function< void ()> &callback )
