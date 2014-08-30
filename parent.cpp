@@ -47,9 +47,6 @@
 #include "parent.h"
 
 // Static function declarations
-static pid_state *lookup_state_create( pid_t pid );
-
-static std::unordered_map<pid_t,boost::intrusive_ptr<pid_state>> children;
 
 // Keep track of handled syscalls
 static std::unordered_map<int, syscall_hook> syscalls;
@@ -62,6 +59,43 @@ static std::atomic_int num_processes;
 
 // Signify whether an alarm was received while we were waiting
 static bool alarm_happened=false;
+
+class proc_state_map {
+    std::unordered_map<pid_t,boost::intrusive_ptr<pid_state>> m_processes;
+    std::mutex m_lock;
+
+    proc_state_map( const proc_state_map &rhs ) = delete;
+    proc_state_map &operator=( const proc_state_map &rhs ) = delete;
+public:
+    proc_state_map() = default;
+
+    // Lookup a pid. Create the state if not found
+    pid_state *lookup( pid_t pid )
+    {
+        std::lock_guard<std::mutex> guard(m_lock);
+
+        auto retIterator( m_processes.find(pid) );
+
+        if( retIterator!=m_processes.end() )
+            return retIterator->second.get();
+
+        LOG_I() << "Creating state for new child " << pid;
+        num_processes++;
+        ptlib::prepare( pid );
+
+        pid_state *ret = new pid_state(pid);
+        m_processes.insert( std::make_pair( pid, boost::intrusive_ptr<pid_state>( ret ) ) );
+
+        return ret;
+    }
+
+    void delete_( pid_t pid )
+    {
+        std::lock_guard<std::mutex> guard(m_lock);
+
+        m_processes.erase(pid);
+    }
+} children;
 
 class DebuggerThreads : public worker_queue {
 private:
@@ -261,13 +295,7 @@ public:
 
         num_processes--;
         LOG_I() << "pid " << m_pid << " exit";
-        delete_state();
-    }
-
-private:
-    void delete_state()
-    {
-        children.erase(m_pid);
+        children.delete_(m_pid);
     }
 };
 
@@ -290,7 +318,7 @@ static void signop_handler(int signum)
 
 static void handle_new_process( pid_t child_id )
 {
-    pid_state *child = lookup_state_create( child_id );
+    pid_state *child = children.lookup( child_id );
     std::unique_lock<std::mutex> state_guard( child->lock() );
 
     child->setStateNewRoot();
@@ -298,7 +326,7 @@ static void handle_new_process( pid_t child_id )
 
 pid_state *handle_new_process( pid_t process, pid_t parent, unsigned long flags, pid_state *creator_state )
 {
-    pid_state *child = lookup_state_create( process );
+    pid_state *child = children.lookup( process );
     std::unique_lock<std::mutex> state_guard( child->lock() );
 
     ASSERT(child->get_state() == pid_state::state::INIT);
@@ -399,34 +427,6 @@ void init_globals()
     shared_mem_size-=shared_mem_size%page_size;
 }
 
-pid_state *lookup_state( pid_t pid )
-{
-    auto retIterator( children.find(pid) );
-    
-    if( retIterator!=children.end() )
-        return retIterator->second.get();
-    
-    return nullptr;
-}
-
-// Lookup a pid. Create the state if not found
-static pid_state *lookup_state_create( pid_t pid )
-{
-    pid_state *ret = lookup_state( pid );
-    
-    if( ret!=nullptr )
-        return ret;
-
-    LOG_I() << "Creating state for new child " << pid;
-    num_processes++;
-    ptlib::prepare( pid );
-
-    ret = new pid_state(pid);
-    children.insert( std::make_pair( pid, boost::intrusive_ptr<pid_state>( ret ) ) );
-
-    return ret;
-}
-
 void init_debugger( daemonProcess *daemonProcess )
 {
     // Initialize the ptlib library
@@ -516,7 +516,7 @@ static void process_sigchld( pid_t pid, ptlib::WAIT_RET wait_state, int status, 
 {
     LOG_T() << "pid " << pid << " wait_state " << wait_state <<
             " status " << HEX_FORMAT(status, 8) << " ret " << HEX_FORMAT(ret, 8);
-    pid_state *proc_state=lookup_state_create(pid);
+    pid_state *proc_state=children.lookup(pid);
 
     switch( wait_state )
     {
