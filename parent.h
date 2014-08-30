@@ -2,6 +2,7 @@
 #define PARENT_H
 
 #include <set>
+#include <memory>
 
 #include <boost/intrusive_ptr.hpp>
 #include <boost/smart_ptr/intrusive_ref_counter.hpp>
@@ -65,11 +66,22 @@ public:
         int_ptr shared_addr = 0;
         unique_mmap shared_ptr;
 
+        process_memory() = default;
+        process_memory(const process_memory &rhs) :
+            non_shared_addr(rhs.non_shared_addr),
+            shared_addr(rhs.shared_addr)
+        // Use uninitialized shared_ptr to indicate this is a copy
+        {
+        }
+
+        process_memory &operator=( const process_memory &rhs ) = delete;
+
         template <typename T> T* get_shared_addr()
         {
             return reinterpret_cast<T*>(shared_ptr.get<char>() + ptlib::prepare_memory_len);
         }
-    } m_proc_mem;
+    };
+    std::shared_ptr<process_memory> m_proc_mem{ new process_memory };
 private:
     enum state m_state = state::INIT;
     SyscallHandlerTask *m_task = nullptr;
@@ -85,7 +97,6 @@ private:
 
 public:
     explicit pid_state(pid_t pid);
-    pid_state(const pid_state *parent, pid_t pid, unsigned long flags);
 
     std::unique_lock<std::mutex> lock()
     {
@@ -147,6 +158,8 @@ public:
 
     int_ptr proxy_mmap(const char *exception_message, pid_t pid,
             int_ptr addr, size_t length, int prot, int flags, int fd, off_t offset);
+    void proxy_munmap(const char *exception_message, pid_t pid,
+                    int_ptr addr, size_t length);
     int proxy_open(const char *exception_message, pid_t pid,
             int_ptr pathname, int flags, mode_t mode = 0666);
     void proxy_close(const char *exception_message, pid_t pid,

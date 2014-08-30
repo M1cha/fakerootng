@@ -35,7 +35,7 @@ void sys_fchownat( int sc_num, pid_t pid, pid_state *state )
     // Turn this into a call to fstatat, so we know what dev:inode to change
     ptlib::set_syscall( pid, ptlib::preferred::FSTATAT );
     // First two arguments are the same for both syscalls
-    ptlib::set_argument( pid, 3, state->m_proc_mem.non_shared_addr );
+    ptlib::set_argument( pid, 3, state->m_proc_mem->non_shared_addr );
 
     // The flags argument is 5 on fchownat, 4 on fstatat
     int flags = ptlib::get_argument( pid, 5 );
@@ -50,7 +50,7 @@ void sys_fchownat( int sc_num, pid_t pid, pid_state *state )
         return;
     }
 
-    struct stat stat = ptlib::get_stat_result( pid, ptlib::preferred::FSTATAT, state->m_proc_mem.non_shared_addr );
+    struct stat stat = ptlib::get_stat_result( pid, ptlib::preferred::FSTATAT, state->m_proc_mem->non_shared_addr );
     auto file_list_lock = file_list::lock();
     file_list::stat_override *override = file_list::get_map( stat );
 
