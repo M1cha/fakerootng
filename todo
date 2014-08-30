@@ -4,5 +4,5 @@ state file - done
 generate syscalls - done
 strace
 chroot
-new process support
+new process support - done
 handle trivial cases in main thread
