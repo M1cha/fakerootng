@@ -81,10 +81,10 @@ public:
 static std::unordered_map< pid_t, platform::process_state > state_cache;
 static std::mutex state_cache_lock;
 
-platform::process_state *get_process_state( pid_t pid, bool create )
+platform::process_state *get_process_state( pid_t tid, bool create )
 {
     std::unique_lock<decltype(state_cache_lock)> lock_guard( state_cache_lock );
-    auto i = state_cache.find(pid);
+    auto i = state_cache.find(tid);
     platform::process_state *ret = &i->second;
 
     if( i == state_cache.end() ) {
@@ -92,14 +92,14 @@ platform::process_state *get_process_state( pid_t pid, bool create )
             ASSERT_MASTER_THREAD();
 
             // TODO Should we act to prevent the cache from exploding? Not likely to happen, either way
-            ret = &state_cache[pid];
+            ret = &state_cache[tid];
             lock_guard.unlock();
 
-            LOG_T() << "Created cache for process " << pid;
-            if( ::ptrace(PTRACE_GETREGS, pid, nullptr, &ret->registers)!=0 )
+            LOG_T() << "Created cache for process " << tid;
+            if( ::ptrace(PTRACE_GETREGS, tid, nullptr, &ret->registers)!=0 )
                 throw std::system_error(errno, std::system_category(), "Failed to get registers from process");
 
-            ret->post_load(pid);
+            ret->post_load(tid);
         } else {
             ret = nullptr;
         }
@@ -114,28 +114,28 @@ void init( callback_initiator callback )
     master_thread = std::this_thread::get_id();
 }
 
-void cont( __ptrace_request request, pid_t pid, int signal )
+void cont( __ptrace_request request, pid_t tid, int signal )
 {
-    platform::process_state *state = linux::get_process_state(pid, false);
+    platform::process_state *state = linux::get_process_state(tid, false);
 
     if( state!=nullptr ) {
         int error;
         thread_proxy.callback([=, &error]() {
                 errno=0;
                 if( state->dirty ) {
-                    LOG_D()<<"Flushing cache for process "<<pid;
-                    if( ::ptrace( (__ptrace_request)PTRACE_SETREGS, pid, 0, &state->registers )<0 ) {
+                    LOG_D()<<"Flushing cache for process "<<tid;
+                    if( ::ptrace( (__ptrace_request)PTRACE_SETREGS, tid, 0, &state->registers )<0 ) {
                         error = errno;
                         return;
                     }
                 }
 
-                LOG_T() << "Deleting cache for process " << pid;
+                LOG_T() << "Deleting cache for process " << tid;
                 std::unique_lock< decltype(state_cache_lock) > lock_guard( state_cache_lock );
-                state_cache.erase(pid);
+                state_cache.erase(tid);
                 lock_guard.unlock();
 
-                ::ptrace( request, pid, 0, signal );
+                ::ptrace( request, tid, 0, signal );
                 error = errno;
             });
 
@@ -144,35 +144,35 @@ void cont( __ptrace_request request, pid_t pid, int signal )
             throw std::system_error(error, std::system_category(), "Failed to flush cache");
         }
     } else {
-        LOG_T() << "Process " << pid << " continued with no cache to flush";
-        ptrace( request, pid, 0, signal );
+        LOG_T() << "Process " << tid << " continued with no cache to flush";
+        ptrace( request, tid, 0, signal );
     }
 }
 
-void prepare( pid_t pid )
+void prepare( pid_t pid, pid_t tid )
 {
     // These cause more harm than good
-    //if( ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_TRACEFORK|PTRACE_O_TRACEVFORK|PTRACE_O_TRACECLONE)!=0 )
+    //if( ptrace(PTRACE_SETOPTIONS, tid, 0, PTRACE_O_TRACEFORK|PTRACE_O_TRACEVFORK|PTRACE_O_TRACECLONE)!=0 )
     //    perror("PTRACE_SETOPTIONS failed");
 }
 
-bool wait( pid_t *pid, int *status, extra_data *data, int async )
+bool wait( pid_t *tid, int *status, extra_data *data, int async )
 {
     ASSERT_MASTER_THREAD();
-    *pid=wait4(-1, status, (async?WNOHANG:0)|__WALL, data );
+    *tid=wait4(-1, status, (async?WNOHANG:0)|__WALL, data );
 
-    ASSERT( *pid<=0 || linux::get_process_state(*pid, false)==NULL );
+    ASSERT( *tid<=0 || linux::get_process_state(*tid, false)==NULL );
 
-    if( async && *pid==0 ) {
+    if( async && *tid==0 ) {
         errno=EAGAIN;
-        *pid=-1;
+        *tid=-1;
     }
 
-    return *pid!=-1;
+    return *tid!=-1;
 }
 
 
-long parse_wait( pid_t pid, int status, WAIT_RET *type )
+long parse_wait( pid_t tid, int status, WAIT_RET *type )
 {
     ASSERT_MASTER_THREAD();
     long ret;
@@ -189,17 +189,17 @@ long parse_wait( pid_t pid, int status, WAIT_RET *type )
         if( ret==SIGTRAP ) {
             siginfo_t siginfo;
 
-            if( ::ptrace(PTRACE_GETSIGINFO, pid, NULL, &siginfo)==0 &&
+            if( ::ptrace(PTRACE_GETSIGINFO, tid, NULL, &siginfo)==0 &&
                 (siginfo.si_code>>8==PTRACE_EVENT_FORK || siginfo.si_code>>8==PTRACE_EVENT_VFORK ||
                  siginfo.si_code>>8==PTRACE_EVENT_CLONE ) )
             {
-                ::ptrace( PTRACE_GETEVENTMSG, pid, NULL, &ret );
+                ::ptrace( PTRACE_GETEVENTMSG, tid, NULL, &ret );
 
                 *type=WAIT_RET::NEWPROCESS;
             } else {
                 /* Since we cannot reliably know when PTRACE_O_TRACESYSGOOD is supported, we always assume that's the reason for a
                  * SIGTRACE */
-                ret=get_syscall(pid);
+                ret=get_syscall(tid);
                 *type=WAIT_RET::SYSCALL;
             }
         } else {
@@ -208,14 +208,14 @@ long parse_wait( pid_t pid, int status, WAIT_RET *type )
         }
     } else {
         /* What is going on here? We should never get here. */
-        LOG_F() << "Process " << pid << " received unknown status " << HEX_FORMAT(status, 8) << " - aborting";
+        LOG_F() << "Process " << tid << " received unknown status " << HEX_FORMAT(status, 8) << " - aborting";
         abort();
     }
 
     return ret;
 }
 
-WAIT_RET reinterpret( WAIT_RET prevstate, pid_t pid, int status, long *ret )
+WAIT_RET reinterpret( WAIT_RET prevstate, pid_t tid, int status, long *ret )
 {
     // Previous state does not affect us
     // XXX if the first thing the child does is a "fork", is this statement still true?
@@ -223,12 +223,12 @@ WAIT_RET reinterpret( WAIT_RET prevstate, pid_t pid, int status, long *ret )
     return prevstate;
 }
 
-int get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
+int get_mem( pid_t pid, pid_t tid, int_ptr process_ptr, void *local_ptr, size_t len )
 {
     if( std::this_thread::get_id()!=ptlib::linux::master_thread ) {
         int ret;
 
-        thread_proxy.callback( [=,&ret]() { ret = get_mem( pid, process_ptr, local_ptr, len ); } );
+        thread_proxy.callback( [=,&ret]() { ret = get_mem( pid, tid, process_ptr, local_ptr, len ); } );
 
         return ret;
     }
@@ -238,7 +238,7 @@ int get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
     size_t offset=((int_ptr)process_ptr)%sizeof(long);
     process_ptr-=offset;
     char *dst=(char *)local_ptr;
-    long buffer=ptrace(PTRACE_PEEKDATA, pid, process_ptr, 0);
+    long buffer=ptrace(PTRACE_PEEKDATA, tid, process_ptr, 0);
     if( buffer==-1 && errno!=0 )
         return 0; // false means failure
 
@@ -256,7 +256,7 @@ int get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
             process_ptr+=offset;
             offset=0;
 
-            buffer=ptrace(PTRACE_PEEKDATA, pid, process_ptr, 0);
+            buffer=ptrace(PTRACE_PEEKDATA, tid, process_ptr, 0);
             if( buffer==-1 && errno!=0 )
                 return 0; // false means failure
         }
@@ -265,12 +265,12 @@ int get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
     return errno==0;
 }
 
-int set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len )
+int set_mem( pid_t pid, pid_t tid, const void *local_ptr, int_ptr process_ptr, size_t len )
 {
     if( std::this_thread::get_id()!=ptlib::linux::master_thread ) {
         int ret;
 
-        thread_proxy.callback( [=,&ret]() { ret = set_mem( pid, local_ptr, process_ptr, len ); } );
+        thread_proxy.callback( [=,&ret]() { ret = set_mem( pid, tid, local_ptr, process_ptr, len ); } );
 
         return ret;
     }
@@ -283,7 +283,7 @@ int set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len )
 
     if( offset!=0 ) {
         // We have "Stuff" hanging before the area we need to fill - initialize the buffer
-        buffer=ptrace( PTRACE_PEEKDATA, pid, process_ptr, 0 );
+        buffer=ptrace( PTRACE_PEEKDATA, tid, process_ptr, 0 );
     }
 
     const char *src=static_cast<const char *>(local_ptr);
@@ -296,7 +296,7 @@ int set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len )
         len--;
 
         if( offset==sizeof(long) ) {
-            ptrace(PTRACE_POKEDATA, pid, process_ptr, buffer);
+            ptrace(PTRACE_POKEDATA, tid, process_ptr, buffer);
             process_ptr+=offset;
             offset=0;
         }
@@ -305,25 +305,25 @@ int set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len )
     if( errno==0 && offset!=0 ) {
         // We have leftover data we still need to transfer. Need to make sure we are not
         // overwriting data outside of our intended area
-        long buffer2=ptrace( PTRACE_PEEKDATA, pid, process_ptr, 0 );
+        long buffer2=ptrace( PTRACE_PEEKDATA, tid, process_ptr, 0 );
 
         unsigned int i;
         for( i=offset; i<sizeof(long); ++i )
             ((char *)&buffer)[i]=((char *)&buffer2)[i];
 
         if( errno==0 )
-            ptrace(PTRACE_POKEDATA, pid, process_ptr, buffer);
+            ptrace(PTRACE_POKEDATA, tid, process_ptr, buffer);
     }
 
     return errno==0;
 }
 
-int get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen )
+int get_string( pid_t pid, pid_t tid, int_ptr process_ptr, char *local_ptr, size_t maxlen )
 {
     if( std::this_thread::get_id()!=ptlib::linux::master_thread ) {
         int ret;
 
-        thread_proxy.callback( [=,&ret]() { ret = get_string( pid, process_ptr, local_ptr, maxlen ); } );
+        thread_proxy.callback( [=,&ret]() { ret = get_string( pid, tid, process_ptr, local_ptr, maxlen ); } );
 
         return ret;
     }
@@ -336,7 +336,7 @@ int get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen )
     int word_offset=0;
 
     while( !done ) {
-        unsigned long word=ptrace( PTRACE_PEEKDATA, pid, process_ptr+(word_offset++)*sizeof(long), 0 );
+        unsigned long word=ptrace( PTRACE_PEEKDATA, tid, process_ptr+(word_offset++)*sizeof(long), 0 );
 
         while( !done && offset<sizeof(long) && i<maxlen ) {
             local_ptr[i]=((char *)&word)[offset]; /* Endianity neutral copy */
@@ -353,17 +353,17 @@ int get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen )
     return i;
 } 
 
-int set_string( pid_t pid, const char *local_ptr, int_ptr process_ptr )
+int set_string( pid_t pid, pid_t tid, const char *local_ptr, int_ptr process_ptr )
 {
     size_t len=strlen(local_ptr)+1;
 
-    return set_mem( pid, local_ptr, process_ptr, len );
+    return set_mem( pid, tid, local_ptr, process_ptr, len );
 }
 
-ssize_t get_cwd( pid_t pid, char *buffer, size_t buff_size )
+ssize_t get_cwd( pid_t pid, pid_t tid, char *buffer, size_t buff_size )
 {
     std::stringstream formatter;
-    formatter << "/proc/" << pid << "/cwd";
+    formatter << "/proc/" << pid << "/task/" << tid << "/cwd";
 
     ssize_t ret=readlink( formatter.str().c_str(), buffer, buff_size>0 ? buff_size-1 : 0 );
 
@@ -373,10 +373,10 @@ ssize_t get_cwd( pid_t pid, char *buffer, size_t buff_size )
     return ret;
 }
 
-ssize_t get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
+ssize_t get_fd( pid_t pid, pid_t tid, int fd, char *buffer, size_t buff_size )
 {
     std::stringstream formatter;
-    formatter << "/proc/" << pid << "/fd/" << fd;
+    formatter << "/proc/" << pid << "/task/" << tid << "/fd/" << fd;
 
     ssize_t ret=readlink( formatter.str().c_str(), buffer, buff_size>0 ? buff_size-1 : 0 );
 
@@ -386,11 +386,11 @@ ssize_t get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
     return ret;
 }
 
-pid_t get_parent( pid_t pid )
+pid_t get_parent( pid_t pid, pid_t tid )
 {
     /* Query the proc filesystem to figure out who the process' parent is */
     std::stringstream filename;
-    filename << "/proc/" << pid << "/status";
+    filename << "/proc/" << pid << "/task/" << tid << "/status";
 
     // TODO use a better parser (maybe using boost::spirit?)
     FILE *stat_file=fopen(filename.str().c_str(), "r");
@@ -422,13 +422,13 @@ pid_t get_parent( pid_t pid )
     return ret;
 }
 
-long ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *data)
+long ptrace(enum __ptrace_request request, pid_t tid, void *addr, void *data)
 {
     long ret;
     int error;
     thread_proxy.callback( [&](){
             errno=0;
-            ret=::ptrace( request, pid, addr, data );
+            ret=::ptrace( request, tid, addr, data );
             error=errno;
             });
 
@@ -440,9 +440,9 @@ long ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *data)
     return ret;
 }
 
-long ptrace(enum __ptrace_request request, pid_t pid, int_ptr addr, int_ptr signal)
+long ptrace(enum __ptrace_request request, pid_t tid, int_ptr addr, int_ptr signal)
 {
-    return ptrace( request, pid, (void *)addr, (void *)signal );
+    return ptrace( request, tid, (void *)addr, (void *)signal );
 }
 
 }; // End of namespace linux

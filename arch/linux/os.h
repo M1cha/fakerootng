@@ -21,19 +21,19 @@ platform::process_state *get_process_state( pid_t pid, bool create = true );
 
 void init( callback_initiator callback );
 void cont( __ptrace_request request, pid_t pid, int signal );
-void prepare( pid_t pid );
+void prepare( pid_t pid, pid_t tid );
 bool wait( pid_t *pid, int *status, extra_data *data, int async );
 long parse_wait( pid_t pid, int status, WAIT_RET *type );
 WAIT_RET reinterpret( WAIT_RET prevstate, pid_t pid, int status, long *ret );
-int get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len );
-int set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len );
-int get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen );
-int set_string( pid_t pid, const char *local_ptr, int_ptr process_ptr );
-ssize_t get_cwd( pid_t pid, char *buffer, size_t buff_size );
-ssize_t get_fd( pid_t pid, int fd, char *buffer, size_t buff_size );
+int get_mem( pid_t pid, pid_t tid, int_ptr process_ptr, void *local_ptr, size_t len );
+int set_mem( pid_t pid, pid_t tid, const void *local_ptr, int_ptr process_ptr, size_t len );
+int get_string( pid_t pid, pid_t tid, int_ptr process_ptr, char *local_ptr, size_t maxlen );
+int set_string( pid_t pid, pid_t tid, const char *local_ptr, int_ptr process_ptr );
+ssize_t get_cwd( pid_t pid, pid_t tid, char *buffer, size_t buff_size );
+ssize_t get_fd( pid_t pid, pid_t tid, int fd, char *buffer, size_t buff_size );
 void save_state( pid_t pid, void *buffer );
 void restore_state( pid_t pid, const void *buffer );
-pid_t get_parent( pid_t pid );
+pid_t get_parent( pid_t pid, pid_t tid );
 long ptrace(enum __ptrace_request request, pid_t pid, void *addr, void *data);
 long ptrace(enum __ptrace_request request, pid_t pid, int_ptr addr, int_ptr signal);
 

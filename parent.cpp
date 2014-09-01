@@ -81,7 +81,6 @@ public:
 
         LOG_I() << "Creating state for new child " << pid;
         num_processes++;
-        ptlib::prepare( pid );
 
         pid_state *ret = new pid_state(pid);
         m_processes.insert( std::make_pair( pid, boost::intrusive_ptr<pid_state>( ret ) ) );
@@ -321,6 +320,7 @@ static void handle_new_process( pid_t child_id )
     pid_state *child = children.lookup( child_id );
     std::unique_lock<std::mutex> state_guard( child->lock() );
 
+    child->m_tid = child_id;
     child->setStateNewRoot();
 }
 
@@ -343,6 +343,10 @@ pid_state *handle_new_process( pid_t process, pid_t parent, unsigned long flags,
     child->m_fsuid = creator_state->m_fsuid;
 
     child->m_ppid = parent;
+
+    if( flags & PROC_FLAGS_THREAD ) {
+        child->m_pid = creator_state->m_pid; // New thread - copy process ID from creator
+    }
 
     if( flags & PROC_FLAGS_SAMEVM ) {
         // Point both to same managing struct
@@ -586,7 +590,7 @@ void parent_unconditional_wakeup()
 pid_state::pid_state(pid_t pid) :
     m_uid(0), m_euid(0), m_suid(0), m_fsuid(0),
     m_gid(0), m_egid(0), m_sgid(0), m_fsgid(0),
-    m_pid(pid), m_ppid(0), m_flags(0)
+    m_pid(pid), m_tid(pid), m_ppid(0), m_flags(0)
 {
 }
 
@@ -645,25 +649,28 @@ void pid_state::end_handling()
             } );
 }
 
-void pid_state::uses_buffers( pid_t pid )
+void pid_state::uses_buffers()
 {
+    // Not easy to allocate buffers after we've already created a thread.
+    ASSERT( m_pid == m_tid );
+
     if( m_proc_mem->shared_ptr )
         return; // Process already has memory
 
-    ptlib::cpu_state saved_state = ptlib::save_state( pid );
+    ptlib::cpu_state saved_state = ptlib::save_state( m_tid );
 
     if( !m_proc_mem->non_shared_addr ) {
         // Allocate the private use area
-        m_proc_mem->non_shared_addr = proxy_mmap( "Mmap private storage in debugee process failed", pid,
+        m_proc_mem->non_shared_addr = proxy_mmap( "Mmap private storage in debugee process failed", m_pid,
                                                   0, PAGE_SIZE, PROT_READ|PROT_WRITE|PROT_EXEC,
                                                   MAP_PRIVATE|MAP_ANONYMOUS, -1, 0 );
-        LOG_D() << "Mapped private memory pid "<<pid<<" address 0x"<<HEX_FORMAT(m_proc_mem->non_shared_addr, 0);
+        LOG_D() << "Mapped private memory pid "<<m_pid<<" address 0x"<<HEX_FORMAT(m_proc_mem->non_shared_addr, 0);
     } else {
         // Already has private area, but has someone else's shared area mapped
-        proxy_munmap( "Munmapping stale shared mem in debugee process failed", pid,
+        proxy_munmap( "Munmapping stale shared mem in debugee process failed", m_pid,
                       m_proc_mem->shared_addr - ptlib::prepare_memory_len, shared_mem_size );
 
-        LOG_D() << "Unmapped stale shared memory pid "<<pid<<" address 0x"<<
+        LOG_D() << "Unmapped stale shared memory pid "<<m_pid<<" address 0x"<<
                 HEX_FORMAT(m_proc_mem->shared_addr - ptlib::prepare_memory_len, 0);
 
         m_proc_mem->shared_addr = 0;
@@ -693,7 +700,7 @@ void pid_state::uses_buffers( pid_t pid )
     // Map the file into the local address space
     m_proc_mem->shared_ptr = unique_mmap("Failed to mmap shared mem file", fd.get(), shared_mem_size, 0,
                 PROT_READ|PROT_WRITE, MAP_SHARED);
-    LOG_D() << "Mapped shared memory pid "<<pid<<" to local address "<<m_proc_mem->shared_ptr.get<void>();
+    LOG_D() << "Mapped shared memory pid "<<m_pid<<" to local address "<<m_proc_mem->shared_ptr.get<void>();
 
     // Fill in the memory with necessary commands
     memcpy( m_proc_mem->shared_ptr.get<void>(), ptlib::prepare_memory(), ptlib::prepare_memory_len );
@@ -701,40 +708,40 @@ void pid_state::uses_buffers( pid_t pid )
     // The local shared memory is mapped. Now we need to map the remote end
     // Generate a new system call
     // Copy the instructions for generating a syscall to the newly created memory
-    ptlib::set_mem( pid, ptlib::prepare_memory(), m_proc_mem->non_shared_addr, ptlib::prepare_memory_len );
+    ptlib::set_mem( m_pid, m_tid, ptlib::prepare_memory(), m_proc_mem->non_shared_addr, ptlib::prepare_memory_len );
 
     // Our generate_syscall function looks for the instructions in the shared memory member. This has not, yet, been
     // mapped in the debugee. Fool it to use the static buffer instead, for now.
     m_proc_mem->shared_addr = m_proc_mem->non_shared_addr + ptlib::prepare_memory_len;
 
-    generate_syscall( pid );
-    ptrace_syscall_wait( pid, 0 );
+    generate_syscall( m_tid );
+    ptrace_syscall_wait( m_tid, 0 );
 
     // Open the same file by the debugee
-    ptlib::set_string( pid, filename, m_proc_mem->non_shared_addr+ptlib::prepare_memory_len );
-    int remote_fd = proxy_open( "Opening shared memory file failed in debugee", pid,
+    ptlib::set_string( m_pid, m_tid, filename, m_proc_mem->non_shared_addr+ptlib::prepare_memory_len );
+    int remote_fd = proxy_open( "Opening shared memory file failed in debugee", m_tid,
             m_proc_mem->non_shared_addr+ptlib::prepare_memory_len, O_RDONLY );
 
     // MMap it
-    generate_syscall( pid );
-    ptrace_syscall_wait( pid, 0 );
+    generate_syscall( m_tid );
+    ptrace_syscall_wait( m_tid, 0 );
 
-    m_proc_mem->shared_addr = proxy_mmap( "Mapping shared memory file failed in debugee", pid,
+    m_proc_mem->shared_addr = proxy_mmap( "Mapping shared memory file failed in debugee", m_tid,
             0, shared_mem_size, PROT_READ|PROT_EXEC, MAP_SHARED, remote_fd, 0 ) + ptlib::prepare_memory_len;
-    LOG_D() << "Mapped shared memory pid "<<pid<<" address 0x"<<
+    LOG_D() << "Mapped shared memory pid "<<m_pid<<" address 0x"<<
             HEX_FORMAT(m_proc_mem->shared_addr - ptlib::prepare_memory_len, 0);
 
     // Close the file descriptor
-    generate_syscall( pid );
-    ptrace_syscall_wait( pid, 0 );
+    generate_syscall( m_tid );
+    ptrace_syscall_wait( m_tid, 0 );
 
-    proxy_close( "Closing shared memory file failed in debugee. How is this even possible?", pid, remote_fd );
+    proxy_close( "Closing shared memory file failed in debugee. How is this even possible?", m_tid, remote_fd );
 
     // Function was entered just entering a system call. Return to the same state before restoring the state
-    generate_syscall( pid );
-    ptrace_syscall_wait( pid, 0 );
+    generate_syscall( m_tid );
+    ptrace_syscall_wait( m_tid, 0 );
 
-    ptlib::restore_state( pid, &saved_state );
+    ptlib::restore_state( m_tid, &saved_state );
 }
 
 void pid_state::verify_syscall_success( pid_t pid, int sc_num, const char *exception_message ) const

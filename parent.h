@@ -58,7 +58,7 @@ public:
     gid_t m_gid, m_egid, m_sgid, m_fsgid;
     std::set<gid_t> m_groups;
 
-    pid_t m_pid, m_ppid;
+    pid_t m_pid, m_tid, m_ppid;
 
     struct process_memory {
         // TODO add locking
@@ -130,6 +130,7 @@ public:
         ASSERT(m_state==state::INIT);
         m_state=state::NEW_ROOT;
 
+        ptlib::prepare( m_pid, m_tid );
         m_wait_condition.notify_all();
     }
 
@@ -138,6 +139,7 @@ public:
         ASSERT(m_state==state::INIT);
         m_state=state::NEW_CHILD;
 
+        ptlib::prepare( m_pid, m_tid );
         m_wait_condition.notify_all();
     }
 
@@ -152,7 +154,7 @@ public:
     void ptrace_syscall_wait( pid_t pid, int signal );
     void start_handling( SyscallHandlerTask *task );
     void end_handling();
-    void uses_buffers( pid_t pid );
+    void uses_buffers();
     void verify_syscall_success( pid_t pid, int sc_num, const char *exception_message ) const;
     void generate_syscall( pid_t pid ) const;
 

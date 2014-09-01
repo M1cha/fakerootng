@@ -52,10 +52,10 @@ void init( callback_initiator callback );
   @brief Continue (or detach) a halted process.
 
   @param request PTRACE request type.
-  @param pid the pid of the process to restart.
+  @param tid the tid of the process to restart.
   @param signal the signal to send the process with the ptrace command.
  */
-void cont( int request, pid_t pid, int signal );
+void cont( int request, pid_t tid, int signal );
 
 /**
   @brief Call once per each new process created.
@@ -63,8 +63,9 @@ void cont( int request, pid_t pid, int signal );
   Call this function once for each new process for which we attach as a debugger.
   This function should be called after we have already attached to it as a debugger.
   @param pid the pid of the process to which we attached.
+  @param tid the thread id of the thread to which we attached.
  */
-void prepare( pid_t pid );
+void prepare( pid_t pid, pid_t tid );
 
 /**
   @brief legal return values from ptlib::wait.
@@ -104,18 +105,18 @@ static inline std::ostream &operator<< (std::ostream &strm, WAIT_RET wait_ret)
  If async is true and there is nothing to report, the function exits immediately, returning false. If async is false,
  the function blocks until there is something to report.
 
- @param[out] pid        the pid of the process on which we are reporting.
+ @param[out] tid        the tid of the process on which we are reporting.
  @param[out] status     the status returned by "wait" (integer).
  @param[out] data       extra data returned by wait (such as rusage).
  @param[in]  async      whether to block if we have nothing to report.
  @returns               whether the function succeeded.
  @see ptlib::parse_wait
  */
-bool wait( pid_t *pid, int *status, extra_data *data, int async );
+bool wait( pid_t *tid, int *status, extra_data *data, int async );
 /**
  @brief parses the info returned by ptlib::wait.
  
- @param[in]  pid        the pid of the process to parse.
+ @param[in]  tid        the tid of the process to parse.
  @param[in]  status     the status as returned by ptlib::wait.
  @param[out] type       type of event that happened.
  @returns               meaning depends on value of type.
@@ -132,66 +133,66 @@ bool wait( pid_t *pid, int *status, extra_data *data, int async );
  @see   ptlib::wait
  @see   ptlib::WAIT_RET
  */
-long parse_wait( pid_t pid, int status, WAIT_RET *type );
+long parse_wait( pid_t tid, int status, WAIT_RET *type );
 
 /* If we get a trace before we run prepare, we might mis-interpret the signals */
 // TODO Is this function even needed?
-WAIT_RET reinterpret( WAIT_RET prestate, pid_t pid, int status, long *ret );
+WAIT_RET reinterpret( WAIT_RET prestate, pid_t tid, int status, long *ret );
 
 /**
   @brief get process' program counter
 
-  @param pid pid of process to query.
+  @param tid tid of process to query.
   @returns address of current program counter.
  */
-int_ptr get_pc( pid_t pid );
+int_ptr get_pc( pid_t tid );
 /**
   @brief set process' program counter
 
-  @param pid pid of process to alter.
+  @param tid tid of process to alter.
   @param location new address to set PC to.
   @returns 0 on success, -1 on failure.
  */
-int set_pc( pid_t pid, int_ptr location );
+int set_pc( pid_t tid, int_ptr location );
 
 /* Syscall analysis functions - call only when stopped process just invoked a syscall */
 
 /* Report the syscall number being invoked */
-int get_syscall( pid_t pid );
-int set_syscall( pid_t pid, int sc_num ); /* Change the meaning of a just started system call */
-void generate_syscall( pid_t pid, int_ptr base_memory ); /* Generate a new system call */
+int get_syscall( pid_t tid );
+int set_syscall( pid_t tid, int sc_num ); /* Change the meaning of a just started system call */
+void generate_syscall( pid_t tid, int_ptr base_memory ); /* Generate a new system call */
 
 /* Return the nth argument passed */
-int_ptr get_argument( pid_t pid, int argnum );
-int set_argument( pid_t pid, int argnum, int_ptr value );
+int_ptr get_argument( pid_t tid, int argnum );
+int set_argument( pid_t tid, int argnum, int_ptr value );
 
-int_ptr get_retval( pid_t pid );
-bool success( pid_t pid, int sc_num ); /* Report whether the syscall succeeded */
-void set_retval( pid_t pid, int_ptr val );
-void set_error( pid_t pid, int sc_num, int error );
-int get_error( pid_t pid, int sc_num );
+int_ptr get_retval( pid_t tid );
+bool success( pid_t tid, int sc_num ); /* Report whether the syscall succeeded */
+void set_retval( pid_t tid, int_ptr val );
+void set_error( pid_t tid, int sc_num, int error );
+int get_error( pid_t tid, int sc_num );
 
 /* Copy memory in and out of the process
  * Return TRUE on success */
-int get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len );
-int set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len );
+int get_mem( pid_t pid, pid_t tid, int_ptr process_ptr, void *local_ptr, size_t len );
+int set_mem( pid_t pid, pid_t tid, const void *local_ptr, int_ptr process_ptr, size_t len );
 
 /* Copy a NULL terminated string. "get" returns the number of bytes copied, including the NULL */
-int get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen );
-int set_string( pid_t pid, const char *local_ptr, int_ptr process_ptr );
+int get_string( pid_t pid, pid_t tid, int_ptr process_ptr, char *local_ptr, size_t maxlen );
+int set_string( pid_t pid, pid_t tid, const char *local_ptr, int_ptr process_ptr );
 
 /* Stat related data processing */
-struct stat get_stat_result( pid_t pid, int sc_num, int_ptr stat_addr );
-void set_stat_result( pid_t pid, int sc_num, int_ptr stat_addr, struct stat *stat );
+struct stat get_stat_result( pid_t pid, pid_t tid, int sc_num, int_ptr stat_addr );
+void set_stat_result( pid_t pid, pid_t tid, int sc_num, int_ptr stat_addr, struct stat *stat );
 
 /* Get a process' current directory and open fds */
 /* Return value is as for "readlink" */
-ssize_t get_cwd( pid_t pid, char *buffer, size_t buff_size );
-ssize_t get_fd( pid_t pid, int fd, char *buffer, size_t buff_size );
+ssize_t get_cwd( pid_t pid, pid_t tid, char *buffer, size_t buff_size );
+ssize_t get_fd( pid_t pid, pid_t tid, int fd, char *buffer, size_t buff_size );
 
 /* Save/restore the process state */
-cpu_state save_state( pid_t pid );
-void restore_state( pid_t pid, const cpu_state *state );
+cpu_state save_state( pid_t tid );
+void restore_state( pid_t tid, const cpu_state *state );
 
 /* Initialize debugger controled memory inside debuggee address space */
 const void *prepare_memory( ); /* Returns pointer to static buffer with the desired opcods, of prepare_memory_len length */
@@ -200,7 +201,7 @@ const void *prepare_memory( ); /* Returns pointer to static buffer with the desi
 /* How much memory does the platform need beyond how much the process needs. Defined in the platform specific header */
 
 /* Process relationship - return the parent of a process */
-pid_t get_parent( pid_t pid );
+pid_t get_parent( pid_t pid, pid_t tid );
 
 /**
  * @brief Handle process creation with debugger attached
@@ -211,11 +212,12 @@ pid_t get_parent( pid_t pid );
  * prepared to handle them in arbitrary order.
  * 
  * @param pid the pid of the process executing the call
+ * @param tid the tid of the process executing the call
  * @param sc_num the actual system call number performed
  * @param waiter a callback to be called whenever the handler needs to release the original process
  * @return the PID of the new process created
  */
-pid_t fork_handler( pid_t pid, int orig_sc, std::function<void ()> waiter );
+pid_t fork_handler( pid_t pid, pid_t tid, int orig_sc, std::function<void ()> waiter );
 
 }; // End of namespace ptlib
 

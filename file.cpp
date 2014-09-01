@@ -27,7 +27,7 @@
 
 void sys_fchownat( int sc_num, pid_t pid, pid_state *state )
 {
-    state->uses_buffers( pid );
+    state->uses_buffers();
 
     uid_t owner = ptlib::get_argument( pid, 3 );
     uid_t group = ptlib::get_argument( pid, 4 );
@@ -50,7 +50,8 @@ void sys_fchownat( int sc_num, pid_t pid, pid_state *state )
         return;
     }
 
-    struct stat stat = ptlib::get_stat_result( pid, ptlib::preferred::FSTATAT, state->m_proc_mem->non_shared_addr );
+    struct stat stat = ptlib::get_stat_result( state->m_pid, state->m_tid, ptlib::preferred::FSTATAT,
+            state->m_proc_mem->non_shared_addr );
     auto file_list_lock = file_list::lock();
     file_list::stat_override *override = file_list::get_map( stat );
 
@@ -78,14 +79,14 @@ static void real_stat( int sc_num, pid_t pid, pid_state *state, unsigned int buf
 
     if( ptlib::success( pid, sc_num ) ) {
         // Check the result to see if we need to lie about this file
-        struct stat stat = ptlib::get_stat_result( pid, sc_num, stat_addr );
+        struct stat stat = ptlib::get_stat_result( state->m_pid, state->m_tid, sc_num, stat_addr );
         auto file_list_lock = file_list::lock();
         file_list::stat_override *override = file_list::get_map( stat, false );
 
         if( override ) {
             file_list::apply( stat, *override );
 
-            ptlib::set_stat_result( pid, sc_num, stat_addr, &stat );
+            ptlib::set_stat_result( state->m_pid, state->m_tid, sc_num, stat_addr, &stat );
 
             LOG_D() << "Reported false info for stat " << *override;
         }

@@ -399,48 +399,48 @@ void init( callback_initiator callback )
     linux::init( callback );
 }
 
-void cont( int request, pid_t pid, int signal )
+void cont( int request, pid_t tid, int signal )
 {
-    linux::cont( __ptrace_request(request), pid, signal );
+    linux::cont( __ptrace_request(request), tid, signal );
 }
 
-void prepare( pid_t pid )
+void prepare( pid_t pid, pid_t tid )
 {
-    linux::prepare(pid);
+    linux::prepare(pid, tid);
 }
 
-bool wait( pid_t *pid, int *status, extra_data *data, int async )
+bool wait( pid_t *tid, int *status, extra_data *data, int async )
 {
-    return linux::wait( pid, status, data, async );
+    return linux::wait( tid, status, data, async );
 }
 
-long parse_wait( pid_t pid, int status, WAIT_RET *type )
+long parse_wait( pid_t tid, int status, WAIT_RET *type )
 {
-    return linux::parse_wait( pid, status, type );
+    return linux::parse_wait( tid, status, type );
 }
 
-WAIT_RET reinterpret( WAIT_RET prestate, pid_t pid, int status, long *ret )
+WAIT_RET reinterpret( WAIT_RET prestate, pid_t tid, int status, long *ret )
 {
-    return linux::reinterpret( prestate, pid, status, ret );
+    return linux::reinterpret( prestate, tid, status, ret );
 }
 
-int_ptr get_pc( pid_t pid )
+int_ptr get_pc( pid_t tid )
 {
-    platform::process_state *state = linux::get_process_state(pid);
+    platform::process_state *state = linux::get_process_state(tid);
     return state->registers.rip;
 }
 
-int set_pc( pid_t pid, int_ptr location )
+int set_pc( pid_t tid, int_ptr location )
 {
-    platform::process_state *state = linux::get_process_state(pid);
+    platform::process_state *state = linux::get_process_state(tid);
     state->registers.rip = location;
     state->dirty = true;
     return 0;
 }
 
-int get_syscall( pid_t pid )
+int get_syscall( pid_t tid )
 {
-    platform::process_state *state = linux::get_process_state(pid);
+    platform::process_state *state = linux::get_process_state(tid);
 
     int syscall;
 
@@ -456,7 +456,7 @@ int get_syscall( pid_t pid )
         if( (unsigned long)syscall < ARRAY_SIZE(syscall_32_to_64) ) {
             syscall=syscall_32_to_64[syscall];
         } else {
-            LOG_W() << "ptlib_get_syscall: " << pid << " syscall out of range " << syscall;
+            LOG_W() << "ptlib_get_syscall: " << tid << " syscall out of range " << syscall;
 
             syscall=-1;
         }
@@ -474,9 +474,9 @@ int get_syscall( pid_t pid )
     return syscall;
 }
 
-static int translate_syscall( pid_t pid, int sc_num )
+static int translate_syscall( pid_t tid, int sc_num )
 {
-    platform::process_state *state = linux::get_process_state(pid);
+    platform::process_state *state = linux::get_process_state(tid);
 
     if( state->type == cpu_types::amd64 )
         return sc_num;
@@ -488,41 +488,41 @@ static int translate_syscall( pid_t pid, int sc_num )
         sc=syscall_64_to_32[sc];
     } else {
         sc=-1;
-        LOG_E() << "ptlib_set_syscall: " << pid <<
+        LOG_E() << "ptlib_set_syscall: " << tid <<
                 " invalid 64 to 32 bit translation for syscall " << sc_num;
     }
 
     return sc;
 }
 
-int set_syscall( pid_t pid, int sc_num )
+int set_syscall( pid_t tid, int sc_num )
 {
-    sc_num=translate_syscall( pid, sc_num );
+    sc_num=translate_syscall( tid, sc_num );
 
     if( sc_num==-1 ) {
         errno=EINVAL;
         return -1;
     }
 
-    platform::process_state *state = linux::get_process_state(pid);
+    platform::process_state *state = linux::get_process_state(tid);
     state->registers.orig_rax = sc_num;
     state->dirty = true;
 
     return 0;
 }
 
-void generate_syscall( pid_t pid, int_ptr base_memory )
+void generate_syscall( pid_t tid, int_ptr base_memory )
 {
-    platform::process_state *state = linux::get_process_state(pid);
+    platform::process_state *state = linux::get_process_state(tid);
 
     switch( state->type ) {
     case cpu_types::amd64:
         /* 64 bit syscall instruction */
-        set_pc( pid, base_memory-prepare_memory_len+syscall_instr64_offset );
+        set_pc( tid, base_memory-prepare_memory_len+syscall_instr64_offset );
         break;
     case cpu_types::i386:
         /* 32 bit syscall instruction */
-        set_pc( pid, base_memory-prepare_memory_len );
+        set_pc( tid, base_memory-prepare_memory_len );
         break;
     default:
         LOG_F() << "Unsupported CPU platform";
@@ -548,17 +548,17 @@ static decltype(user_regs_struct::rax) user_regs_struct::*arg_offset_64bit[]={
     &user_regs_struct::r9
 };
 
-int_ptr get_argument( pid_t pid, int argnum )
+int_ptr get_argument( pid_t tid, int argnum )
 {
     /* Check for error condition */
     if( argnum<1 || argnum>6 ) {
-        LOG_E() << "ptlib_get_argument: " << pid << " invalid argument number " << argnum;
+        LOG_E() << "ptlib_get_argument: " << tid << " invalid argument number " << argnum;
         errno=EINVAL;
 
         return -1;
     }
 
-    platform::process_state *state = linux::get_process_state(pid);
+    platform::process_state *state = linux::get_process_state(tid);
 
     int_ptr ret;
 
@@ -580,16 +580,16 @@ int_ptr get_argument( pid_t pid, int argnum )
     return ret;
 }
 
-int set_argument( pid_t pid, int argnum, int_ptr value )
+int set_argument( pid_t tid, int argnum, int_ptr value )
 {
     if( argnum<1 || argnum>6 ) {
-        LOG_E() << "ptlib_set_argument: " << pid << " invalid argument number " << argnum;
+        LOG_E() << "ptlib_set_argument: " << tid << " invalid argument number " << argnum;
         errno=EINVAL;
 
         return -1;
     }
 
-    platform::process_state *state = linux::get_process_state(pid);
+    platform::process_state *state = linux::get_process_state(tid);
     state->dirty = true;
 
     switch( state->type ) {
@@ -607,68 +607,68 @@ int set_argument( pid_t pid, int argnum, int_ptr value )
     return 0;
 }
 
-int_ptr get_retval( pid_t pid )
+int_ptr get_retval( pid_t tid )
 {
-    platform::process_state *state = linux::get_process_state(pid);
+    platform::process_state *state = linux::get_process_state(tid);
     return state->registers.rax;
 }
 
-bool success( pid_t pid, int sc_num )
+bool success( pid_t tid, int sc_num )
 {
-    unsigned long ret=get_retval( pid );
+    unsigned long ret=get_retval( tid );
 
     /* This heuristic is good for all syscalls we found. It may not be good for all of them */
     return ret<0xfffffffffffff000u;
 }
 
-void set_retval( pid_t pid, int_ptr val )
+void set_retval( pid_t tid, int_ptr val )
 {
-    platform::process_state *state = linux::get_process_state(pid);
+    platform::process_state *state = linux::get_process_state(tid);
 
     state->registers.rax = val;
     state->dirty = true;
 }
 
-void set_error( pid_t pid, int sc_num, int error )
+void set_error( pid_t tid, int sc_num, int error )
 {
-    set_retval( pid, -error );
+    set_retval( tid, -error );
 }
 
-int get_error( pid_t pid, int sc_num )
+int get_error( pid_t tid, int sc_num )
 {
-    return -(long)get_retval( pid );
+    return -(long)get_retval( tid );
 }
 
-int get_mem( pid_t pid, int_ptr process_ptr, void *local_ptr, size_t len )
+int get_mem( pid_t pid, pid_t tid, int_ptr process_ptr, void *local_ptr, size_t len )
 {
-    return linux::get_mem( pid, process_ptr, local_ptr, len );
+    return linux::get_mem( pid, tid, process_ptr, local_ptr, len );
 }
 
-int set_mem( pid_t pid, const void *local_ptr, int_ptr process_ptr, size_t len )
+int set_mem( pid_t pid, pid_t tid, const void *local_ptr, int_ptr process_ptr, size_t len )
 {
-    return linux::set_mem( pid, local_ptr, process_ptr, len );
+    return linux::set_mem( pid, tid, local_ptr, process_ptr, len );
 }
 
-int get_string( pid_t pid, int_ptr process_ptr, char *local_ptr, size_t maxlen )
+int get_string( pid_t pid, pid_t tid, int_ptr process_ptr, char *local_ptr, size_t maxlen )
 {
-    return linux::get_string( pid, process_ptr, local_ptr, maxlen );
+    return linux::get_string( pid, tid, process_ptr, local_ptr, maxlen );
 }
 
-int set_string( pid_t pid, const char *local_ptr, int_ptr process_ptr )
+int set_string( pid_t pid, pid_t tid, const char *local_ptr, int_ptr process_ptr )
 {
-    return linux::set_string( pid, local_ptr, process_ptr );
+    return linux::set_string( pid, tid, local_ptr, process_ptr );
 }
 
-struct stat get_stat_result( pid_t pid, int sc_num, int_ptr stat_addr )
+struct stat get_stat_result( pid_t pid, pid_t tid, int sc_num, int_ptr stat_addr )
 {
-    platform::process_state *state = linux::get_process_state(pid);
+    platform::process_state *state = linux::get_process_state(tid);
 
     struct stat stat;
 
     if( state->type == cpu_types::amd64 ) {
         ASSERT( sc_num==SYS_stat || sc_num==SYS_fstat || sc_num==SYS_lstat || sc_num==SYS_newfstatat );
 
-        get_mem( pid, stat_addr, &stat, sizeof(stat) );
+        get_mem( pid, tid, stat_addr, &stat, sizeof(stat) );
     } else {
         abort();
     }
@@ -676,39 +676,39 @@ struct stat get_stat_result( pid_t pid, int sc_num, int_ptr stat_addr )
     return stat;
 }
 
-void set_stat_result( pid_t pid, int sc_num, int_ptr stat_addr, struct stat *stat )
+void set_stat_result( pid_t pid, pid_t tid, int sc_num, int_ptr stat_addr, struct stat *stat )
 {
-    platform::process_state *state = linux::get_process_state(pid);
+    platform::process_state *state = linux::get_process_state(tid);
 
     if( state->type == cpu_types::amd64 ) {
         ASSERT( sc_num==SYS_stat || sc_num==SYS_fstat || sc_num==SYS_lstat || sc_num==SYS_newfstatat );
 
-        set_mem( pid, stat, stat_addr, sizeof(*stat) );
+        set_mem( pid, tid, stat, stat_addr, sizeof(*stat) );
     } else {
         abort();
     }
 }
 
-ssize_t get_cwd( pid_t pid, char *buffer, size_t buff_size )
+ssize_t get_cwd( pid_t pid, pid_t tid, char *buffer, size_t buff_size )
 {
-    return linux::get_cwd( pid, buffer, buff_size );
+    return linux::get_cwd( pid, tid, buffer, buff_size );
 }
 
-ssize_t get_fd( pid_t pid, int fd, char *buffer, size_t buff_size )
+ssize_t get_fd( pid_t pid, pid_t tid, int fd, char *buffer, size_t buff_size )
 {
-    return linux::get_fd( pid, fd, buffer, buff_size );
+    return linux::get_fd( pid, tid, fd, buffer, buff_size );
 }
 
-cpu_state save_state( pid_t pid )
+cpu_state save_state( pid_t tid )
 {
-    platform::process_state *state = linux::get_process_state(pid);
+    platform::process_state *state = linux::get_process_state(tid);
 
     return state->registers;
 }
 
-void restore_state( pid_t pid, const cpu_state *saved_state )
+void restore_state( pid_t tid, const cpu_state *saved_state )
 {
-    platform::process_state *state = linux::get_process_state(pid);
+    platform::process_state *state = linux::get_process_state(tid);
 
     state->registers = *saved_state;
     state->dirty = true;
@@ -719,14 +719,14 @@ const void *prepare_memory( )
     return memory_image;
 }
 
-pid_t get_parent( pid_t pid )
+pid_t get_parent( pid_t pid, pid_t tid )
 {
-    return linux::get_parent(pid);
+    return linux::get_parent(pid, tid);
 }
 
 namespace platform {
 
-void process_state::post_load(pid_t pid)
+void process_state::post_load(pid_t tid)
 {
     switch(registers.cs) {
     case 0x33:
