@@ -2,7 +2,9 @@ Infrstructure work plan:
 stat/chown - done
 state file - done
 generate syscalls - done
+new process support - done
+threads
+multiarch
 strace
 chroot
-new process support - done
 handle trivial cases in main thread
