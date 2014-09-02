@@ -3,7 +3,7 @@ stat/chown - done
 state file - done
 generate syscalls - done
 new process support - done
-threads
+threads - done
 multiarch
 strace
 chroot

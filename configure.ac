@@ -80,7 +80,6 @@ AC_COMPILE_IFELSE( [AC_LANG_PROGRAM([
     ],
     [AC_MSG_RESULT([no])])
 
-dnl Check which std::map variant to use
 AC_LANG_PUSH(C++)
 #AC_LANG_WERROR
 

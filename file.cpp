@@ -27,7 +27,7 @@
 
 void sys_fchownat( int sc_num, pid_t pid, pid_state *state )
 {
-    state->uses_buffers();
+    auto shared_mem_guard = state->uses_buffers();
 
     uid_t owner = ptlib::get_argument( pid, 3 );
     uid_t group = ptlib::get_argument( pid, 4 );
@@ -44,6 +44,7 @@ void sys_fchownat( int sc_num, pid_t pid, pid_state *state )
     state->ptrace_syscall_wait(pid, 0);
 
     if( !ptlib::success( pid, ptlib::preferred::FSTATAT ) ) {
+        shared_mem_guard.unlock();
         // If we failed the fstatat, our error is, most likely, the same as we would for fchownat for root
         state->end_handling();
 
@@ -52,6 +53,8 @@ void sys_fchownat( int sc_num, pid_t pid, pid_state *state )
 
     struct stat stat = ptlib::get_stat_result( state->m_pid, state->m_tid, ptlib::preferred::FSTATAT,
             state->m_proc_mem->non_shared_addr );
+    shared_mem_guard.unlock();
+
     auto file_list_lock = file_list::lock();
     file_list::stat_override *override = file_list::get_map( stat );
 

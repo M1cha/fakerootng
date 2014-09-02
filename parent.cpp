@@ -649,13 +649,14 @@ void pid_state::end_handling()
             } );
 }
 
-void pid_state::uses_buffers()
+std::unique_lock<std::mutex> pid_state::uses_buffers()
 {
     // Not easy to allocate buffers after we've already created a thread.
     ASSERT( m_pid == m_tid );
 
+    std::unique_lock<std::mutex> guard(m_proc_mem->lock);
     if( m_proc_mem->shared_ptr )
-        return; // Process already has memory
+        return guard; // Process already has memory
 
     ptlib::cpu_state saved_state = ptlib::save_state( m_tid );
 
@@ -742,6 +743,8 @@ void pid_state::uses_buffers()
     ptrace_syscall_wait( m_tid, 0 );
 
     ptlib::restore_state( m_tid, &saved_state );
+
+    return guard;
 }
 
 void pid_state::verify_syscall_success( pid_t pid, int sc_num, const char *exception_message ) const

@@ -61,7 +61,8 @@ public:
     pid_t m_pid, m_tid, m_ppid;
 
     struct process_memory {
-        // TODO add locking
+        std::mutex lock;
+
         int_ptr non_shared_addr = 0;
         int_ptr shared_addr = 0;
         unique_mmap shared_ptr;
@@ -154,7 +155,7 @@ public:
     void ptrace_syscall_wait( pid_t pid, int signal );
     void start_handling( SyscallHandlerTask *task );
     void end_handling();
-    void uses_buffers();
+    std::unique_lock<std::mutex> uses_buffers();
     void verify_syscall_success( pid_t pid, int sc_num, const char *exception_message ) const;
     void generate_syscall( pid_t pid ) const;
 
