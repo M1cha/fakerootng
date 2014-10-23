@@ -66,6 +66,8 @@ DECLARE_SYSFUNC(rmdir);
 
 DECLARE_SYSFUNC(chroot);
 DECLARE_SYSFUNC(getcwd);
+
+// Memory
 DECLARE_SYSFUNC(munmap);
 
 

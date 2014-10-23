@@ -22,6 +22,9 @@ class daemonProcess;
 class pid_state;
 class SyscallHandlerTask;
 
+// Sizes of memory areas
+extern size_t static_mem_size, shared_mem_size;
+
 // We know of a new process in the system
 pid_state *handle_new_process( pid_t process, pid_t parent, unsigned long flags, pid_state *creator_state );
 // Attach the debugger to a specific child

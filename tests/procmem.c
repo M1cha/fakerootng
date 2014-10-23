@@ -103,7 +103,7 @@ int main()
         printf("Writing 13 bytes to legal read only location returned %d (errno %d: %s)\n", written, errno,
                 strerror(errno));
 
-        printf("Memory contains %c%c%c%c%c%c%c%c%c%c%c%c%c\n", map[0], map[1], map[2], map[3],
+        printf("Memory contains %c%c%c%c%c%c%c%c%c%c%c%c%c%c\n", map[0], map[1], map[2], map[3],
                 map[4], map[5], map[6], map[7], map[8], map[9], map[10], map[11], map[12],
                 map[13] );
     }
@@ -119,7 +119,7 @@ int main()
         printf("Reading 13 bytes from legal read only location returned %d (errno %d: %s)\n", numread, errno,
                 strerror(errno));
 
-        printf("Memory contains %c%c%c%c%c%c%c%c%c%c%c%c%c\n", map[0], map[1], map[2], map[3],
+        printf("Memory contains %c%c%c%c%c%c%c%c%c%c%c%c%c%c\n", map[0], map[1], map[2], map[3],
                 map[4], map[5], map[6], map[7], map[8], map[9], map[10], map[11], map[12],
                 map[13] );
     }
@@ -135,7 +135,7 @@ int main()
         printf("Reading 13 bytes from legal unreadable location returned %d (errno %d: %s)\n", numread, errno,
                 strerror(errno));
 
-        printf("Memory contains %c%c%c%c%c%c%c%c%c%c%c%c%c\n", map[0], map[1], map[2], map[3],
+        printf("Memory contains %c%c%c%c%c%c%c%c%c%c%c%c%c%c\n", map[0], map[1], map[2], map[3],
                 map[4], map[5], map[6], map[7], map[8], map[9], map[10], map[11], map[12],
                 map[13] );
     }
