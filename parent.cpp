@@ -289,7 +289,7 @@ public:
     {
         std::unique_lock<std::mutex> state_guard( m_proc_state->lock() );
 
-        ASSERT( m_ptlib_status == ptlib::WAIT_RET::EXIT || m_ptlib_status == ptlib::WAIT_RET::EXIT );
+        ASSERT( m_ptlib_status == ptlib::WAIT_RET::EXIT || m_ptlib_status == ptlib::WAIT_RET::SIGEXIT );
         ASSERT( m_proc_state->get_state()==pid_state::state::NONE || m_proc_state->get_state()==pid_state::state::KERNEL );
 
         num_processes--;
