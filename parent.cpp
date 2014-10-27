@@ -292,7 +292,6 @@ public:
         ASSERT( m_ptlib_status == ptlib::WAIT_RET::EXIT || m_ptlib_status == ptlib::WAIT_RET::SIGEXIT );
         ASSERT( m_proc_state->get_state()==pid_state::state::NONE || m_proc_state->get_state()==pid_state::state::KERNEL );
 
-        num_processes--;
         LOG_I() << "pid " << m_pid << " exit";
         children.delete_(m_pid);
     }
@@ -529,6 +528,7 @@ static void process_sigchld( pid_t pid, ptlib::WAIT_RET wait_state, int status, 
     {
     case ptlib::WAIT_RET::EXIT:
     case ptlib::WAIT_RET::SIGEXIT:
+        num_processes--;
         process_exit( pid, proc_state, wait_state, status, ret );
         break;
     case ptlib::WAIT_RET::SIGNAL:
@@ -575,7 +575,7 @@ int process_children( daemonProcess *daemon )
 
             } else if( errno==ECHILD ) {
                 // We should never get here. If we have no more children, we should have known about it already
-                LOG_F() << "BUG - ptlib wait failed with \"" << strerror(errno) << "\" while numchildren is still " <<
+                LOG_F() << "BUG - ptlib wait failed with \"" << strerror(errno) << "\" while num_processes is still " <<
                         num_processes;
                 num_processes=0;
             }
