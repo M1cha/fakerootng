@@ -7,11 +7,6 @@
 
 namespace logging {
 
-bool init( const char * file_name, bool enabled, bool flush );
-int get_fd();
-void close();
-void flush();
-
 enum class severity {
     FATAL,
     ERROR,
@@ -20,6 +15,11 @@ enum class severity {
     DEBUG,
     TRACE
 };
+
+bool init( const char * file_name, bool enabled, bool flush, severity level );
+int get_fd();
+void close();
+void flush();
 
 static inline std::ostream &operator<< (std::ostream &strm, severity level)
 {

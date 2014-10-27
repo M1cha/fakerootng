@@ -1,7 +1,7 @@
-.TH FAKEROOT\-NG 1 "April 26, 2014" "Shachar Shemesh" "Fakeroot Next Gen User Manual"
+.TH FAKEROOT\-NG 1 "October 27, 2014" "Shachar Shemesh" "Fakeroot Next Gen User Manual"
 .\" Please adjust this date whenever revising the manpage.
 .SH NAME
-fakeroot\-ng \- run a command while making it believe it is running as root
+fakeroot\-ng \- run a program while making it believe it is running as root
 .SH SYNOPSIS
 \fBfakeroot\-ng\fP [ \fIoptions\fP... ] [ [\fB\-\-\fP] \fIcommand line\fP ]
 .SH DESCRIPTION
@@ -39,6 +39,10 @@ mostly useful for cases where fakeroot\-ng fails to act as expected.
 .TP
 \fB-v\fP
 Increases the log verbosity level. If provided more than once, will increase it further.
+
+By default fakeroot\-ng will log at severity "FATAL" if the output is the console (visible only
+if the \-d option is given), and at severity "ERROR" if the output is a file (through the \-l
+option).
 .TP
 \fB-f\fP
 Causes the log file to be flushed after every print. Guarantees that the important hint as to why
@@ -49,6 +53,10 @@ effect if \fB\-l\fP is specified.
 Tells fakeroot\-ng not to completely daemonize itself. This is mostly useful in case of crashes that
 cause a core dump, as the debugger would normally change directory to root, which would prevent a
 core file from being created.
+
+This also allows the debug log to be output to the console, but note that the output will then be mixed
+from the output the actual programs being run produce. Use of the log with \-l is the recommended way
+to get debug output.
 .TP
 \fB\-V\fP
 Print out the version number and copyright info and exit without doing anything.
@@ -104,7 +112,11 @@ Plenty of those. See the "README" file for a list of known ones.
 .SH SEE ALSO
 .BR fakeroot "(1), " fakechroot "(1), " ptrace "(2), " ld.so "(8), " chroot (1)
 .SH AUTHOR
-Fakeroot\-ng was written by Shachar Shemesh.
+Fakeroot\-ng was written by Shachar Shemesh. For a full list of all contributers, please see the
+AUTHORS file in the source distribution.
+.PP
+Fakeroot\-ng is distributed under the terms of the GPL version 2 or later. Please see the
+COPYING file for the complete text of the license.
 .PP
 This manual page was written by Shachar Shemesh <shachar@debian.org>
 .SH PROJECT HOMEPAGE AND SUPPORT
@@ -112,6 +124,11 @@ http://fakeroot-ng.lingnu.com
 .PP
 Community support is available exclusively through the project's
 mailing list, at https://lists.sourceforge.net/lists/listinfo/fakerootng\-devel.
+
+Please do not email Shachar directly with support requests and questions. Private emails deny the
+community a chance to learn from the exchange, and also deny you the chance to get a better answer
+from someone else.
 .PP
-Commercial support is available through Shachar's company,
-Lingnu Open Source Consulting Ltd., at http://www.lingnu.com
+Commercial support used to be available through Shachar's company,
+Lingnu Open Source Consulting Ltd., at http://www.lingnu.com. The company, however,
+is no longer doing business.

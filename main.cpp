@@ -65,6 +65,7 @@ int parse_options( int argc, char *argv[] )
     int opt;
     const char * logfile=NULL;
     bool log_flush=false;
+    logging::severity severity=logging::severity::FATAL;
 
     while( (opt=getopt(argc, argv, "+p:l:dvVfh" ))!=-1 ) {
         switch( opt ) {
@@ -76,13 +77,18 @@ int parse_options( int argc, char *argv[] )
             }
             break;
         case 'l':
-            if( logfile==NULL ) {
-                logfile=optarg;
-            } else {
+            if( logfile!=NULL ) {
                 fprintf(stderr, "-l option given twice\n");
 
                 return -1;
             }
+
+            logfile=optarg;
+            if(severity<logging::severity::ERROR)
+                severity=logging::severity::ERROR; // When logging to file, log all errors by default
+            break;
+        case 'v':
+            severity = static_cast<logging::severity>(static_cast<int>(severity)+1);
             break;
         case 'f':
             log_flush=true;
@@ -113,7 +119,7 @@ int parse_options( int argc, char *argv[] )
         return -1;
     }
 
-    if( ! logging::init( logfile, logfile!=NULL, log_flush ) ) {
+    if( ! logging::init( logfile, logfile!=NULL, log_flush, severity ) ) {
         perror( "Failed to create log file" );
 
         return -1;

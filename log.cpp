@@ -23,10 +23,11 @@ thread_local char thread_name[20];
 std::ostream *logstream;
 std::mutex log_lock;
 
-bool init( const char * file_name, bool enabled, bool flush )
+bool init( const char * file_name, bool enabled, bool flush, severity level )
 {
+    filter_level = level;
+
     if( !enabled ) {
-        filter_level = severity::FATAL;
         logstream = &std::cerr;
         return true;
     }
@@ -39,8 +40,6 @@ bool init( const char * file_name, bool enabled, bool flush )
         log_streambuf.open(log_file);
         logstream = new std::ostream( &log_streambuf );
         auto_flush = flush;
-
-        filter_level = severity::TRACE;
 
         process_name = 'C';
         strcpy( thread_name, "M" );
