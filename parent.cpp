@@ -164,6 +164,13 @@ public:
         proxy_call_node(&node);
     }
 
+    void ptrace_kill()
+    {
+        LOG_E() << "Killing process " << m_pid;
+        kill(m_pid, SIGKILL);
+        ptlib::cont( PTRACE_SYSCALL, m_pid, SIGKILL );
+    }
+
     void ptrace_systrace( int signal )
     {
         ptlib::cont( PTRACE_SYSCALL, m_pid, 0 );
@@ -420,6 +427,7 @@ static void register_handlers()
 
     // Memory
     DEF_SYS1(munmap);
+    DEF_SYS1(mmap);
 }
 
 void init_globals()
@@ -640,6 +648,16 @@ void pid_state::start_handling( SyscallHandlerTask *task )
 {
     ASSERT( m_task==nullptr );
     m_task = task;
+}
+
+void pid_state::terminate()
+{
+    SyscallHandlerTask::proxy_call( [this]()
+            {
+                m_task->ptrace_kill();
+                m_state=state::NONE;
+                m_task=nullptr;
+            } );
 }
 
 void pid_state::end_handling()

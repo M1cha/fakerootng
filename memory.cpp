@@ -19,6 +19,8 @@
 */
 #include "config.h"
 
+#include <signal.h>
+
 #include "syscalls.h"
 #include "log.h"
 #include "parent.h"
@@ -151,4 +153,51 @@ void sys_munmap( int sc_num, pid_t pid, pid_state *state )
     state->ptrace_syscall_wait(pid, 0);
 
     state->end_handling();
+}
+
+void sys_mmap( int sc_num, pid_t pid, pid_state *state )
+{
+    if( !state->m_proc_mem->shared_ptr ) {
+        return perform_syscall(sc_num, pid, state);
+    }
+
+    int_ptr mmap_addr = ptlib::get_argument( pid, 1 );
+    size_t mmap_len = ptlib::get_argument( pid, 2 );
+    int mmap_flags = ptlib::get_argument( pid, 4 );
+
+    if( (mmap_flags & MAP_FIXED)==0 )
+        // Not a request for a fixed address - the call is okay
+        return perform_syscall(sc_num, pid, state);
+
+    int_ptr low_start, low_end, high_start, high_end;
+
+    // Sort the ranges so we can easily compare them.
+    if( state->m_proc_mem->shared_addr < state->m_proc_mem->non_shared_addr ) {
+        low_start = state->m_proc_mem->shared_addr - ptlib::prepare_memory_len;
+        low_end = low_start + shared_mem_size;
+
+        high_start = state->m_proc_mem->non_shared_addr;
+        high_end = high_start + static_mem_size;
+    } else {
+        low_start = state->m_proc_mem->non_shared_addr;
+        low_end = low_start + static_mem_size;
+
+        high_start = state->m_proc_mem->shared_addr - ptlib::prepare_memory_len;
+        high_end = high_start + shared_mem_size;
+    }
+
+    if( mmap_addr>high_end || mmap_addr+mmap_len <= low_start ||
+            (mmap_addr>low_end && mmap_addr+mmap_len <= high_start) )
+    {
+        // fast path: unmap does not overlap our regions - pass it through
+        return perform_syscall(sc_num, pid, state);
+    }
+
+    // The process is trying to mmap over our memory regions
+    LOG_W()<<"Process "<<pid<<" tried to mmap over our memory regions. This is a capital offense. The process has been killed";
+
+    ptlib::set_syscall(pid, ptlib::preferred::NOP);
+
+    state->ptrace_syscall_wait(pid, 0);
+    state->terminate();
 }

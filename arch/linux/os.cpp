@@ -140,8 +140,12 @@ void cont( __ptrace_request request, pid_t tid, int signal )
             });
 
         if( error!=0 ) {
-            LOG_E() << "Flushing cache failed with error " << strerror(error);
-            throw std::system_error(error, std::system_category(), "Failed to flush cache");
+            if( signal!=SIGKILL ) {
+                LOG_E() << "Flushing cache failed with error " << strerror(error);
+                throw std::system_error(error, std::system_category(), "Failed to flush cache");
+            } else {
+                LOG_W() << "Ignoring error flushing cache on doomed process " << tid << ". Error: " << strerror(error);
+            }
         }
     } else {
         LOG_T() << "Process " << tid << " continued with no cache to flush";
