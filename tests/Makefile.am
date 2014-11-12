@@ -1,4 +1,4 @@
-noinst_PROGRAMS=fbomb wait_test exercise calc_defaults pwd getsiginfo thread vfork procmem munmap mmap segfault
+noinst_PROGRAMS=fbomb wait_test exercise calc_defaults pwd getsiginfo thread vfork procmem munmap mmap segfault signal
 
 wait_test_SOURCES=wait_test.cpp
 fbomb_SOURCES=fbomb.cpp
@@ -13,3 +13,4 @@ procmem_SOURCES=procmem.c
 munmap_SOURCES=munmap.c
 mmap_SOURCES=mmap.c
 segfault_SOURCES=segfault.c
+signal_SOURCES=signal.c
