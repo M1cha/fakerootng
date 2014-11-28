@@ -1,0 +1,97 @@
+#define __NR_open 2
+#define __NR_stat 4
+#define __NR_fstat 5
+#define __NR_lstat 6
+#define __NR_access 21 ?
+#define __NR_socketpair 53 what does getsockname return for those?
+#define __NR_fork 57
+#define __NR_vfork 58
+#define __NR_execve 59
+#define __NR_getdents 78 emulate file type? 32bit considerations
+#define __NR_rename 82
+#define __NR_mkdir 83
+#define __NR_rmdir 84
+#define __NR_creat 85
+#define __NR_unlink 87
+#define __NR_symlink 88
+#define __NR_chmod 90
+#define __NR_fchmod 91
+#define __NR_chown 92
+#define __NR_fchown 93
+#define __NR_lchown 94
+#define __NR_getuid 102
+#define __NR_getgid 104
+#define __NR_setuid 105
+#define __NR_setgid 106
+#define __NR_geteuid 107
+#define __NR_getegid 108
+#define __NR_setpgid 109 - probably not
+#define __NR_getpgrp 111 - probably not
+#define __NR_setreuid 113
+#define __NR_setregid 114
+#define __NR_getgroups 115
+#define __NR_setgroups 116
+#define __NR_setresuid 117
+#define __NR_getresuid 118
+#define __NR_setresgid 119
+#define __NR_getresgid 120
+#define __NR_setfsuid 122
+#define __NR_setfsgid 123
+#define __NR_mknod 133
+#define __NR_getdents64 217 emulate file type? 32bit considerations
+#define __NR_openat 257
+#define __NR_mkdirat 258
+#define __NR_mknodat 259
+#define __NR_fchownat 260
+#define __NR_newfstatat 262
+#define __NR_unlinkat 263
+#define __NR_symlinkat 266
+#define __NR_fchmodat 268
+#define __NR_faccessat 269 ?
+#define __NR_unshare 272 Make sure share_vm is not supported
+
+Chroot:
+#define __NR_bind 49 for unix domain sockets
+#define __NR_getsockname 51 for chroot and unix domain sockets?
+#define __NR_getpeername 52
+#define __NR_getcwd 79
+#define __NR_chdir 80
+#define __NR_fchdir 81
+#define __NR_link 86
+#define __NR_chroot 161
+#define __NR_mount 165
+#define __NR_umount2 166
+#define __NR_lookup_dcookie 212 ?
+#define __NR_futimesat 261
+#define __NR_renameat 264
+#define __NR_linkat 265
+#define __NR_readlinkat 267
+#define __NR_utimensat 280
+#define __NR_accept4 288 ?
+inotify_add_watch..
+#define __NR_name_to_handle_at 303 Seriously?
+
+Later:
+#define __NR_ptrace 101
+#define __NR_capget 125
+#define __NR_capset 126
+#define __NR_personality 135
+#define __NR_setxattr 188 ? 
+#define __NR_lsetxattr 189 ?
+#define __NR_fsetxattr 190 ?
+#define __NR_getxattr 191 ?
+#define __NR_lgetxattr 192 ?
+#define __NR_fgetxattr 193 ?
+#define __NR_listxattr 194 ?
+#define __NR_llistxattr 195 ?
+#define __NR_flistxattr 196 ?
+#define __NR_removexattr 197 ?
+#define __NR_lremovexattr 198 ?
+#define __NR_fremovexattr 199 ?
+
+Security:
+#define __NR_mremap 25 :-(
+#define __NR_kill 62
+#define __NR_tgkill 234 to prevent sending signal to ourselves
+#define __NR_process_vm_readv 310
+#define __NR_process_vm_writev 311
