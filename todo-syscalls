@@ -1,12 +1,12 @@
 #define __NR_open 2
-#define __NR_stat 4
-#define __NR_fstat 5
-#define __NR_lstat 6
+#define __NR_stat 4 done
+#define __NR_fstat 5 done
+#define __NR_lstat 6 done
 #define __NR_access 21 ?
 #define __NR_socketpair 53 what does getsockname return for those?
 #define __NR_fork 57
 #define __NR_vfork 58
-#define __NR_execve 59
+#define __NR_execve 59 done
 #define __NR_getdents 78 emulate file type? 32bit considerations
 #define __NR_rename 82
 #define __NR_mkdir 83
@@ -19,11 +19,11 @@
 #define __NR_chown 92
 #define __NR_fchown 93
 #define __NR_lchown 94
-#define __NR_getuid 102
+#define __NR_getuid 102 done
 #define __NR_getgid 104
 #define __NR_setuid 105
 #define __NR_setgid 106
-#define __NR_geteuid 107
+#define __NR_geteuid 107 done
 #define __NR_getegid 108
 #define __NR_setpgid 109 - probably not
 #define __NR_getpgrp 111 - probably not
@@ -32,7 +32,7 @@
 #define __NR_getgroups 115
 #define __NR_setgroups 116
 #define __NR_setresuid 117
-#define __NR_getresuid 118
+#define __NR_getresuid 118 done
 #define __NR_setresgid 119
 #define __NR_getresgid 120
 #define __NR_setfsuid 122
@@ -42,8 +42,8 @@
 #define __NR_openat 257
 #define __NR_mkdirat 258
 #define __NR_mknodat 259
-#define __NR_fchownat 260
-#define __NR_newfstatat 262
+#define __NR_fchownat 260 done
+#define __NR_newfstatat 262 done
 #define __NR_unlinkat 263
 #define __NR_symlinkat 266
 #define __NR_fchmodat 268

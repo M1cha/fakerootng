@@ -405,9 +405,9 @@ static void register_handlers()
     DEF_SYS1(getresuid);
 #if defined(SYS_getuid16)
     DEF_SYS2(getuid16, getuid);
+#endif
 
     // Process
-#endif
     DEF_SYS1(execve);
 #if defined(SYS_fexecve)
     DEF_SYS1(fexecve);
