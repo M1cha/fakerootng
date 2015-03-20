@@ -4,6 +4,7 @@ state file - done
 generate syscalls - done
 new process support - done
 threads - done
+umask
 Error handling
 multiarch
 strace

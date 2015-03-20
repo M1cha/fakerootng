@@ -19,7 +19,12 @@
 */
 #include "config.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include "syscalls.h"
+#include "timespec.h"
 #include "log.h"
 #include "file_lie.h"
 
@@ -106,4 +111,120 @@ void sys_fstatat( int sc_num, pid_t pid, pid_state *state )
 void sys_stat( int sc_num, pid_t pid, pid_state *state )
 {
     real_stat( sc_num, pid, state, 2 );
+}
+
+static bool newly_created_timestamps( const struct stat &stat, struct timespec start_marker )
+{
+    static const long FS_TIMESTAMP_INTERVAL_NS = 100000000; // 100,000,000 nano, or 0.1 seconds
+
+    if( stat.st_mtim != stat.st_ctim || stat.st_atim != stat.st_ctim ) {
+        // A newly created file will have all timestamps the same
+        return false;
+    }
+
+    struct timespec end_marker;
+    clock_gettime( CLOCK_REALTIME, &end_marker );
+
+    if( stat.st_ctim >= end_marker ) {
+        return false;
+    }
+
+    if( stat.st_ctim.tv_nsec==0 ) {
+        // The file system does not support nanoseconds percision
+        return stat.st_ctim.tv_sec <= start_marker.tv_sec;
+    } else {
+        start_marker -= FS_TIMESTAMP_INTERVAL_NS;
+        return stat.st_ctim >= start_marker;
+    }
+}
+
+static void real_open( int sc_num, pid_t pid, pid_state *state, unsigned int offset )
+{
+    int_ptr flags = ptlib::get_argument( pid, offset+1 );
+    mode_t requested_permissions, real_permissions;
+    struct timespec start_marker;
+
+    if( (flags&O_CREAT)!=0 ) {
+        // Possibly creating a new file: make sure we don't deny ourselves read/write permissions on it
+        requested_permissions = ptlib::get_argument( pid, offset+2 );
+
+        real_permissions = requested_permissions;
+        real_permissions &= ~07000; // Remove suid/sgid
+        real_permissions |=  00600; // Add user read/write
+
+        ptlib::set_argument( pid, offset+2, real_permissions );
+
+        // Clock in before possible file creation so we can later compare times
+        clock_gettime( CLOCK_REALTIME, &start_marker );
+    }
+
+    auto shared_mem_guard = state->uses_buffers();
+
+    state->ptrace_syscall_wait(pid, 0);
+
+    if( !ptlib::success( pid, sc_num ) || (flags&O_CREAT)==0 ) {
+        state->end_handling();
+
+        return;
+    }
+
+    // Syscall succeeded and it is possible we created a new file
+
+    int fd = ptlib::get_retval( pid );
+
+    auto saved_state = ptlib::save_state( pid );
+
+    state->generate_syscall( pid );
+    state->ptrace_syscall_wait( pid, 0 );
+
+    ptlib::set_syscall( pid, ptlib::preferred::FSTAT );
+    ptlib::set_argument( pid, 1, fd );
+    ptlib::set_argument( pid, 2, state->m_proc_mem->non_shared_addr );
+    state->ptrace_syscall_wait(pid, 0);
+
+    // Fstat on a valid file descriptor should succeed
+    // XXX What if a different thread closed it?
+    ASSERT( ptlib::success( pid, ptlib::preferred::FSTAT ) );
+
+    struct stat stat = ptlib::get_stat_result( state->m_pid, state->m_tid, ptlib::preferred::FSTAT,
+            state->m_proc_mem->non_shared_addr );
+
+    {
+        auto file_list_lock = file_list::lock();
+        file_list::stat_override *override = file_list::get_map( stat, false );
+
+        TRACEPOINT() << " start time " << start_marker.tv_sec << "." << start_marker.tv_nsec << " ctime " <<
+                stat.st_ctim.tv_sec << "." << stat.st_ctim.tv_nsec << " db " << (override ? "exists" : "doesn't exist");
+        if( (!override || override->transient) && S_ISREG(stat.st_mode) &&
+                newly_created_timestamps( stat, start_marker ) )
+        {
+            // We did not already have the file in our database, and its creation time is after this function started
+            // Yep, we created it :-)
+            stat.st_uid = state->m_fsuid;
+            stat.st_gid = state->m_fsgid;
+            // TODO: Take umask into consideration. umask 222 doesn't currently work.
+            stat.st_mode = S_IFREG | (stat.st_mode&00177) | (requested_permissions&07600);
+
+            if( override ) {
+                file_list::remove_map( stat.st_dev, stat.st_ino );
+            }
+
+            file_list::get_map( stat, true );
+
+            LOG_D() << "Added mapping of new file inode " << stat.st_ino;
+        }
+    }
+
+    ptlib::restore_state( pid, &saved_state );
+    state->end_handling();
+}
+
+void sys_open( int sc_num, pid_t pid, pid_state *state )
+{
+    real_open( sc_num, pid, state, 1 );
+}
+
+void sys_openat( int sc_num, pid_t pid, pid_state *state )
+{
+    real_open( sc_num, pid, state, 2 );
 }

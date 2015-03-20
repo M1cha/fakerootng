@@ -96,6 +96,7 @@ static const int MMAP = SYS_mmap;
 static const int MUNMAP = SYS_munmap;
 static const int OPEN = SYS_open;
 static const int CLOSE = SYS_close;
+static const int FSTAT = SYS_fstat;
 static const int FSTATAT = SYS_newfstatat;
 };
 

@@ -147,6 +147,14 @@ struct stat_override *get_map( const struct ::stat &stat, bool create )
     return &iter->second;
 }
 
+void remove_map( dev_t dev, ino_t inode )
+{
+    file_hash::iterator i(map_hash.find( override_key( dev, inode) ));
+
+    if( i!=map_hash.end() )
+        map_hash.erase(i);
+}
+
 void load_map( std::istream &file )
 {
     struct stat override;
@@ -201,16 +209,5 @@ void save_map( std::ostream &file )
         }
     }
 }
-
-#if 0
-void remove_map( dev_t dev, ino_t inode )
-{
-    file_hash::iterator i(map_hash.find( override_key( dev, inode) ));
-
-    if( i!=map_hash.end() )
-        map_hash.erase(i);
-}
-
-#endif
 
 };

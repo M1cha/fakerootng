@@ -158,7 +158,8 @@ public:
         m_state=state::KERNEL;
     }
 
-    void wait( const std::function< void ()> &callback );
+    template<class CALLBACK>
+    void wait( const CALLBACK &callback );
     void wakeup( ptlib::WAIT_RET wait_state, int status, long parsed_status );
     void ptrace_syscall_wait( pid_t pid, int signal );
     void start_handling( SyscallHandlerTask *task );

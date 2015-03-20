@@ -419,6 +419,8 @@ static void register_handlers()
     DEF_SYS2(vfork, fork);
 
     // File
+    DEF_SYS1(open);
+    DEF_SYS1(openat);
     DEF_SYS1(fchownat);
     DEF_SYS2(newfstatat, fstatat);
     DEF_SYS1(stat);
@@ -605,7 +607,8 @@ pid_state::pid_state(pid_t pid) :
 {
 }
 
-void pid_state::wait( const std::function< void ()> &callback )
+template<class CALLBACK>
+void pid_state::wait( const CALLBACK &callback )
 {
     std::unique_lock<decltype(m_wait_lock)> lock(m_wait_lock);
 
