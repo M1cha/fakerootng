@@ -110,6 +110,7 @@ void sys_execve( int sc_num, pid_t pid, pid_state *state )
 {
     state->ptrace_syscall_wait(pid, 0);
     if( ptlib::success( pid, sc_num ) ) {
+        state->reset_memory();
         // If the syscall succeeded, we will get an extra SIGTRAP that would, otherwise, confuse our state keeping
         state->ptrace_syscall_wait(pid, 0);
     }

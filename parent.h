@@ -86,6 +86,11 @@ public:
         }
     };
     std::shared_ptr<process_memory> m_proc_mem{ new process_memory };
+
+    void reset_memory()
+    {
+        m_proc_mem = decltype(m_proc_mem){ new process_memory };
+    }
 private:
     enum state m_state = state::INIT;
     SyscallHandlerTask *m_task = nullptr;
