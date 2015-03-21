@@ -193,8 +193,6 @@ static void real_open( int sc_num, pid_t pid, pid_state *state, unsigned int off
         auto file_list_lock = file_list::lock();
         file_list::stat_override *override = file_list::get_map( stat, false );
 
-        TRACEPOINT() << " start time " << start_marker.tv_sec << "." << start_marker.tv_nsec << " ctime " <<
-                stat.st_ctim.tv_sec << "." << stat.st_ctim.tv_nsec << " db " << (override ? "exists" : "doesn't exist");
         if( (!override || override->transient) && S_ISREG(stat.st_mode) &&
                 newly_created_timestamps( stat, start_marker ) )
         {
