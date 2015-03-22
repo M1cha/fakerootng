@@ -5,8 +5,11 @@ file.cpp:
 #define __NR_fstat 5
 #define __NR_lstat 6
 #define __NR_execve 59
+#define __NR_unlink 87
+#define __NR_openat 257
 #define __NR_fchownat 260
 #define __NR_newfstatat 262
+#define __NR_unlinkat 263
 
 credentials.cpp:
 #define __NR_getuid 102
@@ -23,7 +26,6 @@ Open:
 #define __NR_mkdir 83
 #define __NR_rmdir 84
 #define __NR_creat 85
-#define __NR_unlink 87
 #define __NR_symlink 88
 #define __NR_chmod 90
 #define __NR_fchmod 91
@@ -47,10 +49,8 @@ Open:
 #define __NR_setfsgid 123
 #define __NR_mknod 133
 #define __NR_getdents64 217 emulate file type? 32bit considerations
-#define __NR_openat 257
 #define __NR_mkdirat 258
 #define __NR_mknodat 259
-#define __NR_unlinkat 263
 #define __NR_symlinkat 266
 #define __NR_fchmodat 268
 #define __NR_faccessat 269 ?

@@ -155,6 +155,15 @@ void remove_map( dev_t dev, ino_t inode )
         map_hash.erase(i);
 }
 
+void mark_map_stale( dev_t dev, ino_t inode )
+{
+    file_hash::iterator i(map_hash.find( override_key( dev, inode) ));
+
+    if( i!=map_hash.end() ) {
+        i->second.transient = true;
+    }
+}
+
 void load_map( std::istream &file )
 {
     struct stat override;

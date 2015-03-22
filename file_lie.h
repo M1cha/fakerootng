@@ -44,6 +44,7 @@ struct stat_override *get_map( const struct ::stat &stat, bool create = true );
 void set_map( const struct stat_override *stat );
 
 void remove_map( dev_t dev, ino_t inode );
+void mark_map_stale( dev_t dev, ino_t inode );
 
 void load_map( std::istream &file );
 void save_map( std::ostream &file );

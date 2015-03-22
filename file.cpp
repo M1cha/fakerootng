@@ -30,6 +30,35 @@
 
 #include "parent.h"
 
+static struct stat proxy_stat( pid_state *state, unsigned int num_path_args, bool follow_links )
+{
+    int syscall;
+
+    switch( num_path_args ) {
+    case 1:
+        syscall = follow_links ? ptlib::preferred::STAT : ptlib::preferred::LSTAT;
+        break;
+    case 2:
+        syscall = ptlib::preferred::FSTATAT;
+        ptlib::set_argument( state->m_tid, 4, follow_links ? 0 : AT_SYMLINK_NOFOLLOW );
+        break;
+    default:
+        LOG_F() << "proxy_stat called with num_path_args set to " << num_path_args << " pid " << state->m_pid;
+        ASSERT(false);
+    }
+
+    ptlib::set_syscall( state->m_tid, syscall );
+    ptlib::set_argument( state->m_tid, num_path_args + 1, state->m_proc_mem->non_shared_addr );
+
+    state->ptrace_syscall_wait(state->m_tid, 0);
+
+    if( !ptlib::success( state->m_tid, syscall ) ) {
+        throw debugee_exception( ptlib::get_error( state->m_tid, syscall ), "generated stat call" );
+    }
+
+    return ptlib::get_stat_result( state->m_pid, state->m_tid, syscall, state->m_proc_mem->non_shared_addr );
+}
+
 void sys_fchownat( int sc_num, pid_t pid, pid_state *state )
 {
     auto shared_mem_guard = state->uses_buffers();
@@ -162,7 +191,7 @@ static void real_open( int sc_num, pid_t pid, pid_state *state, unsigned int off
 
     state->ptrace_syscall_wait(pid, 0);
 
-    if( !ptlib::success( pid, sc_num ) || (flags&O_CREAT)==0 ) {
+    if( (flags&O_CREAT)==0 || !ptlib::success( pid, sc_num ) ) {
         state->end_handling();
 
         return;
@@ -225,4 +254,51 @@ void sys_open( int sc_num, pid_t pid, pid_state *state )
 void sys_openat( int sc_num, pid_t pid, pid_state *state )
 {
     real_open( sc_num, pid, state, 2 );
+}
+
+static void real_unlink( int sc_num, pid_t pid, pid_state *state, unsigned int num_path_args )
+{
+    // We need to know whether the file was, indeed, deleted. Possible methods:
+    // First method:
+    // First, open the file. Next, unlink the file. Then, fstat the file.
+    // Problem - cannot do that for symbolic links. Also, what if we do not have open permissions?
+    //
+    // Second method:
+    // lstat the file before, unlink. If link count before was 1, inode is no more.
+    // Problem - someone else may have linked it while between the lstat and the unlink.
+    //
+    // Third method:
+    // link the file to a temporary name, unlink the original, check link count on temporary name.
+    // Problem - not easy to translate relative name to one that can be used from another process. Also, yeach!
+
+    // For now, implement the second method
+    auto shared_mem_guard = state->uses_buffers();
+    auto saved_state = ptlib::save_state( pid );
+
+    try {
+        struct stat stat = proxy_stat( state, num_path_args, false );
+
+        state->generate_syscall( pid );
+        state->ptrace_syscall_wait( pid, 0 );
+        ptlib::restore_state( pid, &saved_state );
+        state->ptrace_syscall_wait( pid, 0 );
+
+        if( ( stat.st_nlink==1 || S_ISDIR(stat.st_mode) ) && ptlib::success( pid, sc_num ) ) {
+            file_list::mark_map_stale( stat.st_dev, stat.st_ino );
+        }
+    } catch(const debugee_exception &ex) {
+        LOG_D() << "pid " << pid << " failed during unlink: " << ex.what();
+    }
+
+    state->end_handling();
+}
+
+void sys_unlink( int sc_num, pid_t pid, pid_state *state )
+{
+    real_unlink( sc_num, pid, state, 1 );
+}
+
+void sys_unlinkat( int sc_num, pid_t pid, pid_state *state )
+{
+    real_unlink( sc_num, pid, state, 2 );
 }
