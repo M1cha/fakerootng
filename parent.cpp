@@ -347,6 +347,7 @@ pid_state *handle_new_process( pid_t process, pid_t parent, unsigned long flags,
     child->m_euid = creator_state->m_euid;
     child->m_suid = creator_state->m_suid;
     child->m_fsuid = creator_state->m_fsuid;
+    child->m_umask = creator_state->m_umask;
 
     child->m_ppid = parent;
 
@@ -606,7 +607,7 @@ void parent_unconditional_wakeup()
 pid_state::pid_state(pid_t pid) :
     m_uid(0), m_euid(0), m_suid(0), m_fsuid(0),
     m_gid(0), m_egid(0), m_sgid(0), m_fsgid(0),
-    m_pid(pid), m_tid(pid), m_ppid(0), m_flags(0)
+    m_umask(0), m_pid(pid), m_tid(pid), m_ppid(0), m_flags(0)
 {
 }
 

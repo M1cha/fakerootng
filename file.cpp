@@ -180,6 +180,8 @@ static void real_open( int sc_num, pid_t pid, pid_state *state, unsigned int off
         real_permissions = requested_permissions;
         real_permissions &= ~07000; // Remove suid/sgid
         real_permissions |=  00600; // Add user read/write
+        if( (requested_permissions&0011) != 0 )
+            real_permissions |=  00100; // Add user execute
 
         ptlib::set_argument( pid, offset+2, real_permissions );
 
@@ -227,10 +229,10 @@ static void real_open( int sc_num, pid_t pid, pid_state *state, unsigned int off
         {
             // We did not already have the file in our database, and its creation time is after this function started
             // Yep, we created it :-)
-            stat.st_uid = state->m_fsuid;
-            stat.st_gid = state->m_fsgid;
+            stat.st_uid = state->m_euid;
+            stat.st_gid = state->m_egid;
             // TODO: Take umask into consideration. umask 222 doesn't currently work.
-            stat.st_mode = S_IFREG | (stat.st_mode&00177) | (requested_permissions&07600);
+            stat.st_mode = S_IFREG | (stat.st_mode&00077) | (requested_permissions&07700);
 
             if( override ) {
                 file_list::remove_map( stat.st_dev, stat.st_ino );

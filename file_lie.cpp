@@ -64,7 +64,7 @@ std::ostream &operator<<( std::ostream &strm, const override_key &key )
 bool operator==( const stat_override &lhs, const struct stat &rhs )
 {
     return override_key(lhs)==override_key(rhs) &&
-            (lhs.mode&0777) == (rhs.st_mode&0777) &&
+            (lhs.mode&0077) == (rhs.st_mode&0077) &&
             (
                 (lhs.mode&S_IFMT) == (rhs.st_mode&S_IFMT) ||
                 (
@@ -107,8 +107,8 @@ void apply( struct stat &lhs, const stat_override &rhs )
 {
     ASSERT( override_key(lhs) == override_key(rhs) );
 
-    lhs.st_mode &= 0777;
-    lhs.st_mode |= rhs.mode&(S_IFMT|07000);
+    lhs.st_mode &= 0077;
+    lhs.st_mode |= rhs.mode&(S_IFMT|07700);
     if( (lhs.st_mode & S_IFMT)==0 )
         lhs.st_mode |= S_IFREG;
 
