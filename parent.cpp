@@ -427,6 +427,7 @@ static void register_handlers()
     DEF_SYS2(lstat, stat);
     DEF_SYS2(fstat, stat);
     DEF_SYS1(unlink);
+    DEF_SYS2(rmdir, unlink);
     DEF_SYS1(unlinkat);
 
     // Memory

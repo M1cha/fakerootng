@@ -5,6 +5,7 @@ file.cpp:
 #define __NR_fstat 5
 #define __NR_lstat 6
 #define __NR_execve 59
+#define __NR_rmdir 84
 #define __NR_unlink 87
 #define __NR_openat 257
 #define __NR_fchownat 260
@@ -18,13 +19,10 @@ credentials.cpp:
 
 Open:
 #define __NR_access 21 ?
-#define __NR_socketpair 53 what does getsockname return for those?
 #define __NR_fork 57
 #define __NR_vfork 58
 #define __NR_getdents 78 emulate file type? 32bit considerations
-#define __NR_rename 82
 #define __NR_mkdir 83
-#define __NR_rmdir 84
 #define __NR_creat 85
 #define __NR_symlink 88
 #define __NR_chmod 90
@@ -60,9 +58,11 @@ Chroot:
 #define __NR_bind 49 for unix domain sockets
 #define __NR_getsockname 51 for chroot and unix domain sockets?
 #define __NR_getpeername 52
+#define __NR_socketpair 53 what does getsockname return for those?
 #define __NR_getcwd 79
 #define __NR_chdir 80
 #define __NR_fchdir 81
+#define __NR_rename 82
 #define __NR_link 86
 #define __NR_chroot 161
 #define __NR_mount 165
