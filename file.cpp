@@ -176,6 +176,7 @@ static void real_open( int sc_num, pid_t pid, pid_state *state, unsigned int off
     if( (flags&O_CREAT)!=0 ) {
         // Possibly creating a new file: make sure we don't deny ourselves read/write permissions on it
         requested_permissions = ptlib::get_argument( pid, offset+2 );
+        requested_permissions &= ~state->m_umask;
 
         real_permissions = requested_permissions;
         real_permissions &= ~07000; // Remove suid/sgid
@@ -303,4 +304,24 @@ void sys_unlink( int sc_num, pid_t pid, pid_state *state )
 void sys_unlinkat( int sc_num, pid_t pid, pid_state *state )
 {
     real_unlink( sc_num, pid, state, 2 );
+}
+
+void sys_umask( int sc_num, pid_t pid, pid_state *state )
+{
+    mode_t old_mask = state->m_umask;
+
+    mode_t real_mask = ptlib::get_argument( state->m_tid, 1 ) & 0777;
+    state->m_umask = real_mask;
+
+    real_mask &= 0077;
+    ptlib::set_argument( state->m_tid, 1, real_mask );
+
+    state->ptrace_syscall_wait( pid, 0 );
+
+    old_mask |= ptlib::get_retval( state->m_tid );
+
+    ptlib::set_retval( state->m_tid, old_mask );
+    LOG_D() << "Setting thread umask from " << OCT_FORMAT(old_mask, 3) << " to " << OCT_FORMAT( state->m_umask, 3 );
+
+    state->end_handling();
 }

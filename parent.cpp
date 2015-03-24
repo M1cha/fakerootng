@@ -431,6 +431,8 @@ static void register_handlers()
     DEF_SYS2(rmdir, unlink);
     DEF_SYS1(unlinkat);
 
+    DEF_SYS1(umask);
+
     // Memory
     DEF_SYS1(munmap);
     DEF_SYS1(mmap);
