@@ -163,8 +163,8 @@ int set_syscall( pid_t tid, int sc_num ); /* Change the meaning of a just starte
 void generate_syscall( pid_t tid, int_ptr base_memory ); /* Generate a new system call */
 
 /* Return the nth argument passed */
-int_ptr get_argument( pid_t tid, int argnum );
-int set_argument( pid_t tid, int argnum, int_ptr value );
+int_ptr get_argument( pid_t tid, unsigned int argnum );
+int set_argument( pid_t tid, unsigned int argnum, int_ptr value );
 
 int_ptr get_retval( pid_t tid );
 bool success( pid_t tid, int sc_num ); /* Report whether the syscall succeeded */

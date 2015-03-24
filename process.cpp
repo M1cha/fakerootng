@@ -47,7 +47,7 @@ void sys_fork( int sc_num, pid_t pid, pid_state *state )
 #if defined(SYS_clone)
 void sys_clone( int sc_num, pid_t pid, pid_state *state )
 {
-    int_ptr flags = ptlib::get_argument( pid, 1 );
+    int_ptr flags = ptlib::get_argument( pid, 0 );
 
 #if 0 // Dormant code
     if( (flags&(CLONE_PARENT|CLONE_THREAD))!=0 )
@@ -79,7 +79,7 @@ void sys_clone( int sc_num, pid_t pid, pid_state *state )
     flags|=CLONE_PTRACE;
     flags&=~CLONE_UNTRACED; // Reset the UNTRACED flag
 
-    ptlib::set_argument( pid, 1, flags );
+    ptlib::set_argument( pid, 0, flags );
     state->ptrace_syscall_wait(pid, 0);
 
     if( ptlib::success( pid, sc_num ) ) {

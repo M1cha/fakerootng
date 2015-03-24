@@ -40,7 +40,7 @@ static struct stat proxy_stat( pid_state *state, unsigned int num_path_args, boo
         break;
     case 2:
         syscall = ptlib::preferred::FSTATAT;
-        ptlib::set_argument( state->m_tid, 4, follow_links ? 0 : AT_SYMLINK_NOFOLLOW );
+        ptlib::set_argument( state->m_tid, 3, follow_links ? 0 : AT_SYMLINK_NOFOLLOW );
         break;
     default:
         LOG_F() << "proxy_stat called with num_path_args set to " << num_path_args << " pid " << state->m_pid;
@@ -48,7 +48,7 @@ static struct stat proxy_stat( pid_state *state, unsigned int num_path_args, boo
     }
 
     ptlib::set_syscall( state->m_tid, syscall );
-    ptlib::set_argument( state->m_tid, num_path_args + 1, state->m_proc_mem->non_shared_addr );
+    ptlib::set_argument( state->m_tid, num_path_args, state->m_proc_mem->non_shared_addr );
 
     state->ptrace_syscall_wait(state->m_tid, 0);
 
@@ -63,17 +63,17 @@ void sys_fchownat( int sc_num, pid_t pid, pid_state *state )
 {
     auto shared_mem_guard = state->uses_buffers();
 
-    uid_t owner = ptlib::get_argument( pid, 3 );
-    uid_t group = ptlib::get_argument( pid, 4 );
+    uid_t owner = ptlib::get_argument( pid, 2 );
+    uid_t group = ptlib::get_argument( pid, 3 );
 
     // Turn this into a call to fstatat, so we know what dev:inode to change
     ptlib::set_syscall( pid, ptlib::preferred::FSTATAT );
     // First two arguments are the same for both syscalls
-    ptlib::set_argument( pid, 3, state->m_proc_mem->non_shared_addr );
+    ptlib::set_argument( pid, 2, state->m_proc_mem->non_shared_addr );
 
     // The flags argument is 5 on fchownat, 4 on fstatat
-    int flags = ptlib::get_argument( pid, 5 );
-    ptlib::set_argument( pid, 4, flags );
+    int flags = ptlib::get_argument( pid, 4 );
+    ptlib::set_argument( pid, 3, flags );
 
     state->ptrace_syscall_wait(pid, 0);
 
@@ -134,12 +134,12 @@ static void real_stat( int sc_num, pid_t pid, pid_state *state, unsigned int buf
 
 void sys_fstatat( int sc_num, pid_t pid, pid_state *state )
 {
-    real_stat( sc_num, pid, state, 3 );
+    real_stat( sc_num, pid, state, 2 );
 }
 
 void sys_stat( int sc_num, pid_t pid, pid_state *state )
 {
-    real_stat( sc_num, pid, state, 2 );
+    real_stat( sc_num, pid, state, 1 );
 }
 
 static bool newly_created_timestamps( const struct stat &stat, struct timespec start_marker )
@@ -169,13 +169,13 @@ static bool newly_created_timestamps( const struct stat &stat, struct timespec s
 
 static void real_open( int sc_num, pid_t pid, pid_state *state, unsigned int offset )
 {
-    int_ptr flags = ptlib::get_argument( pid, offset+1 );
+    int_ptr flags = ptlib::get_argument( pid, offset );
     mode_t requested_permissions, real_permissions;
     struct timespec start_marker;
 
     if( (flags&O_CREAT)!=0 ) {
         // Possibly creating a new file: make sure we don't deny ourselves read/write permissions on it
-        requested_permissions = ptlib::get_argument( pid, offset+2 );
+        requested_permissions = ptlib::get_argument( pid, offset+1 );
         requested_permissions &= ~state->m_umask;
 
         real_permissions = requested_permissions;
@@ -184,7 +184,7 @@ static void real_open( int sc_num, pid_t pid, pid_state *state, unsigned int off
         if( (requested_permissions&0011) != 0 )
             real_permissions |=  00100; // Add user execute
 
-        ptlib::set_argument( pid, offset+2, real_permissions );
+        ptlib::set_argument( pid, offset+1, real_permissions );
 
         // Clock in before possible file creation so we can later compare times
         clock_gettime( CLOCK_REALTIME, &start_marker );
@@ -210,8 +210,8 @@ static void real_open( int sc_num, pid_t pid, pid_state *state, unsigned int off
     state->ptrace_syscall_wait( pid, 0 );
 
     ptlib::set_syscall( pid, ptlib::preferred::FSTAT );
-    ptlib::set_argument( pid, 1, fd );
-    ptlib::set_argument( pid, 2, state->m_proc_mem->non_shared_addr );
+    ptlib::set_argument( pid, 0, fd );
+    ptlib::set_argument( pid, 1, state->m_proc_mem->non_shared_addr );
     state->ptrace_syscall_wait(pid, 0);
 
     // Fstat on a valid file descriptor should succeed
@@ -310,11 +310,11 @@ void sys_umask( int sc_num, pid_t pid, pid_state *state )
 {
     mode_t old_mask = state->m_umask;
 
-    mode_t real_mask = ptlib::get_argument( state->m_tid, 1 ) & 0777;
+    mode_t real_mask = ptlib::get_argument( state->m_tid, 0 ) & 0777;
     state->m_umask = real_mask;
 
     real_mask &= 0077;
-    ptlib::set_argument( state->m_tid, 1, real_mask );
+    ptlib::set_argument( state->m_tid, 0, real_mask );
 
     state->ptrace_syscall_wait( pid, 0 );
 

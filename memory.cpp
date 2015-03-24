@@ -54,8 +54,8 @@ void sys_munmap( int sc_num, pid_t pid, pid_state *state )
         high_end = high_start + shared_mem_size;
     }
 
-    int_ptr unmap_addr = ptlib::get_argument( pid, 1 );
-    size_t unmap_len = ptlib::get_argument( pid, 2 );
+    int_ptr unmap_addr = ptlib::get_argument( pid, 0 );
+    size_t unmap_len = ptlib::get_argument( pid, 1 );
 
     if( unmap_addr>high_end || unmap_addr+unmap_len <= low_start ||
             (unmap_addr>low_end && unmap_addr+unmap_len <= high_start) )
@@ -136,8 +136,8 @@ void sys_munmap( int sc_num, pid_t pid, pid_state *state )
     auto mem_guard = state->uses_buffers();
     auto saved_state = ptlib::save_state(pid);
     for( unsigned i=1; i<num_ranges; ++i ) {
-        ptlib::set_argument( pid, 1, ranges[num_ranges - i].start );
-        ptlib::set_argument( pid, 2, ranges[num_ranges - i].len );
+        ptlib::set_argument( pid, 0, ranges[num_ranges - i].start );
+        ptlib::set_argument( pid, 1, ranges[num_ranges - i].len );
 
         state->ptrace_syscall_wait(pid, 0);
         // XXX Handle failure
@@ -147,8 +147,8 @@ void sys_munmap( int sc_num, pid_t pid, pid_state *state )
     }
 
     ptlib::restore_state( pid, &saved_state );
-    ptlib::set_argument( pid, 1, ranges[0].start );
-    ptlib::set_argument( pid, 2, ranges[0].len );
+    ptlib::set_argument( pid, 0, ranges[0].start );
+    ptlib::set_argument( pid, 1, ranges[0].len );
 
     state->ptrace_syscall_wait(pid, 0);
 
@@ -161,9 +161,9 @@ void sys_mmap( int sc_num, pid_t pid, pid_state *state )
         return perform_syscall(sc_num, pid, state);
     }
 
-    int_ptr mmap_addr = ptlib::get_argument( pid, 1 );
-    size_t mmap_len = ptlib::get_argument( pid, 2 );
-    int mmap_flags = ptlib::get_argument( pid, 4 );
+    int_ptr mmap_addr = ptlib::get_argument( pid, 0 );
+    size_t mmap_len = ptlib::get_argument( pid, 1 );
+    int mmap_flags = ptlib::get_argument( pid, 3 );
 
     if( (mmap_flags & MAP_FIXED)==0 )
         // Not a request for a fixed address - the call is okay

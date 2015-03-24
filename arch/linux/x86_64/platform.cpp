@@ -548,10 +548,10 @@ static decltype(user_regs_struct::rax) user_regs_struct::*arg_offset_64bit[]={
     &user_regs_struct::r9
 };
 
-int_ptr get_argument( pid_t tid, int argnum )
+int_ptr get_argument( pid_t tid, unsigned int argnum )
 {
     /* Check for error condition */
-    if( argnum<1 || argnum>6 ) {
+    if( argnum>5 ) {
         LOG_E() << "ptlib_get_argument: " << tid << " invalid argument number " << argnum;
         errno=EINVAL;
 
@@ -564,10 +564,10 @@ int_ptr get_argument( pid_t tid, int argnum )
 
     switch( state->type ) {
     case cpu_types::amd64:
-        ret = state->registers.*arg_offset_64bit[argnum-1];
+        ret = state->registers.*arg_offset_64bit[argnum];
         break;
     case cpu_types::i386:
-        ret = state->registers.*arg_offset_32bit[argnum-1];
+        ret = state->registers.*arg_offset_32bit[argnum];
         break;
 
         ret &= 0xffffffff;
@@ -580,9 +580,9 @@ int_ptr get_argument( pid_t tid, int argnum )
     return ret;
 }
 
-int set_argument( pid_t tid, int argnum, int_ptr value )
+int set_argument( pid_t tid, unsigned int argnum, int_ptr value )
 {
-    if( argnum<1 || argnum>6 ) {
+    if( argnum>5 ) {
         LOG_E() << "ptlib_set_argument: " << tid << " invalid argument number " << argnum;
         errno=EINVAL;
 
@@ -594,10 +594,10 @@ int set_argument( pid_t tid, int argnum, int_ptr value )
 
     switch( state->type ) {
     case cpu_types::amd64:
-        state->registers.*arg_offset_64bit[argnum-1] = value;
+        state->registers.*arg_offset_64bit[argnum] = value;
         break;
     case cpu_types::i386:
-        state->registers.*arg_offset_32bit[argnum-1] = value;
+        state->registers.*arg_offset_32bit[argnum] = value;
         break;
     default:
         LOG_F() << "Unsupported CPU platform";

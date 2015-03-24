@@ -793,12 +793,12 @@ int_ptr pid_state::proxy_mmap(const char *exception_message, pid_t pid,
                 int_ptr addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
     ptlib::set_syscall( pid, ptlib::preferred::MMAP );
-    ptlib::set_argument( pid, 1, addr );
-    ptlib::set_argument( pid, 2, length );
-    ptlib::set_argument( pid, 3, prot );
-    ptlib::set_argument( pid, 4, flags );
-    ptlib::set_argument( pid, 5, fd );
-    ptlib::set_argument( pid, 6, offset );
+    ptlib::set_argument( pid, 0, addr );
+    ptlib::set_argument( pid, 1, length );
+    ptlib::set_argument( pid, 2, prot );
+    ptlib::set_argument( pid, 3, flags );
+    ptlib::set_argument( pid, 4, fd );
+    ptlib::set_argument( pid, 5, offset );
 
     ptrace_syscall_wait( pid, 0 );
 
@@ -812,8 +812,8 @@ void pid_state::proxy_munmap(const char *exception_message, pid_t pid,
                 int_ptr addr, size_t length)
 {
     ptlib::set_syscall( pid, ptlib::preferred::MUNMAP );
-    ptlib::set_argument( pid, 1, addr );
-    ptlib::set_argument( pid, 2, length );
+    ptlib::set_argument( pid, 0, addr );
+    ptlib::set_argument( pid, 1, length );
 
     ptrace_syscall_wait( pid, 0 );
 
@@ -825,9 +825,9 @@ int pid_state::proxy_open(const char *exception_message, pid_t pid,
         int_ptr pathname, int flags, mode_t mode)
 {
     ptlib::set_syscall( pid, ptlib::preferred::OPEN );
-    ptlib::set_argument( pid, 1, pathname );
-    ptlib::set_argument( pid, 2, flags );
-    ptlib::set_argument( pid, 3, mode );
+    ptlib::set_argument( pid, 0, pathname );
+    ptlib::set_argument( pid, 1, flags );
+    ptlib::set_argument( pid, 2, mode );
     ptrace_syscall_wait( pid, 0 );
 
     // Test to see if the open was successful
@@ -839,7 +839,7 @@ void pid_state::proxy_close(const char *exception_message, pid_t pid,
         int fd)
 {
     ptlib::set_syscall( pid, ptlib::preferred::CLOSE );
-    ptlib::set_argument( pid, 1, fd );
+    ptlib::set_argument( pid, 0, fd );
     ptrace_syscall_wait( pid, 0 );
 
     verify_syscall_success( pid, ptlib::preferred::OPEN, exception_message );
