@@ -5,7 +5,7 @@
 
 class pid_state;
 
-#define DECLARE_SYSFUNC(name) void sys_##name( int sc_num, pid_t pid, pid_state *state )
+#define DECLARE_SYSFUNC(name) void sys_##name( int sc_num, pid_state *state )
 
 // UID reporting and setting
 DECLARE_SYSFUNC(geteuid);

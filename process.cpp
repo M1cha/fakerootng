@@ -34,20 +34,20 @@
 // Not implemented functions:
 // acct
 
-void sys_fork( int sc_num, pid_t pid, pid_state *state )
+void sys_fork( int sc_num, pid_state *state )
 {
     LOG_F() << "Fork is unhandled at this point in time. Failing the syscall";
     // TODO unhandled system call. Just report failure for now
-    ptlib::set_syscall( pid, ptlib::preferred::NOP );
-    state->ptrace_syscall_wait( pid, 0 );
-    ptlib::set_error( pid, sc_num, ENOSYS );
+    ptlib::set_syscall( state->m_tid, ptlib::preferred::NOP );
+    state->ptrace_syscall_wait( 0 );
+    ptlib::set_error( state->m_tid, sc_num, ENOSYS );
     state->end_handling();
 }
 
 #if defined(SYS_clone)
-void sys_clone( int sc_num, pid_t pid, pid_state *state )
+void sys_clone( int sc_num, pid_state *state )
 {
-    int_ptr flags = ptlib::get_argument( pid, 0 );
+    int_ptr flags = ptlib::get_argument( state->m_tid, 0 );
 
 #if 0 // Dormant code
     if( (flags&(CLONE_PARENT|CLONE_THREAD))!=0 )
@@ -62,14 +62,14 @@ void sys_clone( int sc_num, pid_t pid, pid_state *state )
         state->context_state[0]|=NEW_PROCESS_SAME_DEBUGGER;
 #endif
 
-    LOG_T() << pid << ": clone called with flags " << HEX_FORMAT(flags, 8);
+    LOG_T() << state << ": clone called with flags " << HEX_FORMAT(flags, 8);
 
     // We do not support containers. If one of the containers related flags was set, fail the call.
     if( flags & (CLONE_NEWIPC|CLONE_NEWNET|CLONE_NEWNS|CLONE_NEWPID|CLONE_NEWUTS) ) {
-        ptlib::set_syscall( pid, ptlib::preferred::NOP );
-        state->ptrace_syscall_wait( pid, 0 );
+        ptlib::set_syscall( state->m_tid, ptlib::preferred::NOP );
+        state->ptrace_syscall_wait( 0 );
         // Emulate kernel not supporting containers (which, in a way, is what this is)
-        ptlib::set_error( pid, sc_num, EINVAL );
+        ptlib::set_error( state->m_tid, sc_num, EINVAL );
         state->end_handling();
 
         return;
@@ -79,12 +79,12 @@ void sys_clone( int sc_num, pid_t pid, pid_state *state )
     flags|=CLONE_PTRACE;
     flags&=~CLONE_UNTRACED; // Reset the UNTRACED flag
 
-    ptlib::set_argument( pid, 0, flags );
-    state->ptrace_syscall_wait(pid, 0);
+    ptlib::set_argument( state->m_tid, 0, flags );
+    state->ptrace_syscall_wait(0);
 
-    if( ptlib::success( pid, sc_num ) ) {
-        pid_t newpid=(pid_t)ptlib::get_retval( pid );
-        LOG_T() << pid << ": clone succeeded, new process " << newpid;
+    if( ptlib::success( state->m_tid, sc_num ) ) {
+        pid_t newpid=(pid_t)ptlib::get_retval( state->m_tid );
+        LOG_T() << state << ": clone succeeded, new process " << newpid;
         unsigned long hnp_flags = 0;
         if( flags&CLONE_VM )
             hnp_flags |= PROC_FLAGS_SAMEVM;
@@ -93,26 +93,26 @@ void sys_clone( int sc_num, pid_t pid, pid_state *state )
         if( flags&CLONE_THREAD )
             hnp_flags |= PROC_FLAGS_THREAD;
 
-        pid_t parent = pid;
+        pid_t parent = state->m_tid;
         if( (flags&CLONE_PARENT) || (flags&CLONE_THREAD) )
             parent = state->m_ppid;
 
         handle_new_process( newpid, parent, hnp_flags, state );
     } else {
-        LOG_T() << pid << ": clone failed: " << strerror( ptlib::get_error( pid, sc_num ) );
+        LOG_T() << state << ": clone failed: " << strerror( ptlib::get_error( state->m_tid, sc_num ) );
     }
 
     state->end_handling();
 }
 #endif // SYS_CLONE
 
-void sys_execve( int sc_num, pid_t pid, pid_state *state )
+void sys_execve( int sc_num, pid_state *state )
 {
-    state->ptrace_syscall_wait(pid, 0);
-    if( ptlib::success( pid, sc_num ) ) {
+    state->ptrace_syscall_wait(0);
+    if( ptlib::success( state->m_tid, sc_num ) ) {
         state->reset_memory();
         // If the syscall succeeded, we will get an extra SIGTRAP that would, otherwise, confuse our state keeping
-        state->ptrace_syscall_wait(pid, 0);
+        state->ptrace_syscall_wait(0);
     }
     state->end_handling();
 }

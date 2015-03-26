@@ -162,21 +162,21 @@ public:
     template<class CALLBACK>
     void wait( const CALLBACK &callback );
     void wakeup( ptlib::WAIT_RET wait_state, int status, long parsed_status );
-    void ptrace_syscall_wait( pid_t pid, int signal );
+    void ptrace_syscall_wait( int signal );
     void start_handling( SyscallHandlerTask *task );
     void end_handling();
     void terminate();
     std::unique_lock<std::mutex> uses_buffers();
-    void verify_syscall_success( pid_t pid, int sc_num, const char *exception_message ) const;
-    void generate_syscall( pid_t pid ) const;
+    void verify_syscall_success( int sc_num, const char *exception_message ) const;
+    void generate_syscall() const;
 
-    int_ptr proxy_mmap(const char *exception_message, pid_t pid,
+    int_ptr proxy_mmap(const char *exception_message,
             int_ptr addr, size_t length, int prot, int flags, int fd, off_t offset);
-    void proxy_munmap(const char *exception_message, pid_t pid,
+    void proxy_munmap(const char *exception_message,
                     int_ptr addr, size_t length);
-    int proxy_open(const char *exception_message, pid_t pid,
+    int proxy_open(const char *exception_message,
             int_ptr pathname, int flags, mode_t mode = 0666);
-    void proxy_close(const char *exception_message, pid_t pid,
+    void proxy_close(const char *exception_message,
             int fd);
 
     ptlib::WAIT_RET get_wait_state() const { return m_wait_state; }
@@ -186,6 +186,17 @@ private:
     pid_state( const pid_state &rhs ) = delete;
     pid_state &operator=( const pid_state &rhs ) = delete;
 };
+
+static inline std::ostream &operator<< (std::ostream &strm, const pid_state *state)
+{
+    strm << "PID " << state->m_pid;
+
+    if( state->m_tid != state->m_pid ) {
+        strm << " thread " << state->m_tid;
+    }
+
+    return strm;
+}
 
 static inline std::ostream &operator<< (std::ostream &strm, pid_state::state wait_ret)
 {
@@ -204,7 +215,7 @@ static inline std::ostream &operator<< (std::ostream &strm, pid_state::state wai
     return strm;
 }
 
-typedef void (*sys_callback)( int sc_num, pid_t pid, pid_state *state );
+typedef void (*sys_callback)( int sc_num, pid_state *state );
 struct syscall_hook {
     sys_callback func;
     const char *name;

@@ -25,16 +25,16 @@
 #include "log.h"
 #include "parent.h"
 
-static void perform_syscall( int sc_num, pid_t pid, pid_state *state )
+static void perform_syscall( int sc_num, pid_state *state )
 {
-    state->ptrace_syscall_wait(pid, 0);
+    state->ptrace_syscall_wait(0);
     state->end_handling();
 }
 
-void sys_munmap( int sc_num, pid_t pid, pid_state *state )
+void sys_munmap( int sc_num, pid_state *state )
 {
     if( !state->m_proc_mem->shared_ptr ) {
-        return perform_syscall(sc_num, pid, state);
+        return perform_syscall(sc_num, state);
     }
 
     int_ptr low_start, low_end, high_start, high_end;
@@ -54,18 +54,18 @@ void sys_munmap( int sc_num, pid_t pid, pid_state *state )
         high_end = high_start + shared_mem_size;
     }
 
-    int_ptr unmap_addr = ptlib::get_argument( pid, 0 );
-    size_t unmap_len = ptlib::get_argument( pid, 1 );
+    int_ptr unmap_addr = ptlib::get_argument( state->m_tid, 0 );
+    size_t unmap_len = ptlib::get_argument( state->m_tid, 1 );
 
     if( unmap_addr>high_end || unmap_addr+unmap_len <= low_start ||
             (unmap_addr>low_end && unmap_addr+unmap_len <= high_start) )
     {
         // fast path: unmap does not overlap our regions - pass it through
-        return perform_syscall(sc_num, pid, state);
+        return perform_syscall(sc_num, state);
     }
 
     // In order to reach this point, application would need to ask to unmap regions it did not mmap to begin with.
-    LOG_I()<<"Process "<<pid<<" attempted to unmap our memory regions inside it. Attempted to unmap address "<<
+    LOG_I()<<state<<" attempted to unmap our memory regions inside it. Attempted to unmap address "<<
             (void *)unmap_addr<<" to "<< (void *)(unmap_addr + unmap_len)<<". Our regions are "<<
             (void *)low_start<<" to "<<(void *)low_end<<" and "<<(void *)high_start<<" to "<<(void *)high_end;
     unsigned num_ranges = 0;
@@ -124,50 +124,50 @@ void sys_munmap( int sc_num, pid_t pid, pid_state *state )
         LOG_I()<<"unmap region entirely contained within our memory. Turn operation into NOP";
 
         // XXX Set to NOP
-        ptlib::set_syscall( pid, ptlib::preferred::NOP );
+        ptlib::set_syscall( state->m_tid, ptlib::preferred::NOP );
 
-        state->ptrace_syscall_wait(pid, 0);
-        ptlib::set_retval(pid, 0);
+        state->ptrace_syscall_wait(0);
+        ptlib::set_retval(state->m_tid, 0);
 
         state->end_handling();
         return;
     }
 
     auto mem_guard = state->uses_buffers();
-    auto saved_state = ptlib::save_state(pid);
+    auto saved_state = ptlib::save_state(state->m_tid);
     for( unsigned i=1; i<num_ranges; ++i ) {
-        ptlib::set_argument( pid, 0, ranges[num_ranges - i].start );
-        ptlib::set_argument( pid, 1, ranges[num_ranges - i].len );
+        ptlib::set_argument( state->m_tid, 0, ranges[num_ranges - i].start );
+        ptlib::set_argument( state->m_tid, 1, ranges[num_ranges - i].len );
 
-        state->ptrace_syscall_wait(pid, 0);
+        state->ptrace_syscall_wait(0);
         // XXX Handle failure
 
-        ptlib::generate_syscall( pid, state->m_proc_mem->shared_addr );
-        state->ptrace_syscall_wait( pid, 0 );
+        ptlib::generate_syscall( state->m_tid, state->m_proc_mem->shared_addr );
+        state->ptrace_syscall_wait( 0 );
     }
 
-    ptlib::restore_state( pid, &saved_state );
-    ptlib::set_argument( pid, 0, ranges[0].start );
-    ptlib::set_argument( pid, 1, ranges[0].len );
+    ptlib::restore_state( state->m_tid, &saved_state );
+    ptlib::set_argument( state->m_tid, 0, ranges[0].start );
+    ptlib::set_argument( state->m_tid, 1, ranges[0].len );
 
-    state->ptrace_syscall_wait(pid, 0);
+    state->ptrace_syscall_wait(0);
 
     state->end_handling();
 }
 
-void sys_mmap( int sc_num, pid_t pid, pid_state *state )
+void sys_mmap( int sc_num, pid_state *state )
 {
     if( !state->m_proc_mem->shared_ptr ) {
-        return perform_syscall(sc_num, pid, state);
+        return perform_syscall(sc_num, state);
     }
 
-    int_ptr mmap_addr = ptlib::get_argument( pid, 0 );
-    size_t mmap_len = ptlib::get_argument( pid, 1 );
-    int mmap_flags = ptlib::get_argument( pid, 3 );
+    int_ptr mmap_addr = ptlib::get_argument( state->m_tid, 0 );
+    size_t mmap_len = ptlib::get_argument( state->m_tid, 1 );
+    int mmap_flags = ptlib::get_argument( state->m_tid, 3 );
 
     if( (mmap_flags & MAP_FIXED)==0 )
         // Not a request for a fixed address - the call is okay
-        return perform_syscall(sc_num, pid, state);
+        return perform_syscall(sc_num, state);
 
     int_ptr low_start, low_end, high_start, high_end;
 
@@ -190,14 +190,15 @@ void sys_mmap( int sc_num, pid_t pid, pid_state *state )
             (mmap_addr>low_end && mmap_addr+mmap_len <= high_start) )
     {
         // fast path: unmap does not overlap our regions - pass it through
-        return perform_syscall(sc_num, pid, state);
+        return perform_syscall(sc_num, state);
     }
 
     // The process is trying to mmap over our memory regions
-    LOG_W()<<"Process "<<pid<<" tried to mmap over our memory regions. This is a capital offense. The process has been killed";
+    LOG_W()<<"Process "<<state<<" tried to mmap over our memory regions. This is a capital offense. "
+            "The process has been killed";
 
-    ptlib::set_syscall(pid, ptlib::preferred::NOP);
+    ptlib::set_syscall(state->m_tid, ptlib::preferred::NOP);
 
-    state->ptrace_syscall_wait(pid, 0);
+    state->ptrace_syscall_wait(0);
     state->terminate();
 }
