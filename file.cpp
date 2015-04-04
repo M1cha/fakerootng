@@ -324,3 +324,81 @@ void sys_umask( int sc_num, pid_state *state )
 
     state->end_handling();
 }
+
+static void real_mkdir( int sc_num, pid_state *state, unsigned int offset )
+{
+    auto shared_mem_guard = state->uses_buffers();
+
+    auto saved_state = state->save_state();
+
+    mode_t requested_permissions = state->get_argument( offset );
+    requested_permissions &= ~state->m_umask;
+
+    mode_t real_permissions = requested_permissions;
+    real_permissions &= ~07000; // Remove suid/sgid
+    real_permissions |=  00700; // Add user read/write/execute
+    state->set_argument( offset, real_permissions );
+
+    state->ptrace_syscall_wait( 0 );
+
+    if( state->success( sc_num ) ) {
+        // Need to find out the new directory's inode number
+        state->generate_syscall();
+        state->ptrace_syscall_wait( 0 );
+
+        state->restore_state( &saved_state );
+        int stat_syscall;
+        switch( offset ) {
+        case 1:
+            stat_syscall = ptlib::preferred::STAT;
+            break;
+        case 2:
+            stat_syscall = ptlib::preferred::FSTATAT;
+            state->set_argument( offset+1, 0 ); // No flags - follow symlink
+            break;
+        default:
+            ASSERT(offset==1 || offset==2);
+        }
+        state->set_syscall( stat_syscall );
+
+        state->set_argument( offset, state->m_proc_mem->non_shared_addr );
+        state->ptrace_syscall_wait(0);
+
+        if( !state->success( stat_syscall ) ) {
+            LOG_E() << state << " mkdir succeeded followed by failed stat with errno " <<
+                    state->get_error( stat_syscall );
+        } else {
+            struct stat stat = state->get_stat_result( stat_syscall, state->m_proc_mem->non_shared_addr );
+
+            if( !S_ISDIR(stat.st_mode) ) {
+                LOG_E() << state << " mkdir succeeded, but did not create directory. Inode: " << stat.st_dev << ":" <<
+                        stat.st_ino;
+            } else {
+                auto file_list_lock = file_list::lock();
+                file_list::remove_map( stat.st_dev, stat.st_ino );
+
+                stat.st_mode = S_IFDIR | (stat.st_mode & 00077) | (requested_permissions & 07700);
+                stat.st_uid = state->m_euid;
+                stat.st_gid = state->m_egid;
+                file_list::stat_override *override = file_list::get_map( stat, true );
+                ASSERT( override );
+
+                LOG_D() << "Added mapping of new dir inode " << stat.st_ino;
+            }
+        }
+
+        state->set_retval( 0 );
+    }
+
+    state->end_handling();
+}
+
+void sys_mkdir( int sc_num, pid_state *state )
+{
+    real_mkdir( sc_num, state, 1 );
+}
+
+void sys_mkdirat( int sc_num, pid_state *state )
+{
+    real_mkdir( sc_num, state, 2 );
+}

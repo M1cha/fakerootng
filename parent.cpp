@@ -430,6 +430,8 @@ static void register_handlers()
     DEF_SYS1(unlink);
     DEF_SYS2(rmdir, unlink);
     DEF_SYS1(unlinkat);
+    DEF_SYS1(mkdir);
+    DEF_SYS1(mkdirat);
 
     DEF_SYS1(umask);
 
