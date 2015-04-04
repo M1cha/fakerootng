@@ -54,8 +54,8 @@ void sys_munmap( int sc_num, pid_state *state )
         high_end = high_start + shared_mem_size;
     }
 
-    int_ptr unmap_addr = ptlib::get_argument( state->m_tid, 0 );
-    size_t unmap_len = ptlib::get_argument( state->m_tid, 1 );
+    int_ptr unmap_addr = state->get_argument( 0 );
+    size_t unmap_len = state->get_argument( 1 );
 
     if( unmap_addr>high_end || unmap_addr+unmap_len <= low_start ||
             (unmap_addr>low_end && unmap_addr+unmap_len <= high_start) )
@@ -124,31 +124,31 @@ void sys_munmap( int sc_num, pid_state *state )
         LOG_I()<<"unmap region entirely contained within our memory. Turn operation into NOP";
 
         // XXX Set to NOP
-        ptlib::set_syscall( state->m_tid, ptlib::preferred::NOP );
+        state->set_syscall( ptlib::preferred::NOP );
 
         state->ptrace_syscall_wait(0);
-        ptlib::set_retval(state->m_tid, 0);
+        state->set_retval(0);
 
         state->end_handling();
         return;
     }
 
     auto mem_guard = state->uses_buffers();
-    auto saved_state = ptlib::save_state(state->m_tid);
+    auto saved_state = state->save_state();
     for( unsigned i=1; i<num_ranges; ++i ) {
-        ptlib::set_argument( state->m_tid, 0, ranges[num_ranges - i].start );
-        ptlib::set_argument( state->m_tid, 1, ranges[num_ranges - i].len );
+        state->set_argument( 0, ranges[num_ranges - i].start );
+        state->set_argument( 1, ranges[num_ranges - i].len );
 
         state->ptrace_syscall_wait(0);
         // XXX Handle failure
 
-        ptlib::generate_syscall( state->m_tid, state->m_proc_mem->shared_addr );
+        state->generate_syscall();
         state->ptrace_syscall_wait( 0 );
     }
 
-    ptlib::restore_state( state->m_tid, &saved_state );
-    ptlib::set_argument( state->m_tid, 0, ranges[0].start );
-    ptlib::set_argument( state->m_tid, 1, ranges[0].len );
+    state->restore_state( &saved_state );
+    state->set_argument( 0, ranges[0].start );
+    state->set_argument( 1, ranges[0].len );
 
     state->ptrace_syscall_wait(0);
 
@@ -161,9 +161,9 @@ void sys_mmap( int sc_num, pid_state *state )
         return perform_syscall(sc_num, state);
     }
 
-    int_ptr mmap_addr = ptlib::get_argument( state->m_tid, 0 );
-    size_t mmap_len = ptlib::get_argument( state->m_tid, 1 );
-    int mmap_flags = ptlib::get_argument( state->m_tid, 3 );
+    int_ptr mmap_addr = state->get_argument( 0 );
+    size_t mmap_len = state->get_argument( 1 );
+    int mmap_flags = state->get_argument( 3 );
 
     if( (mmap_flags & MAP_FIXED)==0 )
         // Not a request for a fixed address - the call is okay
@@ -197,7 +197,7 @@ void sys_mmap( int sc_num, pid_state *state )
     LOG_W()<<"Process "<<state<<" tried to mmap over our memory regions. This is a capital offense. "
             "The process has been killed";
 
-    ptlib::set_syscall(state->m_tid, ptlib::preferred::NOP);
+    state->set_syscall(ptlib::preferred::NOP);
 
     state->ptrace_syscall_wait(0);
     state->terminate();

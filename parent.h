@@ -170,6 +170,50 @@ public:
     void verify_syscall_success( int sc_num, const char *exception_message ) const;
     void generate_syscall() const;
 
+    int set_syscall( int sc_num ) {
+        return ptlib::set_syscall( m_tid, sc_num );
+    }
+
+    int_ptr get_argument( unsigned int argnum ) {
+        return ptlib::get_argument( m_tid, argnum );
+    }
+
+    int set_argument( unsigned int argnum, int_ptr value ) {
+        return ptlib::set_argument( m_tid, argnum, value );
+    }
+
+    int_ptr get_retval() {
+        return ptlib::get_retval( m_tid );
+    }
+
+    bool success( int sc_num ) {
+        return ptlib::success( m_tid, sc_num );
+    }
+
+    void set_retval( int_ptr val ) {
+        return ptlib::set_retval( m_tid, val );
+    }
+
+    void set_error( int sc_num, int error ) {
+        return ptlib::set_error( m_tid, sc_num, error );
+    }
+
+    int get_error( int sc_num ) {
+        return ptlib::get_error( m_tid, sc_num );
+    }
+
+    struct stat get_stat_result( int sc_num, int_ptr stat_addr ) {
+        return ptlib::get_stat_result( m_pid, m_tid, sc_num, stat_addr );
+    }
+
+    ptlib::cpu_state save_state() {
+        return ptlib::save_state( m_tid );
+    }
+
+    void restore_state( const ptlib::cpu_state *state ) {
+        return ptlib::restore_state( m_tid, state );
+    }
+
     int_ptr proxy_mmap(const char *exception_message,
             int_ptr addr, size_t length, int prot, int flags, int fd, off_t offset);
     void proxy_munmap(const char *exception_message,
