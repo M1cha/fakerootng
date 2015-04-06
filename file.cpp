@@ -166,9 +166,16 @@ static bool newly_created_timestamps( const struct stat &stat, struct timespec s
     }
 }
 
+static void real_real_open( int sc_num, pid_state *state, unsigned int offset, int flags );
 static void real_open( int sc_num, pid_state *state, unsigned int offset )
 {
     int_ptr flags = state->get_argument( offset );
+
+    real_real_open( sc_num, state, offset, flags );
+}
+
+static void real_real_open( int sc_num, pid_state *state, unsigned int offset, int flags )
+{
     mode_t requested_permissions, real_permissions;
     struct timespec start_marker;
 
@@ -250,6 +257,11 @@ static void real_open( int sc_num, pid_state *state, unsigned int offset )
 void sys_open( int sc_num, pid_state *state )
 {
     real_open( sc_num, state, 1 );
+}
+
+void sys_creat( int sc_num, pid_state *state )
+{
+    real_real_open( sc_num, state, 1, O_CREAT|O_WRONLY|O_TRUNC );
 }
 
 void sys_openat( int sc_num, pid_state *state )

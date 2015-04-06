@@ -422,6 +422,7 @@ static void register_handlers()
     // File
     DEF_SYS1(open);
     DEF_SYS1(openat);
+    DEF_SYS1(creat);
     DEF_SYS1(fchownat);
     DEF_SYS2(newfstatat, fstatat);
     DEF_SYS1(stat);

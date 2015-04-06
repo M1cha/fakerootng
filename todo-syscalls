@@ -7,6 +7,7 @@ file.cpp:
 #define __NR_execve 59
 #define __NR_mkdir 83
 #define __NR_rmdir 84
+#define __NR_creat 85
 #define __NR_unlink 87
 #define __NR_openat 257
 #define __NR_mkdirat 258
@@ -24,7 +25,6 @@ Open:
 #define __NR_fork 57
 #define __NR_vfork 58
 #define __NR_getdents 78 emulate file type? 32bit considerations
-#define __NR_creat 85
 #define __NR_symlink 88
 #define __NR_chmod 90
 #define __NR_fchmod 91
