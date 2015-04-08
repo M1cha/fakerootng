@@ -433,6 +433,9 @@ static void register_handlers()
     DEF_SYS1(unlinkat);
     DEF_SYS1(mkdir);
     DEF_SYS1(mkdirat);
+    DEF_SYS1(chmod);
+    DEF_SYS1(fchmod);
+    DEF_SYS1(fchmodat);
 
     DEF_SYS1(umask);
 

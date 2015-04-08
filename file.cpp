@@ -187,7 +187,7 @@ static void real_real_open( int sc_num, pid_state *state, unsigned int offset, i
         real_permissions = requested_permissions;
         real_permissions &= ~07000; // Remove suid/sgid
         real_permissions |=  00600; // Add user read/write
-        if( (requested_permissions&0011) != 0 )
+        if( (requested_permissions & 0011) != 0 )
             real_permissions |=  00100; // Add user execute
 
         state->set_argument( offset+1, real_permissions );
@@ -413,4 +413,65 @@ void sys_mkdir( int sc_num, pid_state *state )
 void sys_mkdirat( int sc_num, pid_state *state )
 {
     real_mkdir( sc_num, state, 2 );
+}
+
+static void real_chmod( int sc_num, pid_state *state, int stat_sc, unsigned int offset )
+{
+    mode_t requested_permissions = state->get_argument( offset );
+    auto saved_state = state->save_state();
+    auto shared_mem_guard = state->uses_buffers();
+
+    // First perform a stat to see who and/or what we're dealing with
+    state->set_syscall( stat_sc );
+    state->set_argument( offset, state->m_proc_mem->non_shared_addr );
+    state->ptrace_syscall_wait( 0 );
+
+    if( state->success( stat_sc ) ) {
+        struct stat stat = state->get_stat_result( stat_sc, state->m_proc_mem->non_shared_addr );
+
+        state->generate_syscall();
+        state->ptrace_syscall_wait( 0 );
+
+        mode_t real_permissions = requested_permissions;
+        real_permissions &= ~07000; // Remove suid/sgid
+        real_permissions |=  00600; // Add user read/write/execute
+        if( S_ISDIR(stat.st_mode) || (requested_permissions & 0011) != 0 )
+            real_permissions |= 00100;
+
+        state->restore_state( &saved_state );
+        state->set_argument( offset, real_permissions );
+        state->ptrace_syscall_wait( 0 );
+
+        if( state->success( sc_num ) ) {
+            auto file_list_lock = file_list::lock();
+            file_list::stat_override *override = file_list::get_map( stat, true );
+
+            override->mode = (override->mode & S_IFMT) | (requested_permissions & 07777);
+            LOG_D() << state << " Set mode of inode " << override->inode << " to " << OCT_FORMAT(override->mode, 4);
+        }
+    }
+}
+
+void sys_chmod( int sc_num, pid_state *state )
+{
+    real_chmod( sc_num, state, ptlib::preferred::STAT, 1 );
+    state->end_handling();
+}
+
+void sys_fchmod( int sc_num, pid_state *state )
+{
+    real_chmod( sc_num, state, ptlib::preferred::FSTAT, 1 );
+    state->end_handling();
+}
+
+void sys_fchmodat( int sc_num, pid_state *state )
+{
+    // We need a flags argument for the real_chmod, but we need to restore it to its original value upon return
+    int_ptr saved_flags = state->get_argument( 3 );
+    state->set_argument( 3, 0 );
+
+    real_chmod( sc_num, state, ptlib::preferred::FSTATAT, 2 );
+
+    state->set_argument( 3, saved_flags );
+    state->end_handling();
 }
