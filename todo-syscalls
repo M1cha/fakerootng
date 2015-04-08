@@ -11,6 +11,9 @@ file.cpp:
 #define __NR_unlink 87
 #define __NR_chmod 90
 #define __NR_fchmod 91
+#define __NR_chown 92
+#define __NR_fchown 93
+#define __NR_lchown 94
 #define __NR_openat 257
 #define __NR_mkdirat 258
 #define __NR_fchownat 260
@@ -29,9 +32,6 @@ Open:
 #define __NR_vfork 58
 #define __NR_getdents 78 emulate file type? 32bit considerations
 #define __NR_symlink 88
-#define __NR_chown 92
-#define __NR_fchown 93
-#define __NR_lchown 94
 #define __NR_getgid 104
 #define __NR_setuid 105
 #define __NR_setgid 106

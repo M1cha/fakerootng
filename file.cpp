@@ -59,25 +59,27 @@ static struct stat proxy_stat( pid_state *state, unsigned int num_path_args, boo
     return state->get_stat_result( syscall, state->m_proc_mem->non_shared_addr );
 }
 
-void sys_fchownat( int sc_num, pid_state *state )
+static void real_chown( int sc_num, pid_state *state, unsigned offset, int stat_sc )
 {
     auto shared_mem_guard = state->uses_buffers();
 
-    uid_t owner = state->get_argument( 2 );
-    uid_t group = state->get_argument( 3 );
+    uid_t owner = state->get_argument( offset );
+    uid_t group = state->get_argument( offset+1 );
 
     // Turn this into a call to fstatat, so we know what dev:inode to change
-    state->set_syscall( ptlib::preferred::FSTATAT );
-    // First two arguments are the same for both syscalls
-    state->set_argument( 2, state->m_proc_mem->non_shared_addr );
+    state->set_syscall( stat_sc );
+    // First arguments are the same for both syscalls
+    state->set_argument( offset, state->m_proc_mem->non_shared_addr );
 
-    // The flags argument is 5 on fchownat, 4 on fstatat
-    int flags = state->get_argument( 4 );
-    state->set_argument( 3, flags );
+    if( stat_sc==ptlib::preferred::FSTATAT ) {
+        // The flags argument is 5 on fchownat, 4 on fstatat
+        int flags = state->get_argument( offset+2 );
+        state->set_argument( offset+1, flags );
+    }
 
     state->ptrace_syscall_wait(0);
 
-    if( !state->success( ptlib::preferred::FSTATAT ) ) {
+    if( !state->success( stat_sc ) ) {
         shared_mem_guard.unlock();
         // If we failed the fstatat, our error is, most likely, the same as we would for fchownat for root
         state->end_handling();
@@ -85,7 +87,7 @@ void sys_fchownat( int sc_num, pid_state *state )
         return;
     }
 
-    struct stat stat = state->get_stat_result( ptlib::preferred::FSTATAT, state->m_proc_mem->non_shared_addr );
+    struct stat stat = state->get_stat_result( stat_sc, state->m_proc_mem->non_shared_addr );
     shared_mem_guard.unlock();
 
     auto file_list_lock = file_list::lock();
@@ -105,6 +107,26 @@ void sys_fchownat( int sc_num, pid_state *state )
             " to "<<override->uid<<"."<<override->gid;
 
     state->end_handling();
+}
+
+void sys_fchownat( int sc_num, pid_state *state )
+{
+    real_chown( sc_num, state, 2, ptlib::preferred::FSTATAT );
+}
+
+void sys_fchown( int sc_num, pid_state *state )
+{
+    real_chown( sc_num, state, 1, ptlib::preferred::FSTAT );
+}
+
+void sys_chown( int sc_num, pid_state *state )
+{
+    real_chown( sc_num, state, 1, ptlib::preferred::STAT );
+}
+
+void sys_lchown( int sc_num, pid_state *state )
+{
+    real_chown( sc_num, state, 1, ptlib::preferred::LSTAT );
 }
 
 static void real_stat( int sc_num, pid_state *state, unsigned int buf_arg )
