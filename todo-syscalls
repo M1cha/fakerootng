@@ -49,6 +49,9 @@ Open:
 #define __NR_getresgid 120
 #define __NR_setfsuid 122
 #define __NR_setfsgid 123
+#define __NR_setxattr 188  - for system.posix_acl_access, possibly others as well
+#define __NR_lsetxattr 189
+#define __NR_fsetxattr 190
 #define __NR_getdents64 217 emulate file type? 32bit considerations
 #define __NR_symlinkat 266
 #define __NR_faccessat 269 ?
