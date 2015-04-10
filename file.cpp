@@ -497,3 +497,76 @@ void sys_fchmodat( int sc_num, pid_state *state )
     state->set_argument( 3, saved_flags );
     state->end_handling();
 }
+
+static void real_mknod( int sc_num, pid_state *state, unsigned offset, int stat_sc, int stat_flags )
+{
+    auto shared_mem_guard = state->uses_buffers();
+    auto saved_state = state->save_state();
+
+    mode_t requested_mode = state->get_argument( offset );
+    dev_t dev = state->get_argument( offset+1 );
+
+    requested_mode &= ~state->m_umask;
+    mode_t real_mode = (requested_mode & S_IFMT) | 00600 | (requested_mode & 00066);
+    if( (requested_mode & 0111) != 0 ) {
+        real_mode |= 00100;
+    }
+    
+    if( S_ISCHR(requested_mode) || S_ISBLK(requested_mode) ) {
+        LOG_D() << state << " squashing request for creating a device";
+        real_mode = S_IFREG | (real_mode & 00666);
+    }
+
+    state->set_argument( offset, real_mode );
+
+    state->ptrace_syscall_wait( 0 );
+
+    if( state->success( sc_num ) ) {
+        state->generate_syscall();
+        state->ptrace_syscall_wait( 0 );
+
+        state->restore_state( &saved_state );
+        state->set_syscall( stat_sc );
+        state->set_argument( offset, state->m_proc_mem->non_shared_addr );
+        if( stat_flags != -1 ) {
+            state->set_argument( offset+1, stat_flags );
+        }
+        state->ptrace_syscall_wait( 0 );
+
+        if( state->success( stat_sc ) ) {
+            struct stat stat = state->get_stat_result( stat_sc, state->m_proc_mem->non_shared_addr );
+
+            if( (stat.st_mode & S_IFMT) != (real_mode & S_IFMT) ) {
+                LOG_W() << state << " inode " << stat.st_dev << ":" << stat.st_ino << " returned inconsistent type. "
+                        "Expected " << HEX_FORMAT( real_mode, 0 ) << ", got " << HEX_FORMAT( stat.st_mode, 0 );
+
+                state->set_retval( 0 );
+                state->end_handling();
+                return;
+            }
+
+            stat.st_mode = (requested_mode & (S_IFMT | 07700)) | (stat.st_mode & 00066);
+            stat.st_uid = state->m_euid;
+            stat.st_gid = state->m_egid;
+            stat.st_rdev = dev;
+
+            auto file_list_lock = file_list::lock();
+            file_list::remove_map( stat.st_dev, stat.st_ino );
+            file_list::get_map( stat, true );
+        }
+
+        state->set_retval( 0 );
+    }
+
+    state->end_handling();
+}
+
+void sys_mknod( int sc_num, pid_state *state )
+{
+    real_mknod( sc_num, state, 1, ptlib::preferred::LSTAT, -1 );
+}
+
+void sys_mknodat( int sc_num, pid_state *state )
+{
+    real_mknod( sc_num, state, 2, ptlib::preferred::FSTATAT, AT_SYMLINK_NOFOLLOW );
+}

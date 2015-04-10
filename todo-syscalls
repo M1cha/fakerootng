@@ -14,7 +14,9 @@ file.cpp:
 #define __NR_chown 92
 #define __NR_fchown 93
 #define __NR_lchown 94
+#define __NR_mknod 133
 #define __NR_openat 257
+#define __NR_mknodat 259
 #define __NR_mkdirat 258
 #define __NR_fchownat 260
 #define __NR_newfstatat 262
@@ -47,9 +49,7 @@ Open:
 #define __NR_getresgid 120
 #define __NR_setfsuid 122
 #define __NR_setfsgid 123
-#define __NR_mknod 133
 #define __NR_getdents64 217 emulate file type? 32bit considerations
-#define __NR_mknodat 259
 #define __NR_symlinkat 266
 #define __NR_faccessat 269 ?
 #define __NR_unshare 272 Make sure share_vm is not supported

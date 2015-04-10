@@ -127,9 +127,11 @@ struct stat_override *get_map( const struct ::stat &stat, bool create )
     auto iter = map_hash.find( key );
 
     if( iter == map_hash.end() ) {
-        if( create )
+        if( create ) {
+            LOG_I() << "Creating stat override for " << stat.st_dev << ":" << stat.st_ino << " mode " <<
+                    OCT_FORMAT(stat.st_mode, 0) << " uid " << stat.st_uid << " gid " << stat.st_gid;
             return &(map_hash.emplace( key, stat_override(stat) ).first->second);
-        else
+        } else
             return nullptr;
     }
 
@@ -138,7 +140,8 @@ struct stat_override *get_map( const struct ::stat &stat, bool create )
         // The file probably changed outside of fakeroot-ng (or so we hope...)
         // Either way, there is a mismatch between the file on disk and the file in our database.
         // Erase the file from the database and start over.
-        LOG_W() << "File "<<key<<" mismatch between the disk and the database - erasing from the database";
+        LOG_W() << "File "<<key<<" mismatch between the disk and the database - erasing from the database. "
+                "DB mode "<<OCT_FORMAT(iter->second.mode, 4)<<" file "<<OCT_FORMAT(stat.st_mode, 4);
         map_hash.erase(iter);
 
         return get_map( stat, create );
