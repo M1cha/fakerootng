@@ -571,6 +571,86 @@ void sys_mknodat( int sc_num, pid_state *state )
     real_mknod( sc_num, state, 2, ptlib::preferred::FSTATAT, AT_SYMLINK_NOFOLLOW );
 }
 
+void sys_symlink( int sc_num, pid_state *state )
+{
+    auto shared_mem_guard = state->uses_buffers();
+    auto saved_state = state->save_state();
+
+    state->ptrace_syscall_wait( 0 );
+
+    if( state->success(sc_num) ) {
+        state->generate_syscall();
+        state->ptrace_syscall_wait( 0 );
+
+        state->restore_state( &saved_state );
+
+        static const int STAT_SYSCALL = ptlib::preferred::LSTAT;
+        state->set_syscall( STAT_SYSCALL );
+        state->set_argument( 0, state->get_argument( 1 ) );
+        state->set_argument( 1, state->m_proc_mem->non_shared_addr );
+        state->ptrace_syscall_wait( 0 );
+
+        if( state->success( STAT_SYSCALL ) ) {
+            struct stat stat = state->get_stat_result( ptlib::preferred::FSTAT, state->m_proc_mem->non_shared_addr );
+            auto file_list_lock = file_list::lock();
+
+            file_list::remove_map( stat.st_dev, stat.st_ino );
+
+            stat.st_uid = state->m_euid;
+            stat.st_gid = state->m_gid;
+            file_list::get_map( stat, true );
+        } else {
+            LOG_E() << state << " stat on successful symlink failed: " << state->get_error( STAT_SYSCALL );
+
+            // Set it to a false success return
+            state->set_retval( 0 );
+        }
+    }
+
+    state->end_handling();
+}
+
+void sys_symlinkat( int sc_num, pid_state *state )
+{
+    auto shared_mem_guard = state->uses_buffers();
+    auto saved_state = state->save_state();
+
+    state->ptrace_syscall_wait( 0 );
+
+    if( state->success(sc_num) ) {
+        state->generate_syscall();
+        state->ptrace_syscall_wait( 0 );
+
+        state->restore_state( &saved_state );
+
+        static const int STAT_SYSCALL = ptlib::preferred::FSTATAT;
+        state->set_syscall( STAT_SYSCALL );
+        state->set_argument( 0, state->get_argument( 1 ) );
+        state->set_argument( 1, state->get_argument( 2 ) );
+        state->set_argument( 2, state->m_proc_mem->non_shared_addr );
+        state->set_argument( 3, AT_SYMLINK_NOFOLLOW );
+        state->ptrace_syscall_wait( 0 );
+
+        if( state->success( STAT_SYSCALL ) ) {
+            struct stat stat = state->get_stat_result( ptlib::preferred::FSTAT, state->m_proc_mem->non_shared_addr );
+            auto file_list_lock = file_list::lock();
+
+            file_list::remove_map( stat.st_dev, stat.st_ino );
+
+            stat.st_uid = state->m_euid;
+            stat.st_gid = state->m_gid;
+            file_list::get_map( stat, true );
+        } else {
+            LOG_E() << state << " fstatat on successful symlink failed: " << state->get_error( STAT_SYSCALL );
+
+            // Set it to a false success return
+            state->set_retval( 0 );
+        }
+    }
+
+    state->end_handling();
+}
+
 void sys_setxattr( int sc_num, pid_state *state )
 {
     int_ptr name_ptr = state->get_argument( 1 );

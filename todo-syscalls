@@ -9,6 +9,7 @@ file.cpp:
 #define __NR_rmdir 84
 #define __NR_creat 85
 #define __NR_unlink 87
+#define __NR_symlink 88
 #define __NR_chmod 90
 #define __NR_fchmod 91
 #define __NR_chown 92
@@ -24,6 +25,7 @@ file.cpp:
 #define __NR_fchownat 260
 #define __NR_newfstatat 262
 #define __NR_unlinkat 263
+#define __NR_symlinkat 266
 #define __NR_fchmodat 268
 
 credentials.cpp:
@@ -36,7 +38,6 @@ Open:
 #define __NR_fork 57
 #define __NR_vfork 58
 #define __NR_getdents 78 emulate file type? 32bit considerations
-#define __NR_symlink 88
 #define __NR_getgid 104
 #define __NR_setuid 105
 #define __NR_setgid 106
@@ -52,11 +53,7 @@ Open:
 #define __NR_getresgid 120
 #define __NR_setfsuid 122
 #define __NR_setfsgid 123
-#define __NR_setxattr 188  - for system.posix_acl_access, possibly others as well
-#define __NR_lsetxattr 189
-#define __NR_fsetxattr 190
 #define __NR_getdents64 217 emulate file type? 32bit considerations
-#define __NR_symlinkat 266
 #define __NR_faccessat 269 ?
 #define __NR_unshare 272 Make sure share_vm is not supported
 

@@ -441,6 +441,8 @@ static void register_handlers()
     DEF_SYS1(fchmodat);
     DEF_SYS1(mknod);
     DEF_SYS1(mknodat);
+    DEF_SYS1(symlink);
+    DEF_SYS1(symlinkat);
     DEF_SYS1(setxattr);
     DEF_SYS2(lsetxattr, setxattr);
     DEF_SYS2(fsetxattr, setxattr);
