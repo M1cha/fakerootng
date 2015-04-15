@@ -15,6 +15,9 @@ file.cpp:
 #define __NR_fchown 93
 #define __NR_lchown 94
 #define __NR_mknod 133
+#define __NR_setxattr 188
+#define __NR_lsetxattr 189
+#define __NR_fsetxattr 190
 #define __NR_openat 257
 #define __NR_mknodat 259
 #define __NR_mkdirat 258

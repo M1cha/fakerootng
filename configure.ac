@@ -154,7 +154,8 @@ AC_FUNC_LSTAT
 AC_FUNC_LSTAT_FOLLOWS_SLASHED_SYMLINK
 AC_FUNC_VPRINTF
 AC_FUNC_MMAP
-AC_CHECK_FUNCS([ftruncate getcwd memset mkdir munmap realpath select socket strchr strerror strtoul])
+AC_CHECK_FUNCS([ftruncate getcwd memset mkdir munmap realpath select socket strchr strerror strtoul clock_gettime])
+AC_CHECK_FUNCS([strstr])
 
 AC_MSG_CHECKING([whether openat class functions are supported])
 AC_COMPILE_IFELSE(

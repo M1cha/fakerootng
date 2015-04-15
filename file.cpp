@@ -570,3 +570,27 @@ void sys_mknodat( int sc_num, pid_state *state )
 {
     real_mknod( sc_num, state, 2, ptlib::preferred::FSTATAT, AT_SYMLINK_NOFOLLOW );
 }
+
+void sys_setxattr( int sc_num, pid_state *state )
+{
+    int_ptr name_ptr = state->get_argument( 1 );
+
+    static const char ACL_NAME[] = "system.posix_acl_access";
+    char property_name[sizeof(ACL_NAME)];
+
+    ptlib::get_string( state->m_pid, state->m_tid, name_ptr, property_name, sizeof(ACL_NAME)-1 );
+    if( strcmp( ACL_NAME, property_name )==0 ) {
+        // We do not support this property
+        LOG_D() << state << " failing call to setxattr for " << ACL_NAME;
+
+        state->set_syscall( ptlib::preferred::NOP );
+
+        state->ptrace_syscall_wait(0);
+
+        state->set_error( sc_num, ENOTSUP );
+    } else {
+        state->ptrace_syscall_wait(0);
+    }
+
+    state->end_handling();
+}

@@ -4,9 +4,10 @@ state file - done
 generate syscalls - done
 new process support - done
 threads - done
-umask
+umask - done
 Error handling
 multiarch
 strace
 chroot
 handle trivial cases in main thread
+should we handle setxattr of system.posix_acl_access? posix_acl_default?
