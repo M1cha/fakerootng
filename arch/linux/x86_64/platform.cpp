@@ -66,15 +66,15 @@ static int syscall_32_to_64[]={
     __NR_time,		/* 13 */
     __NR_mknod,		/* 14 */
     __NR_chmod,		/* 15 */
-    __NR_lchown,	/* 16 */
+    SYS_lchown16,	/* 16 */
     -1, /* __NR_break,		17 */
     SYS_oldstat,	/* 18 */
     __NR_lseek,		/* 19 */
     __NR_getpid,	/* 20 */
     __NR_mount,		/* 21 */
     -1, /* __NR_umount,	 22 */
-    __NR_setuid,	/* 23 */
-    __NR_getuid,	/* 24 */
+    SYS_setuid16,	/* 23 */
+    SYS_getuid16,	/* 24 */
     -1, /* __NR_stime,		 25 */
     __NR_ptrace,	/* 26 */
     __NR_alarm,		/* 27 */
@@ -96,11 +96,11 @@ static int syscall_32_to_64[]={
     __NR_times,		/* 43 */
     -1, /* prof,		 44 */
     __NR_brk,		/* 45 */
-    __NR_setgid,	/* 46 */
-    __NR_getgid,	/* 47 */
+    SYS_setgid16,	/* 46 */
+    SYS_getgid16,	/* 47 */
     -1, /* signal,	 48 */
-    __NR_geteuid,	/* 49 */
-    __NR_getegid,	/* 50 */
+    SYS_geteuid16,	/* 49 */
+    SYS_getegid16,	/* 50 */
     __NR_acct,		/* 51 */
     __NR_umount2,	/* 52 */
     -1, /* lock,		53 */
@@ -120,8 +120,8 @@ static int syscall_32_to_64[]={
     -1, /* sigaction,	 67 */
     -1, /* sgetmask,	 68 */
     -1, /* ssetmask,	 69 */
-    __NR_setreuid,	/* 70 */
-    __NR_setregid,	/* 71 */
+    SYS_setreuid16,	/* 70 */
+    SYS_setregid16,	/* 71 */
     -1, /* sigsuspend,	 72 */
     -1, /* sigpending,	 73 */
     __NR_sethostname,	/* 74 */
@@ -130,8 +130,8 @@ static int syscall_32_to_64[]={
     __NR_getrusage,	/* 77 */
     __NR_gettimeofday,	/* 78 */
     __NR_settimeofday,	/* 79 */
-    __NR_getgroups,	/* 80 */
-    __NR_setgroups,	/* 81 */
+    SYS_getgroups16,	/* 80 */
+    SYS_setgroups16,	/* 81 */
     __NR_select,	/* 82 */
     __NR_symlink,	/* 83 */
     SYS_oldlstat,	/* 84 */
@@ -145,7 +145,7 @@ static int syscall_32_to_64[]={
     __NR_truncate,	/* 92 */
     __NR_ftruncate,	/* 93 */
     __NR_fchmod,	/* 94 */
-    __NR_fchown,	/* 95 */
+    SYS_fchown16,	/* 95 */
     __NR_getpriority,	/* 96 */
     __NR_setpriority,	/* 97 */
     -1, /* profil,	 98 */
@@ -188,8 +188,8 @@ static int syscall_32_to_64[]={
     __NR_sysfs,	        	/* 135 */
     __NR_personality,		/* 136 */
     __NR_afs_syscall,		/* 137 */ /* Syscall for Andrew File System */
-    __NR_setfsuid,		/* 138 */
-    __NR_setfsgid,		/* 139 */
+    SYS_setfsuid16,		/* 138 */
+    SYS_setfsgid16,		/* 139 */
     -1, /* _llseek,		 140 */
     __NR_getdents,		/* 141 */
     -1, /* _newselect,		 142 */
@@ -214,14 +214,14 @@ static int syscall_32_to_64[]={
     __NR_sched_rr_get_interval,	        	/* 161 */
     __NR_nanosleep,		/* 162 */
     __NR_mremap,		/* 163 */
-    __NR_setresuid,		/* 164 */
-    __NR_getresuid,		/* 165 */
+    SYS_setresuid16,		/* 164 */
+    SYS_getresuid16,		/* 165 */
     -1, /* vm86,	        	 166 */
     __NR_query_module,		/* 167 */
     __NR_poll,		        /* 168 */
     __NR_nfsservctl,		/* 169 */
-    __NR_setresgid,		/* 170 */
-    __NR_getresgid,		/* 171 */
+    SYS_setresgid16,		/* 170 */
+    SYS_getresgid16,		/* 171 */
     __NR_prctl,		        /* 172 */
     __NR_rt_sigreturn,		/* 173 */
     __NR_rt_sigaction,		/* 174 */
@@ -232,7 +232,7 @@ static int syscall_32_to_64[]={
     __NR_rt_sigsuspend,		/* 179 */
     __NR_pread64,		/* 180 */
     __NR_pwrite64,		/* 181 */
-    __NR_chown,		        /* 182 */
+    SYS_chown16,	        /* 182 */
     __NR_getcwd,		/* 183 */
     __NR_capget,		/* 184 */
     __NR_capset,		/* 185 */
@@ -249,25 +249,25 @@ static int syscall_32_to_64[]={
     SYS_stat64,		/* 195 */
     SYS_lstat64,		/* 196 */
     SYS_fstat64,		/* 197 */
-    SYS_lchown32,		/* 198 */
-    SYS_getuid32,		/* 199 */
-    SYS_getgid32,		/* 200 */
-    SYS_geteuid32,		/* 201 */
-    SYS_getegid32,		/* 202 */
-    SYS_setreuid32,		/* 203 */
-    SYS_setregid32,		/* 204 */
-    SYS_getgroups32,		/* 205 */
-    SYS_setgroups32,		/* 206 */
-    SYS_fchown32,		/* 207 */
-    SYS_setresuid32,		/* 208 */
-    SYS_getresuid32,		/* 209 */
-    SYS_setresgid32,		/* 210 */
-    SYS_getresgid32,		/* 211 */
-    SYS_chown32,		/* 212 */
-    SYS_setuid32,		/* 213 */
-    SYS_setgid32,		/* 214 */
-    SYS_setfsuid32,		/* 215 */
-    SYS_setfsgid32,		/* 216 */
+    __NR_lchown,		/* 198 */
+    __NR_getuid,		/* 199 */
+    __NR_getgid,		/* 200 */
+    __NR_geteuid,		/* 201 */
+    __NR_getegid,		/* 202 */
+    __NR_setreuid,		/* 203 */
+    __NR_setregid,		/* 204 */
+    __NR_getgroups,		/* 205 */
+    __NR_setgroups,		/* 206 */
+    __NR_fchown,		/* 207 */
+    __NR_setresuid,		/* 208 */
+    __NR_getresuid,		/* 209 */
+    __NR_setresgid,		/* 210 */
+    __NR_getresgid,		/* 211 */
+    __NR_chown,			/* 212 */
+    __NR_setuid,		/* 213 */
+    __NR_setgid,		/* 214 */
+    __NR_setfsuid,		/* 215 */
+    __NR_setfsgid,		/* 216 */
     __NR_pivot_root,		/* 217 */
     __NR_mincore,		/* 218 */
     __NR_madvise,		/* 219 */
@@ -392,6 +392,7 @@ void init( callback_initiator callback )
         if( syscall_32_to_64[i]!=-1 && syscall_32_to_64[i]>=(-SYS_X86_32_OFFSET) &&
                 syscall_32_to_64[i]<(int)ARRAY_SIZE(syscall_32_to_64) )
         {
+            ASSERT( syscall_64_to_32[syscall_32_to_64[i]+SYS_X86_32_OFFSET] == -1 );
             syscall_64_to_32[syscall_32_to_64[i]+SYS_X86_32_OFFSET]=i;
         }
     }

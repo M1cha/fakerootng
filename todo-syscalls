@@ -15,6 +15,9 @@ file.cpp:
 #define __NR_chown 92
 #define __NR_fchown 93
 #define __NR_lchown 94
+#define __NR_getgid 104
+#define __NR_getegid 108
+#define __NR_getresgid 120
 #define __NR_mknod 133
 #define __NR_setxattr 188
 #define __NR_lsetxattr 189
@@ -38,10 +41,8 @@ Open:
 #define __NR_fork 57
 #define __NR_vfork 58
 #define __NR_getdents 78 emulate file type? 32bit considerations
-#define __NR_getgid 104
 #define __NR_setuid 105
 #define __NR_setgid 106
-#define __NR_getegid 108
 #define __NR_setpgid 109 - probably not
 #define __NR_getpgrp 111 - probably not
 #define __NR_setreuid 113
@@ -50,7 +51,6 @@ Open:
 #define __NR_setgroups 116
 #define __NR_setresuid 117
 #define __NR_setresgid 119
-#define __NR_getresgid 120
 #define __NR_setfsuid 122
 #define __NR_setfsgid 123
 #define __NR_getdents64 217 emulate file type? 32bit considerations

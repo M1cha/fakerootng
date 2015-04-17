@@ -202,6 +202,14 @@ public:
         return ptlib::get_error( m_tid, sc_num );
     }
 
+    int get_mem( int_ptr process_ptr, void *local_ptr, size_t len ) {
+        return ptlib::get_mem( m_pid, m_tid, process_ptr, local_ptr, len );
+    }
+
+    int set_mem( const void *local_ptr, int_ptr process_ptr, size_t len ) {
+        return ptlib::set_mem( m_pid, m_tid, local_ptr, process_ptr, len );
+    }
+
     struct stat get_stat_result( int sc_num, int_ptr stat_addr ) {
         return ptlib::get_stat_result( m_pid, m_tid, sc_num, stat_addr );
     }

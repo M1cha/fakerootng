@@ -407,6 +407,18 @@ static void register_handlers()
 #if defined(SYS_getuid16)
     DEF_SYS2(getuid16, getuid);
 #endif
+#if defined(SYS_getresuid16)
+    DEF_SYS1(getresuid16);
+#endif
+    DEF_SYS1(getgid);
+    DEF_SYS1(getegid);
+    DEF_SYS1(getresgid);
+#if defined(SYS_getgid16)
+    DEF_SYS2(getgid16, getgid);
+#endif
+#if defined(SYS_getresgid16)
+    DEF_SYS1(getresgid16);
+#endif
 
     // Process
     DEF_SYS1(execve);
