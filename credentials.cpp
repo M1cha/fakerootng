@@ -93,3 +93,40 @@ void sys_getresgid16( int sc_num, pid_state *state )
 {
     real_getres_id<uint16_t>( sc_num, state, "gid", state->m_gid, state->m_egid, state->m_sgid );
 }
+
+template <class GID_T>
+static void real_getgroups( int sc_num, pid_state *state )
+{
+    unsigned int size = state->get_argument( 0 );
+    int_ptr groups_ptr = state->get_argument( 1 );
+
+    state->set_syscall( ptlib::preferred::NOP );
+    state->ptrace_syscall_wait( 0 );
+
+    if( size>0 && size<state->m_groups.size() ) {
+        state->set_error( sc_num, EINVAL );
+    } else {
+        if( size>0 ) {
+            std::vector<GID_T> groups;
+            groups.reserve( state->m_groups.size() );
+
+            std::copy( state->m_groups.begin(), state->m_groups.end(), std::back_inserter( groups ) );
+
+            state->set_mem( groups.data(), groups_ptr, groups.size() * sizeof(GID_T) );
+        }
+
+        state->set_retval( state->m_groups.size() );
+    }
+
+    state->end_handling();
+}
+
+void sys_getgroups( int sc_num, pid_state *state )
+{
+    return real_getgroups<gid_t>( sc_num, state );
+}
+
+void sys_getgroups16( int sc_num, pid_state *state )
+{
+    return real_getgroups<uint16_t>( sc_num, state );
+}

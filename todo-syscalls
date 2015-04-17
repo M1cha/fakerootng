@@ -17,6 +17,7 @@ file.cpp:
 #define __NR_lchown 94
 #define __NR_getgid 104
 #define __NR_getegid 108
+#define __NR_getgroups 115
 #define __NR_getresgid 120
 #define __NR_mknod 133
 #define __NR_setxattr 188
@@ -47,7 +48,6 @@ Open:
 #define __NR_getpgrp 111 - probably not
 #define __NR_setreuid 113
 #define __NR_setregid 114
-#define __NR_getgroups 115
 #define __NR_setgroups 116
 #define __NR_setresuid 117
 #define __NR_setresgid 119

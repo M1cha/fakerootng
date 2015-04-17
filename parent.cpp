@@ -419,6 +419,10 @@ static void register_handlers()
 #if defined(SYS_getresgid16)
     DEF_SYS1(getresgid16);
 #endif
+    DEF_SYS1(getgroups);
+#if defined(SYS_getgroups16)
+    DEF_SYS1(getgroups16);
+#endif
 
     // Process
     DEF_SYS1(execve);

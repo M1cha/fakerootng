@@ -1,7 +1,7 @@
 #ifndef PARENT_H
 #define PARENT_H
 
-#include <set>
+#include <unordered_set>
 #include <memory>
 
 #include <boost/intrusive_ptr.hpp>
@@ -59,7 +59,7 @@ public:
     // The credentials (including the Linux specific file system UID)
     uid_t m_uid, m_euid, m_suid, m_fsuid;
     gid_t m_gid, m_egid, m_sgid, m_fsgid;
-    std::set<gid_t> m_groups;
+    std::unordered_set<gid_t> m_groups;
     mode_t m_umask;
 
     pid_t m_pid, m_tid, m_ppid;

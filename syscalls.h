@@ -19,6 +19,7 @@ DECLARE_SYSFUNC(setgid);
 DECLARE_SYSFUNC(setreuid);
 DECLARE_SYSFUNC(setregid);
 DECLARE_SYSFUNC(getgroups);
+DECLARE_SYSFUNC(getgroups16);
 DECLARE_SYSFUNC(setgroups);
 
 // UID Non-POSIX
