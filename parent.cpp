@@ -281,7 +281,9 @@ static void init_handlers()
 #if defined(SYS_faccessat) && HAVE_OPENAT
     DEF_SYS2(faccessat, generic_chroot_at_link4);
 #endif
+#ifdef SYS_utime
     DEF_SYS2(utime, generic_chroot_support_param1);
+#endif
     DEF_SYS2(utimes, generic_chroot_support_param1);
 #ifdef SYS_setxattr
     DEF_SYS2(setxattr, generic_chroot_support_param1);
@@ -311,7 +313,9 @@ static void init_handlers()
     DEF_SYS1(chroot);
     DEF_SYS1(getcwd);
 
+#ifdef SYS_mmap
     DEF_SYS1(mmap);
+#endif
 #ifdef SYS_mmap2
     DEF_SYS2(mmap2, mmap);
 #endif

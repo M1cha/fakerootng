@@ -189,10 +189,12 @@ AC_ARG_WITH([memdir], [AC_HELP_STRING([--with-memdir=DIR],[Where to create share
 
 dnl Canoninize the canonical system names
 [
-if [ "$target_os" = "linux-gnu" ]
-then
+
+case "$target_os" in
+linux-gnu|linux-gnueabihf|linux-gnueabi)
     target_os=linux
-fi
+    ;;
+esac
 
 case "$target_cpu" in
 i686|i586|i486)
