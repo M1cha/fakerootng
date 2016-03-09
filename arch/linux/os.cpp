@@ -399,7 +399,7 @@ pid_t get_parent( pid_t pid, pid_t tid )
     // TODO use a better parser (maybe using boost::spirit?)
     FILE *stat_file=fopen(filename.str().c_str(), "r");
     if( stat_file==NULL ) {
-        LOG_E() << __FUNCTION__ << ": Failed to open " << filename << ": " << strerror(errno);
+        LOG_E() << __FUNCTION__ << ": Failed to open " << filename.str() << ": " << strerror(errno);
 
         return -1;
     }
